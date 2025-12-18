@@ -15,25 +15,32 @@ logger = get_logger()
 class DriveManager:
     """คลาสสำหรับจัดการ Google Drive"""
 
-    def __init__(self, drive_service):
+    def __init__(self, drive_service, main_folder_id=None):
         """
         Args:
             drive_service: Google Drive API service instance
+            main_folder_id: ID ของโฟลเดอร์หลักที่ต้องการใช้ (ถ้าไม่ระบุจะสร้างใหม่)
         """
         self.service = drive_service
         self.main_folder_name = "CT Studio - Customer Photos"
-        self.main_folder_id = None
-        logger.info("DriveManager initialized")
+        self.main_folder_id = main_folder_id  # ใช้ Folder ID ที่ระบุ
+        logger.info(f"DriveManager initialized with folder_id: {main_folder_id}")
 
     def get_or_create_main_folder(self) -> str:
         """
         หาหรือสร้างโฟลเดอร์หลัก "CT Studio - Customer Photos"
+        ถ้ามี main_folder_id ตั้งแต่ init แล้ว จะใช้ Folder ID นั้นเลย
 
         Returns:
             str: folder_id ของโฟลเดอร์หลัก
         """
         try:
-            # ค้นหาโฟลเดอร์หลักที่มีอยู่
+            # ถ้ามี main_folder_id อยู่แล้ว ให้ใช้เลย (ไม่ต้องสร้างใหม่)
+            if self.main_folder_id:
+                logger.info(f"Using existing main folder ID: {self.main_folder_id}")
+                return self.main_folder_id
+
+            # ถ้าไม่มี ให้ค้นหาหรือสร้างใหม่
             logger.info(f"Searching for main folder: {self.main_folder_name}")
 
             query = f"name='{self.main_folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
@@ -71,13 +78,12 @@ class DriveManager:
             logger.error(f"Error accessing main folder: {e}")
             raise Exception(f"ไม่สามารถเข้าถึงโฟลเดอร์หลักได้: {str(e)}")
 
-    def get_or_create_customer_folder(self, customer_id: str, customer_name: str) -> Tuple[str, str]:
+    def get_or_create_customer_folder(self, phone: str) -> Tuple[str, str]:
         """
-        หาหรือสร้างโฟลเดอร์ลูกค้า
+        หาหรือสร้างโฟลเดอร์ลูกค้า โดยใช้เบอร์โทรเป็นชื่อโฟลเดอร์
 
         Args:
-            customer_id: รหัสลูกค้า เช่น "CUST-001"
-            customer_name: ชื่อลูกค้า
+            phone: เบอร์โทรศัพท์ลูกค้า เช่น "0812345678"
 
         Returns:
             Tuple[str, str]: (folder_id, folder_url)
@@ -87,8 +93,8 @@ class DriveManager:
             if not self.main_folder_id:
                 self.get_or_create_main_folder()
 
-            # ชื่อโฟลเดอร์ลูกค้า: "CUST-XXX - ชื่อลูกค้า"
-            folder_name = f"{customer_id} - {customer_name}"
+            # ชื่อโฟลเดอร์ลูกค้า: ใช้เบอร์โทรเท่านั้น
+            folder_name = phone
             logger.info(f"Searching for customer folder: {folder_name}")
 
             # ค้นหาโฟลเดอร์ลูกค้าที่มีอยู่
@@ -265,12 +271,20 @@ class DriveManager:
 
 
 # สร้าง instance ของ DriveManager
-def get_drive_manager():
+def get_drive_manager(main_folder_id=None):
     """
     สร้างและคืนค่า DriveManager instance
+
+    Args:
+        main_folder_id: ID ของโฟลเดอร์หลัก (optional)
 
     Returns:
         DriveManager: instance ของ DriveManager
     """
     from config import drive_service
-    return DriveManager(drive_service)
+
+    # Folder ID ขององค์กร - ถ้าไม่ระบุจะใช้ค่านี้
+    if main_folder_id is None:
+        main_folder_id = "1qJLGL9RJuA3rR9qTIvde-046VpN6ZG7o"
+
+    return DriveManager(drive_service, main_folder_id=main_folder_id)

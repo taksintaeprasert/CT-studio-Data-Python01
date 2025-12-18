@@ -140,6 +140,7 @@ def show_customer_list():
                     # เก็บข้อมูลลูกค้าใน session state
                     st.session_state.selected_customer_id = customer_id
                     st.session_state.selected_customer_name = full_name
+                    st.session_state.selected_customer_phone = phone  # เพิ่มเบอร์โทร
                     st.session_state.selected_customer_folder_id = drive_folder_id
                     st.session_state.selected_customer_folder_url = folder_url
                     # หาลำดับแถวใน Google Sheets (row_index)
@@ -157,6 +158,7 @@ def show_photo_manager():
 
     customer_id = st.session_state.get('selected_customer_id', '')
     customer_name = st.session_state.get('selected_customer_name', '')
+    customer_phone = st.session_state.get('selected_customer_phone', '')  # เพิ่มเบอร์โทร
     folder_id = st.session_state.get('selected_customer_folder_id', '')
     folder_url = st.session_state.get('selected_customer_folder_url', '')
     row_index = st.session_state.get('selected_customer_row', 0)
@@ -169,21 +171,20 @@ def show_photo_manager():
     st.markdown("---")
 
     st.subheader(f"📸 จัดการรูปภาพ: {customer_name}")
-    st.caption(f"รหัส: {customer_id}")
+    st.caption(f"รหัส: {customer_id} | เบอร์: {customer_phone}")
 
     try:
         # ตรวจสอบว่ามีโฟลเดอร์หรือยัง ถ้าไม่มีให้สร้าง
         if not folder_id:
             with st.spinner("กำลังสร้างโฟลเดอร์สำหรับลูกค้า..."):
-                logger.info(f"Creating folder for customer: {customer_id}")
+                logger.info(f"Creating folder for customer: {customer_id} (phone: {customer_phone})")
 
                 # สร้างโฟลเดอร์หลักก่อน (ถ้ายังไม่มี)
                 drive_manager.get_or_create_main_folder()
 
-                # สร้างโฟลเดอร์ลูกค้า
+                # สร้างโฟลเดอร์ลูกค้า (ใช้เบอร์โทรเป็นชื่อโฟลเดอร์)
                 folder_id, folder_url = drive_manager.get_or_create_customer_folder(
-                    customer_id,
-                    customer_name
+                    customer_phone
                 )
 
                 # อัพเดทข้อมูลใน Google Sheets
