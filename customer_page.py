@@ -24,7 +24,7 @@ def phone_str(v):
     return s
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300)  # เพิ่ม cache เป็น 5 นาที
 def load_customers() -> List[Dict]:
     """โหลดข้อมูลลูกค้าจาก Google Sheets"""
     try:
@@ -65,6 +65,40 @@ def update_customer_drive_info(customer_id: str, folder_id: str, folder_url: str
     except Exception as e:
         logger.error(f"Failed to update Drive info: {e}")
         raise Exception(f"ไม่สามารถอัพเดทข้อมูล Drive ได้: {str(e)}")
+
+
+def update_customer(customer_id: str, row_index: int, updated_data: Dict):
+    """
+    อัพเดทข้อมูลลูกค้าใน Google Sheets
+
+    Args:
+        customer_id: รหัสลูกค้า
+        row_index: แถวที่ต้องอัพเดท (เริ่มจาก 1 = header, 2 = แถวแรก)
+        updated_data: ข้อมูลที่ต้องการอัพเดท (dict)
+    """
+    try:
+        logger.info(f"Updating customer {customer_id} at row {row_index}")
+
+        # อัพเดทแต่ละ column
+        # สมมติโครงสร้าง: customer_id, full_name, phone, contact_channel, ...
+
+        if 'full_name' in updated_data:
+            ws_customers.update_cell(row_index, 2, updated_data['full_name'])
+
+        if 'phone' in updated_data:
+            ws_customers.update_cell(row_index, 3, updated_data['phone'])
+
+        if 'contact_channel' in updated_data:
+            ws_customers.update_cell(row_index, 4, updated_data['contact_channel'])
+
+        logger.info(f"Customer {customer_id} updated successfully")
+
+        # Clear cache
+        st.cache_data.clear()
+
+    except Exception as e:
+        logger.error(f"Failed to update customer: {e}")
+        raise Exception(f"ไม่สามารถอัพเดทข้อมูลลูกค้าได้: {str(e)}")
 
 
 def show_customer_list():
@@ -109,7 +143,7 @@ def show_customer_list():
         st.warning("ไม่พบลูกค้าที่ค้นหา")
         return
 
-    # แสดงเป็น Grid
+    # แสดงเป็น Expander (ลด UI ให้เรียบง่าย)
     for idx, customer in enumerate(filtered_customers):
         customer_id = customer.get('customer_id', 'N/A')
         full_name = customer.get('full_name', 'N/A')
@@ -118,39 +152,79 @@ def show_customer_list():
         drive_folder_id = customer.get('drive_folder_id', '')
         folder_url = customer.get('folder_url', '')
 
-        # สร้าง container สำหรับแต่ละลูกค้า
-        with st.container():
-            col1, col2, col3 = st.columns([3, 2, 1])
+        # หาลำดับแถวใน Google Sheets (row_index)
+        original_idx = customers.index(customer)
+        row_index = original_idx + 2  # +2 เพราะ header=1, data เริ่ม=2
 
-            with col1:
-                st.markdown(f"### 👤 {full_name}")
-                st.caption(f"**รหัส:** {customer_id}")
+        # ใช้ expander แทน container
+        with st.expander(
+            f"👤 {full_name} | 📞 {phone} | 📋 {customer_id}",
+            expanded=False
+        ):
+            # ฟอร์มแก้ไขข้อมูลลูกค้า
+            with st.form(f"edit_customer_form_{customer_id}"):
+                st.markdown("#### ✏️ แก้ไขข้อมูลลูกค้า")
 
-            with col2:
-                st.markdown(f"**📞 เบอร์:** {phone}")
-                st.caption(f"**ช่องทาง:** {contact_channel}")
+                edit_full_name = st.text_input(
+                    "ชื่อ-นามสกุล *",
+                    value=full_name,
+                    key=f"edit_name_{customer_id}"
+                )
 
-            with col3:
-                # ปุ่มจัดการรูปภาพ
-                if st.button(
-                    "📸 จัดการรูปภาพ",
-                    key=f"manage_photos_{customer_id}_{idx}",
-                    use_container_width=True
-                ):
-                    # เก็บข้อมูลลูกค้าใน session state
-                    st.session_state.selected_customer_id = customer_id
-                    st.session_state.selected_customer_name = full_name
-                    st.session_state.selected_customer_phone = phone  # เพิ่มเบอร์โทร
-                    st.session_state.selected_customer_folder_id = drive_folder_id
-                    st.session_state.selected_customer_folder_url = folder_url
-                    # หาลำดับแถวใน Google Sheets (row_index)
-                    # ต้องหา index ในรายการเดิม (customers) ไม่ใช่ filtered
-                    original_idx = customers.index(customer)
-                    st.session_state.selected_customer_row = original_idx + 2  # +2 เพราะ header=1, data เริ่ม=2
-                    st.session_state.show_photo_manager = True
+                edit_phone = st.text_input(
+                    "เบอร์โทร *",
+                    value=phone,
+                    key=f"edit_phone_{customer_id}"
+                )
+
+                edit_contact_channel = st.selectbox(
+                    "ช่องทางติดต่อ *",
+                    ["facebook", "line", "phone", "walkin", "other"],
+                    index=["facebook", "line", "phone", "walkin", "other"].index(contact_channel) if contact_channel in ["facebook", "line", "phone", "walkin", "other"] else 0,
+                    key=f"edit_channel_{customer_id}"
+                )
+
+                save_button = st.form_submit_button(
+                    "💾 บันทึกการแก้ไข",
+                    use_container_width=True,
+                    type="primary"
+                )
+
+            # Handle บันทึก
+            if save_button:
+                try:
+                    updated_data = {
+                        'full_name': edit_full_name,
+                        'phone': edit_phone,
+                        'contact_channel': edit_contact_channel
+                    }
+
+                    update_customer(customer_id, row_index, updated_data)
+
+                    st.success("✅ บันทึกการแก้ไขเรียบร้อย!")
+                    time.sleep(1)
                     st.rerun()
 
+                except Exception as e:
+                    st.error(f"❌ เกิดข้อผิดพลาด: {str(e)}")
+
             st.markdown("---")
+
+            # ปุ่มจัดการรูปภาพ
+            if st.button(
+                "📸 จัดการรูปภาพ",
+                key=f"manage_photos_{customer_id}_{idx}",
+                use_container_width=True
+            ):
+                # เก็บข้อมูลลูกค้าใน session state
+                st.session_state.selected_customer_id = customer_id
+                st.session_state.selected_customer_name = full_name
+                st.session_state.selected_customer_phone = phone  # เพิ่มเบอร์โทร
+                st.session_state.selected_customer_folder_id = drive_folder_id
+                st.session_state.selected_customer_folder_url = folder_url
+                st.session_state.selected_customer_row = row_index
+                st.session_state.show_photo_manager = True
+                st.rerun()
 
 
 def show_photo_manager():

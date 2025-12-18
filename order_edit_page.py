@@ -35,7 +35,7 @@ def to_float(x):
         return 0.0
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300)  # เพิ่ม cache เป็น 5 นาที
 def load_orders() -> List[Dict]:
     """โหลดข้อมูล Orders ทั้งหมด"""
     try:
@@ -49,7 +49,7 @@ def load_orders() -> List[Dict]:
         return []
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300)  # เพิ่ม cache เป็น 5 นาที
 def load_order_items(order_id: str) -> List[Dict]:
     """โหลดรายการสินค้าของ Order"""
     try:
@@ -179,6 +179,13 @@ def render_order_edit_page(master_items, staff, customers):
         st.info("ยังไม่มี Order ในระบบ")
         return
 
+    # ตั้งค่า pagination
+    ITEMS_PER_PAGE = 15
+
+    # Initialize session state สำหรับ pagination
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = 1
+
     # แสดงจำนวน Order
     st.info(f"📊 มี Order ทั้งหมด: **{len(orders)}** รายการ")
 
@@ -265,7 +272,61 @@ def render_order_edit_page(master_items, staff, customers):
     # เรียงตาม created_at ล่าสุดก่อน
     filtered_orders = sorted(filtered_orders, key=lambda x: x.get('created_at', ''), reverse=True)
 
-    st.markdown(f"แสดง **{len(filtered_orders)}** รายการ")
+    # คำนวณจำนวนหน้า
+    total_filtered = len(filtered_orders)
+    total_pages = (total_filtered + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE  # ปัดขึ้น
+
+    # ตรวจสอบ current_page ไม่เกินจำนวนหน้า
+    if st.session_state.current_page > total_pages and total_pages > 0:
+        st.session_state.current_page = total_pages
+
+    # คำนวณ start และ end index สำหรับหน้าปัจจุบัน
+    start_idx = (st.session_state.current_page - 1) * ITEMS_PER_PAGE
+    end_idx = min(start_idx + ITEMS_PER_PAGE, total_filtered)
+
+    # แสดงข้อมูล pagination
+    if total_filtered > 0:
+        st.markdown(f"แสดง **{start_idx + 1}-{end_idx}** จาก **{total_filtered}** รายการ (หน้า {st.session_state.current_page}/{total_pages})")
+    else:
+        st.markdown(f"แสดง **0** รายการ")
+
+    # ปุ่ม pagination
+    if total_pages > 1:
+        col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
+
+        with col1:
+            if st.button("⏮️ แรก", disabled=(st.session_state.current_page == 1), use_container_width=True):
+                st.session_state.current_page = 1
+                st.rerun()
+
+        with col2:
+            if st.button("◀️ ก่อนหน้า", disabled=(st.session_state.current_page == 1), use_container_width=True):
+                st.session_state.current_page -= 1
+                st.rerun()
+
+        with col3:
+            # Page selector
+            selected_page = st.selectbox(
+                "เลือกหน้า",
+                range(1, total_pages + 1),
+                index=st.session_state.current_page - 1,
+                key="page_selector",
+                label_visibility="collapsed"
+            )
+            if selected_page != st.session_state.current_page:
+                st.session_state.current_page = selected_page
+                st.rerun()
+
+        with col4:
+            if st.button("▶️ ถัดไป", disabled=(st.session_state.current_page == total_pages), use_container_width=True):
+                st.session_state.current_page += 1
+                st.rerun()
+
+        with col5:
+            if st.button("⏭️ สุดท้าย", disabled=(st.session_state.current_page == total_pages), use_container_width=True):
+                st.session_state.current_page = total_pages
+                st.rerun()
+
     st.markdown("---")
 
     # แสดงรายการ Order
@@ -273,7 +334,10 @@ def render_order_edit_page(master_items, staff, customers):
         st.warning("ไม่พบ Order ที่ค้นหา")
         return
 
-    for idx, order in enumerate(filtered_orders):
+    # แสดงเฉพาะรายการในหน้าปัจจุบัน
+    page_orders = filtered_orders[start_idx:end_idx]
+
+    for idx, order in enumerate(page_orders):
         order_id = order.get('order_id', 'N/A')
         customer_id = order.get('customer_id', 'N/A')
         appointment_date = order.get('appointment_date', 'N/A')
@@ -303,6 +367,11 @@ def render_order_edit_page(master_items, staff, customers):
 
 def show_order_editor_inline(order_data, order_id, row_index, master_items, staff):
     """แสดงฟอร์มแก้ไข Order แบบ inline ใน expander"""
+
+    # Initialize session state สำหรับเก็บรายการที่จะลบ
+    delete_key = f'items_to_delete_{order_id}'
+    if delete_key not in st.session_state:
+        st.session_state[delete_key] = []
 
     # แสดงข้อมูลลูกค้า
     st.info(f"**ลูกค้า:** {order_data.get('customer_id', 'N/A')}")
@@ -406,6 +475,7 @@ def show_order_editor_inline(order_data, order_id, row_index, master_items, staf
     # Handle บันทึก
     if save_button:
         try:
+            # อัพเดทข้อมูล Order
             updated_data = {
                 'appointment_date': str(edit_appointment_date),
                 'appointment_time': edit_appointment_time,
@@ -417,6 +487,22 @@ def show_order_editor_inline(order_data, order_id, row_index, master_items, staf
             }
 
             update_order(order_id, row_index, updated_data)
+
+            # ลบรายการสินค้าที่ถูกเลือก (ถ้ามี)
+            if st.session_state[delete_key]:
+                for item_id in st.session_state[delete_key]:
+                    try:
+                        delete_order_item(item_id)
+                        logger.info(f"Deleted item {item_id} from order {order_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to delete item {item_id}: {e}")
+
+                # อัพเดทยอดรวม
+                from orders import update_order_total
+                update_order_total(ws_orders, ws_order_items, order_id)
+
+                # Clear รายการที่จะลบ
+                st.session_state[delete_key] = []
 
             st.success("✅ บันทึกการแก้ไขเรียบร้อย!")
             time.sleep(1)
@@ -432,9 +518,12 @@ def show_order_editor_inline(order_data, order_id, row_index, master_items, staf
     # โหลดรายการสินค้าปัจจุบัน
     order_items = load_order_items(order_id)
 
-    if order_items:
+    # กรองรายการที่ถูกเลือกให้ลบออก
+    active_items = [item for item in order_items if item.get('order_item_id') not in st.session_state[delete_key]]
+
+    if active_items:
         st.markdown("**รายการปัจจุบัน:**")
-        for idx, item in enumerate(order_items):
+        for idx, item in enumerate(active_items):
             col_num, col_item, col_price, col_remove = st.columns([0.5, 3, 1.5, 0.5])
 
             with col_num:
@@ -447,19 +536,25 @@ def show_order_editor_inline(order_data, order_id, row_index, master_items, staf
                 st.text(f"{to_float(item.get('list_price', 0)):,.2f} ฿")
 
             with col_remove:
-                if st.button("🗑️", key=f"remove_item_{order_id}_{item.get('order_item_id')}_{idx}", help="ลบรายการนี้"):
-                    try:
-                        delete_order_item(item.get('order_item_id'))
-                        # อัพเดทยอดรวม
-                        from orders import update_order_total
-                        update_order_total(ws_orders, ws_order_items, order_id)
-                        st.success("✅ ลบรายการสำเร็จ!")
-                        time.sleep(0.5)
+                if st.button("🗑️", key=f"remove_item_{order_id}_{item.get('order_item_id')}_{idx}", help="ทำเครื่องหมายลบ (กดบันทึกเพื่อยืนยัน)"):
+                    # เพิ่มเข้ารายการที่จะลบ
+                    if item.get('order_item_id') not in st.session_state[delete_key]:
+                        st.session_state[delete_key].append(item.get('order_item_id'))
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ ไม่สามารถลบได้: {str(e)}")
-    else:
+
+    # แสดงรายการที่จะลบ (ถ้ามี)
+    if st.session_state[delete_key]:
+        st.warning(f"⚠️ มี **{len(st.session_state[delete_key])}** รายการที่จะถูกลบเมื่อกดบันทึก")
+
+        # ปุ่มยกเลิกการลบทั้งหมด
+        if st.button("↩️ ยกเลิกการลบทั้งหมด", key=f"cancel_delete_{order_id}"):
+            st.session_state[delete_key] = []
+            st.rerun()
+
+    if not active_items and not st.session_state[delete_key]:
         st.info("ไม่มีรายการสินค้าในคำสั่งซื้อนี้")
+    elif not active_items and st.session_state[delete_key]:
+        st.info("รายการสินค้าทั้งหมดถูกทำเครื่องหมายให้ลบ (กดบันทึกเพื่อยืนยัน)")
 
     # เพิ่มรายการใหม่
     st.markdown("**เพิ่มรายการใหม่:**")
