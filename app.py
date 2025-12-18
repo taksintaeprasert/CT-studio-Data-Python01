@@ -7,6 +7,7 @@ from sheets import ws_orders, ws_order_items, ws_master_item, ws_staff, ws_custo
 from orders import create_order_with_items, ValidationError
 from ct_logger import get_logger
 from customer_page import render_customer_page
+from order_edit_page import render_order_edit_page
 
 # Initialize logger
 logger = get_logger()
@@ -127,7 +128,7 @@ with st.sidebar:
 # =========================
 # TABS
 # =========================
-tab1, tab2 = st.tabs(["📝 รับ Order", "👥 จัดการข้อมูลลูกค้า"])
+tab1, tab2, tab3 = st.tabs(["📝 รับ Order", "✏️ แก้ไข Order", "👥 จัดการข้อมูลลูกค้า"])
 
 # ========================
 # TAB 1: รับ Order
@@ -208,6 +209,48 @@ with tab1:
         key="mode"
     )
 
+    # ส่วนเลือกสินค้า (นอก form เพื่อให้สามารถเพิ่ม/ลบได้โดยไม่ submit)
+    st.markdown("#### 💅 รายการสินค้า/บริการ")
+
+    col_select, col_add = st.columns([4, 1])
+    with col_select:
+        selected_item_temp = st.selectbox(
+            "เลือกรายการที่ต้องการเพิ่ม",
+            [""] + item_codes_raw,
+            format_func=lambda x: "-- เลือกสินค้า/บริการ --" if x == "" else x,
+            key="temp_item_select"
+        )
+    with col_add:
+        st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
+        if st.button("➕ เพิ่ม", use_container_width=True, key="add_item_btn"):
+            if selected_item_temp and selected_item_temp != "":
+                if "selected_items" not in st.session_state:
+                    st.session_state.selected_items = []
+                st.session_state.selected_items.append(selected_item_temp)
+                st.rerun()
+
+    # แสดงรายการที่เลือก
+    if "selected_items" not in st.session_state:
+        st.session_state.selected_items = []
+
+    if st.session_state.selected_items:
+        st.markdown("**รายการที่เลือก:**")
+        for idx, item in enumerate(st.session_state.selected_items):
+            col_num, col_item, col_remove = st.columns([0.5, 4, 0.5])
+            with col_num:
+                st.text(f"{idx + 1}.")
+            with col_item:
+                st.text(item)
+            with col_remove:
+                if st.button("🗑️", key=f"remove_item_{idx}", help="ลบรายการนี้"):
+                    st.session_state.selected_items.pop(idx)
+                    st.rerun()
+    else:
+        st.info("ยังไม่ได้เลือกรายการสินค้า/บริการ (กด ➕ เพิ่ม เพื่อเพิ่มรายการ)")
+
+    st.markdown("---")
+
+    # ฟอร์มหลัก
     with st.form("order_form"):
         customer_id = ""
 
@@ -306,15 +349,7 @@ with tab1:
 
         st.markdown("---")
 
-        # Items Section
-        st.markdown("#### 💅 รายการสินค้า/บริการ")
-        st.multiselect(
-            "เลือกรายการ *",
-            item_codes_raw,
-            key="selected_items",
-            help="สามารถเลือกได้หลายรายการ"
-        )
-
+        # Note
         st.text_input("หมายเหตุ", key="note", placeholder="ระบุรายละเอียดเพิ่มเติม (ถ้ามี)")
 
         st.markdown("---")
@@ -496,7 +531,14 @@ with tab1:
 
 
 # ========================
-# TAB 2: จัดการข้อมูลลูกค้า
+# TAB 2: แก้ไข Order
 # ========================
 with tab2:
+    render_order_edit_page(master_items, staff, customers)
+
+
+# ========================
+# TAB 3: จัดการข้อมูลลูกค้า
+# ========================
+with tab3:
     render_customer_page()
