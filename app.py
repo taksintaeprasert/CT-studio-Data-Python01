@@ -212,6 +212,17 @@ with tab1:
     # ส่วนเลือกสินค้า (นอก form เพื่อให้สามารถเพิ่ม/ลบได้โดยไม่ submit)
     st.markdown("#### 💅 รายการสินค้า/บริการ")
 
+    # แก้โครงสร้างข้อมูลให้เก็บเป็น dict พร้อม upsell
+    if "selected_items" not in st.session_state:
+        st.session_state.selected_items = []
+
+    # ถ้า selected_items เป็น list ของ string (โครงสร้างเก่า) ให้แปลงเป็น dict
+    if st.session_state.selected_items and isinstance(st.session_state.selected_items[0], str):
+        st.session_state.selected_items = [
+            {"item_code": item, "is_upsell": False}
+            for item in st.session_state.selected_items
+        ]
+
     col_select, col_add = st.columns([4, 1])
     with col_select:
         selected_item_temp = st.selectbox(
@@ -224,23 +235,38 @@ with tab1:
         st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
         if st.button("➕ เพิ่ม", use_container_width=True, key="add_item_btn"):
             if selected_item_temp and selected_item_temp != "":
-                if "selected_items" not in st.session_state:
-                    st.session_state.selected_items = []
-                st.session_state.selected_items.append(selected_item_temp)
+                st.session_state.selected_items.append({
+                    "item_code": selected_item_temp,
+                    "is_upsell": False
+                })
+                # แสดง success message
+                st.success(f"✅ เพิ่ม {selected_item_temp} แล้ว")
+                time.sleep(0.3)
                 st.rerun()
 
     # แสดงรายการที่เลือก
-    if "selected_items" not in st.session_state:
-        st.session_state.selected_items = []
-
     if st.session_state.selected_items:
         st.markdown("**รายการที่เลือก:**")
-        for idx, item in enumerate(st.session_state.selected_items):
-            col_num, col_item, col_remove = st.columns([0.5, 4, 0.5])
+        for idx, item_data in enumerate(st.session_state.selected_items):
+            item_code = item_data["item_code"]
+            is_upsell = item_data.get("is_upsell", False)
+
+            col_num, col_item, col_upsell, col_remove = st.columns([0.5, 3, 1, 0.5])
             with col_num:
                 st.text(f"{idx + 1}.")
             with col_item:
-                st.text(item)
+                st.text(item_code)
+            with col_upsell:
+                # Checkbox สำหรับ up-sell
+                upsell_checked = st.checkbox(
+                    "🎁 Up-sell",
+                    value=is_upsell,
+                    key=f"upsell_{idx}",
+                    help="ติ๊กถ้าเป็นการขายเพิ่ม"
+                )
+                # อัพเดทค่าใน session state
+                if upsell_checked != is_upsell:
+                    st.session_state.selected_items[idx]["is_upsell"] = upsell_checked
             with col_remove:
                 if st.button("🗑️", key=f"remove_item_{idx}", help="ลบรายการนี้"):
                     st.session_state.selected_items.pop(idx)
@@ -436,6 +462,10 @@ with tab1:
             # Create order
             logger.info(f"Creating order for customer: {customer_id}")
 
+            # แยก item_codes และ upsell_flags จาก selected_items
+            item_codes = [item["item_code"] for item in selected_items]
+            upsell_flags = [item.get("is_upsell", False) for item in selected_items]
+
             order_id, total = create_order_with_items(
                 ws_orders=ws_orders,
                 ws_order_items=ws_order_items,
@@ -447,8 +477,8 @@ with tab1:
                 artist_id=st.session_state["artist_id"],
                 channel=st.session_state["channel"],
                 order_status=st.session_state["order_status"],
-                item_codes=selected_items,
-                upsell_flags=[False] * len(selected_items),
+                item_codes=item_codes,
+                upsell_flags=upsell_flags,
                 note=st.session_state["note"],
             )
 
