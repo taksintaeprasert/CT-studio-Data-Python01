@@ -23,6 +23,18 @@ def phone_str(v):
     return s
 
 
+def to_float(x):
+    """แปลงราคาเป็น float (รองรับ ฿ และ comma)"""
+    if not x:
+        return 0.0
+    try:
+        # ลบ comma, ฿, และช่องว่างออก
+        clean = str(x).replace(",", "").replace("฿", "").strip()
+        return float(clean)
+    except (ValueError, AttributeError):
+        return 0.0
+
+
 @st.cache_data(ttl=60)
 def load_orders() -> List[Dict]:
     """โหลดข้อมูล Orders ทั้งหมด"""
@@ -170,24 +182,85 @@ def render_order_edit_page(master_items, staff, customers):
     # แสดงจำนวน Order
     st.info(f"📊 มี Order ทั้งหมด: **{len(orders)}** รายการ")
 
-    # ช่องค้นหา
-    search_term = st.text_input(
-        "🔍 ค้นหา Order",
-        placeholder="ค้นหาจาก Order ID, Customer ID, วันที่...",
-        key="order_search"
-    )
+    # ฟิลเตอร์
+    st.markdown("### 🔍 กรองข้อมูล")
+
+    col1, col2, col3 = st.columns([2, 1, 1])
+
+    with col1:
+        search_term = st.text_input(
+            "ค้นหา",
+            placeholder="Order ID, Customer ID...",
+            key="order_search",
+            label_visibility="collapsed"
+        )
+
+    with col2:
+        # Filter วันที่นัดหมาย (เริ่มต้น)
+        date_from = st.date_input(
+            "จากวันที่",
+            value=None,
+            key="date_from",
+            help="กรองตามวันนัดหมาย (เริ่มต้น)"
+        )
+
+    with col3:
+        # Filter วันที่นัดหมาย (สิ้นสุด)
+        date_to = st.date_input(
+            "ถึงวันที่",
+            value=None,
+            key="date_to",
+            help="กรองตามวันนัดหมาย (สิ้นสุด)"
+        )
+
+    col4, col5 = st.columns([1, 3])
+
+    with col4:
+        # Filter สถานะ
+        status_filter = st.selectbox(
+            "สถานะ",
+            ["ทั้งหมด", "booking", "active", "cancel", "done"],
+            format_func=lambda x: {
+                "ทั้งหมด": "📋 ทั้งหมด",
+                "booking": "📅 จอง",
+                "active": "✅ เข้ารับบริการ",
+                "cancel": "❌ ยกเลิก",
+                "done": "✔️ เสร็จสิ้น"
+            }.get(x, x),
+            key="status_filter"
+        )
 
     # กรองข้อมูล
+    filtered_orders = orders
+
+    # Filter ตามคำค้นหา
     if search_term:
         search_lower = search_term.lower()
         filtered_orders = [
-            o for o in orders
+            o for o in filtered_orders
             if search_lower in str(o.get('order_id', '')).lower()
             or search_lower in str(o.get('customer_id', '')).lower()
-            or search_lower in str(o.get('appointment_date', '')).lower()
         ]
-    else:
-        filtered_orders = orders
+
+    # Filter ตามวันที่นัดหมาย
+    if date_from:
+        filtered_orders = [
+            o for o in filtered_orders
+            if o.get('appointment_date') and str(o.get('appointment_date')) >= str(date_from)
+        ]
+
+    if date_to:
+        filtered_orders = [
+            o for o in filtered_orders
+            if o.get('appointment_date') and str(o.get('appointment_date')) <= str(date_to)
+        ]
+
+    # Filter ตามสถานะ
+    if status_filter != "ทั้งหมด":
+        filtered_orders = [
+            o for o in filtered_orders
+            if str(o.get('order_status', '')).lower() == status_filter.lower()
+        ]
 
     # เรียงตาม created_at ล่าสุดก่อน
     filtered_orders = sorted(filtered_orders, key=lambda x: x.get('created_at', ''), reverse=True)
@@ -208,46 +281,215 @@ def render_order_edit_page(master_items, staff, customers):
         order_status = order.get('order_status', 'N/A')
         total_income = order.get('total_income', 0)
 
-        # สร้าง container สำหรับแต่ละ Order
-        with st.container():
-            col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
+        # หาลำดับแถวใน Google Sheets
+        original_idx = orders.index(order)
+        row_index = original_idx + 2  # +2 เพราะ header=1, data เริ่ม=2
 
-            with col1:
-                st.markdown(f"### 📋 {order_id}")
-                st.caption(f"**ลูกค้า:** {customer_id}")
+        status_icons = {
+            "booking": "📅",
+            "active": "✅",
+            "cancel": "❌",
+            "done": "✔️"
+        }
 
-            with col2:
-                st.markdown(f"**📅 นัดหมาย:** {appointment_date} {appointment_time}")
-                status_icons = {
-                    "booking": "📅",
-                    "active": "✅",
-                    "cancel": "❌",
-                    "done": "✔️"
-                }
-                st.caption(f"**สถานะ:** {status_icons.get(order_status, '')} {order_status}")
+        # ใช้ expander แทนการกดปุ่มไปหน้าใหม่
+        with st.expander(
+            f"📋 {order_id} | 👤 {customer_id} | 📅 {appointment_date} {appointment_time} | {status_icons.get(order_status, '')} {order_status} | 💰 {to_float(total_income):,.2f} ฿",
+            expanded=False
+        ):
+            # แสดงฟอร์มแก้ไขใน expander
+            show_order_editor_inline(order, order_id, row_index, master_items, staff)
 
-            with col3:
-                st.markdown(f"**💰 {float(total_income):,.2f} ฿**")
 
-            with col4:
-                if st.button("✏️ แก้ไข", key=f"edit_order_{order_id}_{idx}", use_container_width=True):
-                    # เก็บข้อมูล Order ใน session state
-                    st.session_state.selected_order_id = order_id
-                    st.session_state.selected_order_data = order
-                    # หาลำดับแถวใน Google Sheets
-                    original_idx = orders.index(order)
-                    st.session_state.selected_order_row = original_idx + 2  # +2 เพราะ header=1, data เริ่ม=2
-                    st.session_state.show_order_editor = True
+def show_order_editor_inline(order_data, order_id, row_index, master_items, staff):
+    """แสดงฟอร์มแก้ไข Order แบบ inline ใน expander"""
+
+    # แสดงข้อมูลลูกค้า
+    st.info(f"**ลูกค้า:** {order_data.get('customer_id', 'N/A')}")
+
+    # ฟอร์มแก้ไข
+    with st.form(f"edit_order_form_{order_id}"):
+        st.markdown("#### 📅 นัดหมาย")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            try:
+                default_date = datetime.strptime(order_data.get('appointment_date', str(date.today())), "%Y-%m-%d").date()
+            except:
+                default_date = date.today()
+
+            edit_appointment_date = st.date_input(
+                "วันที่นัด *",
+                value=default_date,
+                key=f"edit_appointment_date_{order_id}"
+            )
+
+        with col2:
+            edit_appointment_time = st.text_input(
+                "เวลานัด *",
+                value=order_data.get('appointment_time', ''),
+                key=f"edit_appointment_time_{order_id}",
+                placeholder="เช่น 14:30"
+            )
+
+        st.markdown("---")
+        st.markdown("#### 👥 พนักงาน & ช่องทาง")
+
+        sales_ids = [""] + [s.get("staff_id") for s in staff if str(s.get("role")).strip().lower() == "sales" and str(s.get("is_active")).strip().lower() in {"true", "1", "yes"}]
+        artist_ids = [""] + [s.get("staff_id") for s in staff if str(s.get("role")).strip().lower() == "artist" and str(s.get("is_active")).strip().lower() in {"true", "1", "yes"}]
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            current_sales = order_data.get('sales_id', '')
+            edit_sales_id = st.selectbox(
+                "พนักงานขาย *",
+                sales_ids,
+                index=sales_ids.index(current_sales) if current_sales in sales_ids else 0,
+                key=f"edit_sales_id_{order_id}"
+            )
+
+        with col2:
+            current_artist = order_data.get('artist_id', '')
+            edit_artist_id = st.selectbox(
+                "ช่างทำ *",
+                artist_ids,
+                index=artist_ids.index(current_artist) if current_artist in artist_ids else 0,
+                key=f"edit_artist_id_{order_id}"
+            )
+
+        with col3:
+            current_channel = order_data.get('channel', '')
+            edit_channel = st.selectbox(
+                "ช่องทาง *",
+                ["", "facebook", "line", "walkin", "other"],
+                index=["", "facebook", "line", "walkin", "other"].index(current_channel) if current_channel in ["", "facebook", "line", "walkin", "other"] else 0,
+                key=f"edit_channel_{order_id}"
+            )
+
+        with col4:
+            current_status = order_data.get('order_status', '')
+            edit_order_status = st.selectbox(
+                "สถานะ *",
+                ["", "booking", "active", "cancel", "done"],
+                index=["", "booking", "active", "cancel", "done"].index(current_status) if current_status in ["", "booking", "active", "cancel", "done"] else 0,
+                format_func=lambda x: {
+                    "": "-- เลือกสถานะ --",
+                    "booking": "📅 จอง",
+                    "active": "✅ เข้ารับบริการ",
+                    "cancel": "❌ ยกเลิก",
+                    "done": "✔️ เสร็จสิ้น"
+                }.get(x, x),
+                key=f"edit_order_status_{order_id}"
+            )
+
+        st.markdown("---")
+        st.markdown("#### 📝 หมายเหตุ")
+
+        edit_note = st.text_input(
+            "หมายเหตุ",
+            value=order_data.get('note', ''),
+            key=f"edit_note_{order_id}",
+            placeholder="ระบุรายละเอียดเพิ่มเติม"
+        )
+
+        st.markdown("---")
+
+        # ปุ่มบันทึก
+        save_button = st.form_submit_button(
+            "💾 บันทึกการแก้ไข",
+            use_container_width=True,
+            type="primary"
+        )
+
+    # Handle บันทึก
+    if save_button:
+        try:
+            updated_data = {
+                'appointment_date': str(edit_appointment_date),
+                'appointment_time': edit_appointment_time,
+                'sales_id': edit_sales_id,
+                'artist_id': edit_artist_id,
+                'channel': edit_channel,
+                'order_status': edit_order_status,
+                'note': edit_note
+            }
+
+            update_order(order_id, row_index, updated_data)
+
+            st.success("✅ บันทึกการแก้ไขเรียบร้อย!")
+            time.sleep(1)
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"❌ เกิดข้อผิดพลาด: {str(e)}")
+
+    # ส่วนแก้ไขรายการสินค้า
+    st.markdown("---")
+    st.markdown("### 💅 รายการสินค้า/บริการ")
+
+    # โหลดรายการสินค้าปัจจุบัน
+    order_items = load_order_items(order_id)
+
+    if order_items:
+        st.markdown("**รายการปัจจุบัน:**")
+        for idx, item in enumerate(order_items):
+            col_num, col_item, col_price, col_remove = st.columns([0.5, 3, 1.5, 0.5])
+
+            with col_num:
+                st.text(f"{idx + 1}.")
+
+            with col_item:
+                st.text(item.get('item_name', 'N/A'))
+
+            with col_price:
+                st.text(f"{to_float(item.get('list_price', 0)):,.2f} ฿")
+
+            with col_remove:
+                if st.button("🗑️", key=f"remove_item_{order_id}_{item.get('order_item_id')}_{idx}", help="ลบรายการนี้"):
+                    try:
+                        delete_order_item(item.get('order_item_id'))
+                        # อัพเดทยอดรวม
+                        from orders import update_order_total
+                        update_order_total(ws_orders, ws_order_items, order_id)
+                        st.success("✅ ลบรายการสำเร็จ!")
+                        time.sleep(0.5)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ ไม่สามารถลบได้: {str(e)}")
+    else:
+        st.info("ไม่มีรายการสินค้าในคำสั่งซื้อนี้")
+
+    # เพิ่มรายการใหม่
+    st.markdown("**เพิ่มรายการใหม่:**")
+
+    item_codes = [r.get("item_code", "") for r in master_items if r.get("item_code")]
+
+    col_select, col_add = st.columns([4, 1])
+
+    with col_select:
+        new_item = st.selectbox(
+            "เลือกสินค้า/บริการที่ต้องการเพิ่ม",
+            [""] + item_codes,
+            format_func=lambda x: "-- เลือกสินค้า/บริการ --" if x == "" else x,
+            key=f"new_item_select_{order_id}"
+        )
+
+    with col_add:
+        st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
+        if st.button("➕ เพิ่ม", use_container_width=True, key=f"add_new_item_btn_{order_id}"):
+            if new_item:
+                try:
+                    add_order_item(order_id, new_item)
+                    st.success(f"✅ เพิ่ม {new_item} สำเร็จ!")
+                    time.sleep(0.5)
                     st.rerun()
-
-            st.markdown("---")
-
-    # แสดงหน้าแก้ไข Order (ถ้ากดปุ่มแก้ไข)
-    if st.session_state.get('show_order_editor', False):
-        show_order_editor(master_items, staff, customers)
+                except Exception as e:
+                    st.error(f"❌ ไม่สามารถเพิ่มได้: {str(e)}")
 
 
-def show_order_editor(master_items, staff, customers):
+def show_order_editor_old(master_items, staff, customers):
     """แสดงหน้าแก้ไข Order"""
 
     order_data = st.session_state.get('selected_order_data', {})
@@ -401,7 +643,7 @@ def show_order_editor(master_items, staff, customers):
                 st.text(item.get('item_name', 'N/A'))
 
             with col_price:
-                st.text(f"{float(item.get('list_price', 0)):,.2f} ฿")
+                st.text(f"{to_float(item.get('list_price', 0)):,.2f} ฿")
 
             with col_remove:
                 if st.button("🗑️", key=f"remove_item_{item.get('order_item_id')}_{idx}", help="ลบรายการนี้"):
