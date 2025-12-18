@@ -161,27 +161,27 @@ def show_customer_list():
             f"👤 {full_name} | 📞 {phone} | 📋 {customer_id}",
             expanded=False
         ):
-            # ฟอร์มแก้ไขข้อมูลลูกค้า
-            with st.form(f"edit_customer_form_{customer_id}"):
+            # ฟอร์มแก้ไขข้อมูลลูกค้า (ใช้ row_index เป็น key เพื่อป้องกัน duplicate)
+            with st.form(f"edit_customer_form_{row_index}"):
                 st.markdown("#### ✏️ แก้ไขข้อมูลลูกค้า")
 
                 edit_full_name = st.text_input(
                     "ชื่อ-นามสกุล *",
                     value=full_name,
-                    key=f"edit_name_{customer_id}"
+                    key=f"edit_name_{row_index}"
                 )
 
                 edit_phone = st.text_input(
                     "เบอร์โทร *",
                     value=phone,
-                    key=f"edit_phone_{customer_id}"
+                    key=f"edit_phone_{row_index}"
                 )
 
                 edit_contact_channel = st.selectbox(
                     "ช่องทางติดต่อ *",
                     ["facebook", "line", "phone", "walkin", "other"],
                     index=["facebook", "line", "phone", "walkin", "other"].index(contact_channel) if contact_channel in ["facebook", "line", "phone", "walkin", "other"] else 0,
-                    key=f"edit_channel_{customer_id}"
+                    key=f"edit_channel_{row_index}"
                 )
 
                 save_button = st.form_submit_button(
@@ -210,10 +210,10 @@ def show_customer_list():
 
             st.markdown("---")
 
-            # ปุ่มจัดการรูปภาพ
+            # ปุ่มจัดการรูปภาพ (ใช้ row_index เป็น key)
             if st.button(
                 "📸 จัดการรูปภาพ",
-                key=f"manage_photos_{customer_id}_{idx}",
+                key=f"manage_photos_{row_index}",
                 use_container_width=True
             ):
                 # เก็บข้อมูลลูกค้าใน session state
