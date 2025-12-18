@@ -101,6 +101,31 @@ def update_customer(customer_id: str, row_index: int, updated_data: Dict):
         raise Exception(f"ไม่สามารถอัพเดทข้อมูลลูกค้าได้: {str(e)}")
 
 
+def delete_customer(customer_id: str, row_index: int):
+    """
+    ลบลูกค้าจาก Google Sheets
+
+    Args:
+        customer_id: รหัสลูกค้า
+        row_index: แถวที่ต้องลบ (เริ่มจาก 1 = header, 2 = แถวแรก)
+    """
+    try:
+        logger.info(f"Deleting customer {customer_id} at row {row_index}")
+
+        ws_customers.delete_rows(row_index)
+
+        logger.info(f"Customer {customer_id} deleted successfully")
+
+        # Clear cache
+        st.cache_data.clear()
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to delete customer: {e}")
+        raise Exception(f"ไม่สามารถลบลูกค้าได้: {str(e)}")
+
+
 def show_customer_list():
     """แสดงรายการลูกค้าทั้งหมด"""
 
@@ -210,21 +235,45 @@ def show_customer_list():
 
             st.markdown("---")
 
-            # ปุ่มจัดการรูปภาพ (ใช้ row_index เป็น key)
-            if st.button(
-                "📸 จัดการรูปภาพ",
-                key=f"manage_photos_{row_index}",
-                use_container_width=True
-            ):
-                # เก็บข้อมูลลูกค้าใน session state
-                st.session_state.selected_customer_id = customer_id
-                st.session_state.selected_customer_name = full_name
-                st.session_state.selected_customer_phone = phone  # เพิ่มเบอร์โทร
-                st.session_state.selected_customer_folder_id = drive_folder_id
-                st.session_state.selected_customer_folder_url = folder_url
-                st.session_state.selected_customer_row = row_index
-                st.session_state.show_photo_manager = True
-                st.rerun()
+            # ปุ่มจัดการรูปภาพ และปุ่มลบ (ใช้ row_index เป็น key)
+            col_photo, col_delete = st.columns(2)
+
+            with col_photo:
+                if st.button(
+                    "📸 จัดการรูปภาพ",
+                    key=f"manage_photos_{row_index}",
+                    use_container_width=True
+                ):
+                    # เก็บข้อมูลลูกค้าใน session state
+                    st.session_state.selected_customer_id = customer_id
+                    st.session_state.selected_customer_name = full_name
+                    st.session_state.selected_customer_phone = phone  # เพิ่มเบอร์โทร
+                    st.session_state.selected_customer_folder_id = drive_folder_id
+                    st.session_state.selected_customer_folder_url = folder_url
+                    st.session_state.selected_customer_row = row_index
+                    st.session_state.show_photo_manager = True
+                    st.rerun()
+
+            with col_delete:
+                if st.button(
+                    "🗑️ ลบลูกค้า",
+                    key=f"delete_customer_{row_index}",
+                    type="secondary",
+                    use_container_width=True
+                ):
+                    confirm_key = f'confirm_delete_customer_{customer_id}'
+                    if st.session_state.get(confirm_key, False):
+                        try:
+                            delete_customer(customer_id, row_index)
+                            st.success(f"✅ ลบลูกค้า {customer_id} สำเร็จ!")
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ {str(e)}")
+                    else:
+                        st.session_state[confirm_key] = True
+                        st.warning("⚠️ กดอีกครั้งเพื่อยืนยันการลบ")
+                        st.rerun()
 
 
 def show_photo_manager():

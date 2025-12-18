@@ -166,6 +166,34 @@ def add_order_item(order_id: str, item_code: str):
         raise Exception(f"ไม่สามารถเพิ่มรายการสินค้าได้: {str(e)}")
 
 
+def delete_order(order_id: str):
+    """ลบ Order และรายการสินค้าทั้งหมด"""
+    try:
+        logger.info(f"Deleting order: {order_id}")
+
+        # ลบรายการสินค้าทั้งหมดใน order ก่อน
+        all_items = ws_order_items.get_all_records()
+        for idx, item in enumerate(all_items, start=2):
+            if str(item.get('order_id')) == str(order_id):
+                ws_order_items.delete_rows(idx)
+                logger.info(f"Deleted item row {idx}")
+
+        # ลบ order
+        all_orders = ws_orders.get_all_records()
+        for idx, order in enumerate(all_orders, start=2):
+            if str(order.get('order_id')) == str(order_id):
+                ws_orders.delete_rows(idx)
+                logger.info(f"Deleted order row {idx}")
+                break
+
+        st.cache_data.clear()
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to delete order: {e}")
+        raise Exception(f"ไม่สามารถลบ Order ได้: {str(e)}")
+
+
 def render_order_edit_page(master_items, staff, customers):
     """Render หน้าแก้ไข Order"""
 
@@ -373,8 +401,24 @@ def show_order_editor_inline(order_data, order_id, row_index, master_items, staf
     if delete_key not in st.session_state:
         st.session_state[delete_key] = []
 
-    # แสดงข้อมูลลูกค้า
-    st.info(f"**ลูกค้า:** {order_data.get('customer_id', 'N/A')}")
+    # แสดงข้อมูลลูกค้า และปุ่มลบ
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        st.info(f"**ลูกค้า:** {order_data.get('customer_id', 'N/A')}")
+    with col2:
+        if st.button("🗑️ ลบ Order", key=f"delete_order_{order_id}", type="secondary", use_container_width=True):
+            if st.session_state.get(f'confirm_delete_{order_id}', False):
+                try:
+                    delete_order(order_id)
+                    st.success(f"✅ ลบ Order {order_id} สำเร็จ!")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ {str(e)}")
+            else:
+                st.session_state[f'confirm_delete_{order_id}'] = True
+                st.warning("⚠️ กดอีกครั้งเพื่อยืนยันการลบ")
+                st.rerun()
 
     # ฟอร์มแก้ไข
     with st.form(f"edit_order_form_{order_id}"):
