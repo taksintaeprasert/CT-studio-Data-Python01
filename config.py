@@ -38,8 +38,17 @@ def get_credentials():
     # ถ้าไม่ได้รันบน Cloud หรือไม่มี secrets ให้ใช้ keygg.json
     KEY_FILE = "keygg.json"
     if os.path.exists(KEY_FILE):
-        return Credentials.from_service_account_file(KEY_FILE, scopes=SCOPES)
+        print(f"✅ Found {KEY_FILE}, loading credentials...")
+        try:
+            creds = Credentials.from_service_account_file(KEY_FILE, scopes=SCOPES)
+            print(f"✅ Service Account: {creds.service_account_email}")
+            return creds
+        except Exception as e:
+            print(f"❌ Error loading {KEY_FILE}: {e}")
+            raise
     else:
+        print(f"❌ {KEY_FILE} not found in current directory: {os.getcwd()}")
+        print(f"Files in directory: {os.listdir('.')}")
         raise FileNotFoundError(
             f"ไม่พบไฟล์ {KEY_FILE} และไม่ได้ตั้งค่า Streamlit secrets\n"
             "กรุณาตรวจสอบการตั้งค่า credentials"
