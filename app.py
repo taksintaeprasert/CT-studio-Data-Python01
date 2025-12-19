@@ -11,6 +11,7 @@ from customer_page import render_customer_page
 from order_edit_page import render_order_edit_page
 from dashboard_page import render_dashboard
 from marketing_data_page import render_marketing_data_page
+from auth import check_authentication, show_user_info, logout_button, is_admin
 
 # Initialize logger
 logger = get_logger()
@@ -41,10 +42,106 @@ def phone_str(v):
 st.set_page_config(
     page_title="CT Studio - ระบบจัดการ",
     page_icon="💄",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
+# =========================
+# MOBILE-FRIENDLY CSS
+# =========================
+st.markdown("""
+<style>
+    /* Mobile-friendly adjustments */
+    @media (max-width: 768px) {
+        /* ขยายปุ่มให้กดง่าย */
+        .stButton > button {
+            width: 100% !important;
+            height: 50px !important;
+            font-size: 16px !important;
+        }
+
+        /* ขยาย input fields */
+        .stTextInput > div > div > input,
+        .stSelectbox > div > div > select,
+        .stNumberInput > div > div > input {
+            font-size: 16px !important;
+            height: 50px !important;
+        }
+
+        /* ปรับ column ให้เป็น 1 column บนมือถือ */
+        [data-testid="column"] {
+            width: 100% !important;
+            flex: 100% !important;
+        }
+
+        /* ขยาย expander */
+        .streamlit-expanderHeader {
+            font-size: 16px !important;
+            padding: 15px !important;
+        }
+
+        /* ปรับ metrics */
+        [data-testid="stMetricValue"] {
+            font-size: 24px !important;
+        }
+
+        /* ปรับ tabs ให้ใหญ่ขึ้น */
+        .stTabs [data-baseweb="tab"] {
+            font-size: 14px !important;
+            padding: 12px 16px !important;
+        }
+    }
+
+    /* ปรับ sidebar ให้อ่านง่าย */
+    section[data-testid="stSidebar"] {
+        min-width: 250px !important;
+    }
+
+    /* ปรับตารางให้อ่านง่ายบนมือถือ */
+    .dataframe {
+        font-size: 14px !important;
+    }
+
+    /* ปรับ form submit button */
+    .stForm button[type="submit"] {
+        background-color: #0066cc !important;
+        color: white !important;
+        font-weight: bold !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
+# AUTHENTICATION CHECK
+# =========================
+name, authentication_status, username, authenticator = check_authentication()
+
+# ถ้ายังไม่ได้ login
+if authentication_status == False:
+    st.error('🚫 Username/password ไม่ถูกต้อง')
+    st.stop()
+
+elif authentication_status == None:
+    st.warning('👋 กรุณา Login เพื่อใช้งานระบบ')
+    st.info("""
+    **🔐 บัญชีทดสอบ:**
+    - Admin: username=`admin`, password=`admin123`
+    - Sales: username=`sales1`, password=`sales123`
+    """)
+    st.stop()
+
+# ถ้า login สำเร็จ
+logger.info(f"User logged in: {username} ({name})")
+
+# แสดงข้อมูลผู้ใช้และปุ่ม logout
+show_user_info(name, username)
+logout_button(authenticator)
+
+# =========================
+# MAIN APP
+# =========================
 st.title("💄 CT Studio - ระบบจัดการ")
+st.markdown(f"👋 สวัสดี **{name}**")
 st.markdown("---")
 
 # -------------------------
