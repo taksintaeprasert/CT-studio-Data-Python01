@@ -20,7 +20,3 @@ cookie:
   expiry_days: 30
   key: ct_studio_secret_key_2024  # เปลี่ยนเป็น random string
   name: ct_studio_auth_cookie
-
-preauthorized:
-  emails:
-  - admin@ctstudio.com
