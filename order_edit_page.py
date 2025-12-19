@@ -8,6 +8,7 @@ import time
 from datetime import datetime, date
 
 from sheets import ws_orders, ws_order_items, ws_master_item, ws_staff, ws_customers
+from sheets_helper import safe_get_orders, safe_get_order_items
 from orders import ValidationError
 from ct_logger import get_logger
 
@@ -40,7 +41,7 @@ def load_orders() -> List[Dict]:
     """โหลดข้อมูล Orders ทั้งหมด"""
     try:
         logger.info("Loading orders for edit page")
-        orders = ws_orders.get_all_records()
+        orders = safe_get_orders()
         logger.info(f"Loaded {len(orders)} orders")
         return orders
     except Exception as e:
@@ -54,7 +55,7 @@ def load_order_items(order_id: str) -> List[Dict]:
     """โหลดรายการสินค้าของ Order"""
     try:
         logger.info(f"Loading order items for: {order_id}")
-        all_items = ws_order_items.get_all_records()
+        all_items = safe_get_order_items()
         order_items = [item for item in all_items if str(item.get('order_id')) == str(order_id)]
         logger.info(f"Loaded {len(order_items)} items for order {order_id}")
         return order_items
@@ -115,7 +116,7 @@ def delete_order_item(item_id: str):
         logger.info(f"Deleting order item: {item_id}")
 
         # หาแถวที่ต้องลบ
-        all_items = ws_order_items.get_all_records()
+        all_items = safe_get_order_items()
         row_index = None
 
         for idx, item in enumerate(all_items, start=2):  # start=2 เพราะ row 1 = header
@@ -172,14 +173,14 @@ def delete_order(order_id: str):
         logger.info(f"Deleting order: {order_id}")
 
         # ลบรายการสินค้าทั้งหมดใน order ก่อน
-        all_items = ws_order_items.get_all_records()
+        all_items = safe_get_order_items()
         for idx, item in enumerate(all_items, start=2):
             if str(item.get('order_id')) == str(order_id):
                 ws_order_items.delete_rows(idx)
                 logger.info(f"Deleted item row {idx}")
 
         # ลบ order
-        all_orders = ws_orders.get_all_records()
+        all_orders = safe_get_orders()
         for idx, order in enumerate(all_orders, start=2):
             if str(order.get('order_id')) == str(order_id):
                 ws_orders.delete_rows(idx)

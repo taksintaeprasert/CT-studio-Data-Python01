@@ -4,6 +4,7 @@ import streamlit as st
 from datetime import datetime, date
 
 from sheets import ws_orders, ws_order_items, ws_master_item, ws_staff, ws_customers
+from sheets_helper import safe_get_master_items, safe_get_staff
 from orders import create_order_with_items, ValidationError
 from ct_logger import get_logger
 from customer_page import render_customer_page
@@ -52,7 +53,7 @@ def load_master_items():
     """โหลดรายการสินค้า/บริการ"""
     try:
         logger.info("Loading master items...")
-        items = ws_master_item.get_all_records()
+        items = safe_get_master_items()
         logger.info(f"Loaded {len(items)} master items")
         return items
     except Exception as e:
@@ -65,7 +66,7 @@ def load_staff():
     """โหลดข้อมูลพนักงาน"""
     try:
         logger.info("Loading staff data...")
-        staff = ws_staff.get_all_records()
+        staff = safe_get_staff()
         logger.info(f"Loaded {len(staff)} staff records")
         return staff
     except Exception as e:
