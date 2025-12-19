@@ -2,6 +2,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import os
+import base64
 
 # Scopes สำหรับการเข้าถึง Google Sheets และ Drive
 SCOPES = [
@@ -13,14 +14,22 @@ SCOPES = [
 def get_credentials():
     """
     โหลด credentials จาก Streamlit Secrets (Cloud) หรือ keygg.json (Local)
+    รองรับทั้ง private_key ปกติและ private_key_base64
     """
     try:
         # ลองโหลดจาก Streamlit secrets ก่อน (สำหรับ Cloud)
         import streamlit as st
         if "google_service_account" in st.secrets:
             # รันบน Streamlit Cloud
+            creds_dict = dict(st.secrets["google_service_account"])
+
+            # ถ้ามี private_key_base64 ให้ decode กลับมาเป็น private_key
+            if "private_key_base64" in creds_dict and "private_key" not in creds_dict:
+                encoded_key = creds_dict.pop("private_key_base64")
+                creds_dict["private_key"] = base64.b64decode(encoded_key).decode('utf-8')
+
             return Credentials.from_service_account_info(
-                st.secrets["google_service_account"],
+                creds_dict,
                 scopes=SCOPES
             )
     except (ImportError, FileNotFoundError, KeyError):
