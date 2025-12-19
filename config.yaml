@@ -1,0 +1,22 @@
+credentials:
+  usernames:
+    admin:
+      email: admin@ctstudio.com
+      name: Admin User
+      password: $2b$12$K8y5w0/uetpo0yvxRCVPROwH/uLmTifLTq2ma2zyoRiPm/Bzku.Cm  # admin123
+      role: admin
+    sales1:
+      email: sales1@ctstudio.com
+      name: Sales User 1
+      password: $2b$12$RuhjrzAD.cbblY4CDlX7medB4R0so1KCBoSDTNQgoBRzIsqz.3hS2  # sales123
+      role: sales
+    sales2:
+      email: sales2@ctstudio.com
+      name: Sales User 2
+      password: $2b$12$RuhjrzAD.cbblY4CDlX7medB4R0so1KCBoSDTNQgoBRzIsqz.3hS2  # sales123
+      role: sales
+
+cookie:
+  expiry_days: 30
+  key: ct_studio_secret_key_2024  # เปลี่ยนเป็น random string
+  name: ct_studio_auth_cookie
