@@ -9,6 +9,8 @@ from orders import create_order_with_items, ValidationError
 from ct_logger import get_logger
 from customer_page import render_customer_page
 from order_edit_page import render_order_edit_page
+from dashboard_page import render_dashboard
+from marketing_data_page import render_marketing_data_page
 
 # Initialize logger
 logger = get_logger()
@@ -129,7 +131,13 @@ with st.sidebar:
 # =========================
 # TABS
 # =========================
-tab1, tab2, tab3 = st.tabs(["📝 รับ Order", "✏️ แก้ไข Order", "👥 จัดการข้อมูลลูกค้า"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "📝 รับ Order",
+    "✏️ แก้ไข Order",
+    "👥 จัดการข้อมูลลูกค้า",
+    "📊 Dashboard",
+    "📈 Marketing Data"
+])
 
 # ========================
 # TAB 1: รับ Order
@@ -573,3 +581,17 @@ with tab2:
 # ========================
 with tab3:
     render_customer_page()
+
+
+# ========================
+# TAB 4: Dashboard
+# ========================
+with tab4:
+    render_dashboard()
+
+
+# ========================
+# TAB 5: Marketing Data
+# ========================
+with tab5:
+    render_marketing_data_page()

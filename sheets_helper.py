@@ -3,7 +3,7 @@ Helper functions สำหรับ Google Sheets
 รองรับกรณีที่มี empty headers
 """
 
-from sheets import ws_orders, ws_order_items, ws_master_item, ws_staff, ws_customers, ws_payments
+from sheets import ws_orders, ws_order_items, ws_master_item, ws_staff, ws_customers, ws_payments, ws_chats, ws_ads_budget
 
 
 # กำหนด expected headers สำหรับแต่ละ sheet
@@ -58,6 +58,18 @@ EXPECTED_HEADERS = {
         'amount',
         'net_amount',
         'payment_method',
+        'note'
+    ],
+    'chats': [
+        'chat_date',
+        'chat_count',
+        'note'
+    ],
+    'ads_budget': [
+        'week_start_date',
+        'week_end_date',
+        'budget_amount',
+        'platform',
         'note'
     ]
 }
@@ -119,3 +131,19 @@ def safe_get_payments():
         print("Warning: payments worksheet not available")
         return []
     return get_all_records_safe(ws_payments, 'payments')
+
+
+def safe_get_chats():
+    """โหลดข้อมูล chats ทั้งหมด"""
+    if ws_chats is None:
+        print("Warning: chats worksheet not available")
+        return []
+    return get_all_records_safe(ws_chats, 'chats')
+
+
+def safe_get_ads_budget():
+    """โหลดข้อมูล ads_budget ทั้งหมด"""
+    if ws_ads_budget is None:
+        print("Warning: ads_budget worksheet not available")
+        return []
+    return get_all_records_safe(ws_ads_budget, 'ads_budget')
