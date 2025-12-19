@@ -46,8 +46,8 @@ def check_authentication():
     """
     authenticator = init_authenticator()
 
-    # ย้าย login widget ไปไว้ sidebar
-    name, authentication_status, username = authenticator.login('Login', 'sidebar')
+    # ย้าย login widget ไปไว้ sidebar (เวอร์ชันใหม่ใช้ keyword arguments)
+    name, authentication_status, username = authenticator.login(location='sidebar')
 
     return name, authentication_status, username, authenticator
 
