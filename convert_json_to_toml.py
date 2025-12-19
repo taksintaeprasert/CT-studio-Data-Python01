@@ -19,8 +19,13 @@ def convert_json_to_toml(json_file="keygg.json", output_file="secrets.toml"):
 
         # เพิ่มแต่ละ field
         for key, value in data.items():
-            # ถ้าเป็น string ต้องใส่ quotes
-            if isinstance(value, str):
+            # ถ้าเป็น private_key ใช้ triple-quote และแปลง \n เป็น newline จริง
+            if key == 'private_key' and isinstance(value, str):
+                # แปลง \n เป็น newline จริงๆ
+                formatted_key = value.replace('\\n', '\n')
+                toml_content += f'{key} = """{formatted_key}"""\n'
+            # ถ้าเป็น string ธรรมดา ใส่ quotes
+            elif isinstance(value, str):
                 # Escape quotes ใน string
                 escaped_value = value.replace('"', '\\"')
                 toml_content += f'{key} = "{escaped_value}"\n'
