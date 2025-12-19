@@ -461,9 +461,7 @@ with tab1:
                     st.session_state["full_name"],
                     st.session_state["phone"],
                     st.session_state["contact_channel"],
-                    "",
-                    "",  # drive_folder_id
-                    ""   # folder_url
+                    ""  # note
                 ])
                 logger.info(f"New customer created: {customer_id}")
                 st.cache_data.clear()
