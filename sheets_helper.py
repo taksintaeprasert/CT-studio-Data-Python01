@@ -3,7 +3,7 @@ Helper functions สำหรับ Google Sheets
 รองรับกรณีที่มี empty headers
 """
 
-from sheets import ws_orders, ws_order_items, ws_master_item, ws_staff, ws_customers
+from sheets import ws_orders, ws_order_items, ws_master_item, ws_staff, ws_customers, ws_payments, ws_chats, ws_ads_budget
 
 
 # กำหนด expected headers สำหรับแต่ละ sheet
@@ -18,8 +18,9 @@ EXPECTED_HEADERS = {
         'artist_id',
         'channel',
         'order_status',
-        'total_income',
-        'note'
+        'total_price',  # เปลี่ยนจาก total_income
+        'note',
+        'total_paid'  # เพิ่ม column ใหม่
     ],
     'order_items': [
         'order_item_id',
@@ -48,6 +49,27 @@ EXPECTED_HEADERS = {
         'full_name',
         'phone',
         'contact_channel',
+        'note'
+    ],
+    'payments': [
+        'payment_id',
+        'order_id',
+        'payment_date',
+        'amount',
+        'net_amount',
+        'payment_method',
+        'note'
+    ],
+    'chats': [
+        'chat_date',
+        'chat_count',
+        'note'
+    ],
+    'ads_budget': [
+        'week_start_date',
+        'week_end_date',
+        'budget_amount',
+        'platform',
         'note'
     ]
 }
@@ -101,3 +123,27 @@ def safe_get_staff():
 def safe_get_customers():
     """โหลดข้อมูล customers ทั้งหมด"""
     return get_all_records_safe(ws_customers, 'customers')
+
+
+def safe_get_payments():
+    """โหลดข้อมูล payments ทั้งหมด"""
+    if ws_payments is None:
+        print("Warning: payments worksheet not available")
+        return []
+    return get_all_records_safe(ws_payments, 'payments')
+
+
+def safe_get_chats():
+    """โหลดข้อมูล chats ทั้งหมด"""
+    if ws_chats is None:
+        print("Warning: chats worksheet not available")
+        return []
+    return get_all_records_safe(ws_chats, 'chats')
+
+
+def safe_get_ads_budget():
+    """โหลดข้อมูล ads_budget ทั้งหมด"""
+    if ws_ads_budget is None:
+        print("Warning: ads_budget worksheet not available")
+        return []
+    return get_all_records_safe(ws_ads_budget, 'ads_budget')
