@@ -10,6 +10,14 @@ ws_master_item = sh.worksheet("master_item")
 ws_staff = sh.worksheet("staff")
 ws_customers = sh.worksheet("customers")
 
+# เพิ่ม payments worksheet
+try:
+    ws_payments = sh.worksheet("payments")
+    print("payments sheet:", ws_payments.title)
+except Exception as e:
+    print(f"Warning: payments sheet not found. Please create it. Error: {e}")
+    ws_payments = None
+
 print("sheets.py loaded, ws_orders =", ws_orders)
 print("orders sheet:", ws_orders.title)
 print("order_items sheet:", ws_order_items.title)
