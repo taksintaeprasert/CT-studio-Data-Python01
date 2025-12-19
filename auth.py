@@ -42,12 +42,18 @@ def check_authentication():
     ตรวจสอบ authentication และแสดงหน้า login ถ้ายังไม่ได้ login
 
     Returns:
-        tuple: (name, authentication_status, username)
+        tuple: (name, authentication_status, username, authenticator)
     """
     authenticator = init_authenticator()
 
-    # ย้าย login widget ไปไว้ sidebar (เวอร์ชันใหม่ใช้ keyword arguments)
-    name, authentication_status, username = authenticator.login(location='sidebar')
+    # แสดง login widget ใน sidebar
+    authenticator.login(location='sidebar')
+
+    # ดึงค่า authentication status จาก session state (API ใหม่)
+    import streamlit as st
+    name = st.session_state.get("name")
+    authentication_status = st.session_state.get("authentication_status")
+    username = st.session_state.get("username")
 
     return name, authentication_status, username, authenticator
 
@@ -110,4 +116,4 @@ def show_user_info(name: str, username: str):
 def logout_button(authenticator):
     """แสดงปุ่ม logout"""
     st.sidebar.markdown("---")
-    authenticator.logout('Logout', 'sidebar')
+    authenticator.logout(location='sidebar')
