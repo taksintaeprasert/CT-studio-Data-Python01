@@ -12,6 +12,7 @@ from customer_page import render_customer_page
 from order_edit_page import render_order_edit_page
 from dashboard_page import render_dashboard
 from marketing_data_page import render_marketing_data_page
+from sales_performance_page import render_sales_performance
 from auth import check_authentication, show_user_info, logout_button, is_admin
 
 # Initialize logger
@@ -229,12 +230,13 @@ with st.sidebar:
 # =========================
 # TABS
 # =========================
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📝 รับ Order",
     "✏️ แก้ไข Order",
     "👥 จัดการข้อมูลลูกค้า",
     "📊 Dashboard",
-    "📈 Marketing Data"
+    "📈 Marketing Data",
+    "💼 Sales Performance"
 ])
 
 # ========================
@@ -736,3 +738,10 @@ with tab4:
 # ========================
 with tab5:
     render_marketing_data_page()
+
+
+# ========================
+# TAB 6: Sales Performance
+# ========================
+with tab6:
+    render_sales_performance()

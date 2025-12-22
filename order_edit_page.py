@@ -373,8 +373,8 @@ def render_order_edit_page(master_items, staff, customers):
     for idx, order in enumerate(page_orders):
         order_id = order.get('order_id', 'N/A')
         customer_id = order.get('customer_id', 'N/A')
-        appointment_date = order.get('appointment_date', 'N/A')
-        appointment_time = order.get('appointment_time', 'N/A')
+        sales_id = order.get('sales_id', 'N/A')
+        artist_id = order.get('artist_id', 'N/A')
         order_status = order.get('order_status', 'N/A')
         total_income = order.get('total_income', 0)
 
@@ -389,12 +389,19 @@ def render_order_edit_page(master_items, staff, customers):
             "done": "✔️"
         }
 
-        # ใช้ expander แทนการกดปุ่มไปหน้าใหม่
+        status_labels = {
+            "booking": "จอง",
+            "active": "เข้ารับบริการ",
+            "cancel": "ยกเลิก",
+            "done": "เสร็จสิ้น"
+        }
+
+        # แสดงข้อมูลแบบสั้น: ชื่อลูกค้า | เซล | ช่าง | สถานะ | ราคา
         with st.expander(
-            f"📋 {order_id} | 👤 {customer_id} | 📅 {appointment_date} {appointment_time} | {status_icons.get(order_status, '')} {order_status} | 💰 {to_float(total_income):,.2f} ฿",
+            f"👤 {customer_id} | 💼 {sales_id} | 🎨 {artist_id} | {status_icons.get(order_status, '')} {status_labels.get(order_status, order_status)} | 💰 {to_float(total_income):,.2f} ฿",
             expanded=False
         ):
-            # แสดงฟอร์มแก้ไขใน expander
+            # แสดงฟอร์มแก้ไขใน expander (พร้อม order_id ข้างใน)
             show_order_editor_inline(order, order_id, row_index, master_items, staff)
 
 
@@ -405,6 +412,10 @@ def show_order_editor_inline(order_data, order_id, row_index, master_items, staf
     delete_key = f'items_to_delete_{order_id}'
     if delete_key not in st.session_state:
         st.session_state[delete_key] = []
+
+    # แสดง Order ID ด้านบน
+    st.markdown(f"### 📋 Order: `{order_id}`")
+    st.markdown("---")
 
     # แสดงข้อมูลลูกค้า และปุ่มต่างๆ
     col1, col2, col3 = st.columns([3, 1.5, 1])
