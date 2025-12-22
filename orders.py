@@ -83,12 +83,13 @@ def create_order(
     artist_id: str,
     channel: str,
     order_status: str,
-    note: str = ""
+    note: str = "",
+    deposit: float = 0.0
 ) -> str:
-    """สร้าง order ใหม่"""
-    
-    logger.info(f"Creating order for customer: {customer_id}")
-    
+    """สร้าง order ใหม่ (รองรับเงินมัดจำ)"""
+
+    logger.info(f"Creating order for customer: {customer_id} with deposit: {deposit}")
+
     # Validate
     try:
         validate_order_data(
@@ -97,12 +98,13 @@ def create_order(
         )
     except ValidationError:
         raise
-    
+
     try:
         order_id = f"TEST-{datetime.now().strftime('%d%m%y%H%M%S')}"
         created_at = datetime.now().isoformat()
+        # total_income เริ่มต้นเป็น 0 (จะอัพเดทหลังเพิ่ม items)
         total_income = 0
-        
+
         row = [
             order_id,
             created_at,
@@ -114,15 +116,16 @@ def create_order(
             channel,
             order_status,
             total_income,
+            deposit,  # เงินมัดจำ (แยกจาก total_income)
             note
         ]
-        
+
         logger.debug(f"Appending row to orders sheet: {order_id}")
         ws_orders.append_row(row)
-        
-        logger.info(f"Order created successfully: {order_id}")
+
+        logger.info(f"Order created successfully: {order_id} (deposit: {deposit})")
         return order_id
-        
+
     except Exception as e:
         logger.error(f"Failed to create order: {e}")
         raise
@@ -171,13 +174,13 @@ def add_order_item(
 
 
 def update_order_total(ws_orders, ws_order_items, order_id: str) -> float:
-    """อัพเดทยอดรวมของ order"""
-    
+    """อัพเดทยอดรวมของ order (ราคาบริการทั้งหมด - ไม่รวมเงินมัดจำ)"""
+
     logger.debug(f"Updating total for order: {order_id}")
-    
+
     try:
         items = ws_order_items.get_all_records()
-        
+
         def to_number(x):
             """แปลงราคาเป็นตัวเลข"""
             if not x:
@@ -189,31 +192,37 @@ def update_order_total(ws_orders, ws_order_items, order_id: str) -> float:
             except (ValueError, AttributeError) as e:
                 logger.warning(f"Cannot convert price to number: {x}")
                 return 0
-        
+
         # หารายการที่อยู่ใน order นี้
         order_items = [i for i in items if str(i["order_id"]) == str(order_id)]
-        total = sum(to_number(i["list_price"]) for i in order_items)
-        
-        logger.debug(f"Calculated total: {total} (from {len(order_items)} items)")
-        
-        # หา row index ของ order
+        items_total = sum(to_number(i["list_price"]) for i in order_items)
+
+        # total_income = ราคาบริการทั้งหมด (ไม่บวก deposit)
+        # deposit เก็บแยกใน column deposit
+        total_income = items_total
+
+        logger.debug(f"Calculated: items={items_total}, total_income={total_income}")
+
+        # ดึงข้อมูล orders เพื่อหา row index
         orders = ws_orders.get_all_records()
+
+        # หา row index
         row_index = next(
             (idx for idx, r in enumerate(orders, start=2) if str(r["order_id"]) == str(order_id)),
             None
         )
-        
+
         if row_index is None:
             error_msg = f"ไม่พบ Order ID '{order_id}' สำหรับอัพเดทยอดรวม"
             logger.error(error_msg)
             raise ValueError(error_msg)
-        
+
         # อัพเดท column 10 (total_income)
-        ws_orders.update_cell(row_index, 10, total)
-        
-        logger.info(f"Order total updated: {order_id} = {total}")
-        return total
-        
+        ws_orders.update_cell(row_index, 10, total_income)
+
+        logger.info(f"Order total updated: {order_id} = {total_income} (items: {items_total})")
+        return total_income
+
     except Exception as e:
         logger.error(f"Failed to update order total: {e}")
         raise
@@ -233,25 +242,26 @@ def create_order_with_items(
     item_codes: list,
     upsell_flags: list = None,
     note: str = "",
+    deposit: float = 0.0,
 ):
-    """สร้าง order พร้อมรายการสินค้า - ฟังก์ชันหลัก"""
-    
+    """สร้าง order พร้อมรายการสินค้า - ฟังก์ชันหลัก (รองรับเงินมัดจำ)"""
+
     logger.info(
-        f"Creating order with {len(item_codes)} items for customer {customer_id}"
+        f"Creating order with {len(item_codes)} items for customer {customer_id} (deposit: {deposit})"
     )
-    
+
     try:
         # Validate
         if not item_codes:
             raise ValidationError("กรุณาเลือกรายการสินค้า/บริการอย่างน้อย 1 รายการ")
-        
+
         if upsell_flags is None:
             upsell_flags = [False] * len(item_codes)
-        
+
         if len(upsell_flags) != len(item_codes):
             raise ValidationError("จำนวน upsell_flags ไม่ตรงกับ item_codes")
-        
-        # 1. สร้าง order
+
+        # 1. สร้าง order (พร้อม deposit)
         order_id = create_order(
             ws_orders=ws_orders,
             customer_id=customer_id,
@@ -262,8 +272,9 @@ def create_order_with_items(
             channel=channel,
             order_status=order_status,
             note=note,
+            deposit=deposit,
         )
-        
+
         # 2. เพิ่มรายการสินค้า
         for code, is_upsell in zip(item_codes, upsell_flags):
             add_order_item(
@@ -273,14 +284,14 @@ def create_order_with_items(
                 item_code=code,
                 is_upsell=is_upsell,
             )
-        
-        # 3. อัพเดทยอดรวม
+
+        # 3. อัพเดทยอดรวม (จะนับรวม deposit + items)
         total = update_order_total(ws_orders, ws_order_items, order_id)
-        
-        logger.info(f"Order completed: {order_id} (Total: {total})")
-        
+
+        logger.info(f"Order completed: {order_id} (Total: {total}, Deposit: {deposit})")
+
         return order_id, total
-        
+
     except ValidationError:
         # ส่งต่อ ValidationError ไปให้ caller จัดการ
         raise

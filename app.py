@@ -3,9 +3,10 @@ import time
 import streamlit as st
 from datetime import datetime, date
 
-from sheets import ws_orders, ws_order_items, ws_master_item, ws_staff, ws_customers
+from sheets import ws_orders, ws_order_items, ws_master_item, ws_staff, ws_customers, ws_payments
 from sheets_helper import safe_get_master_items, safe_get_staff
 from orders import create_order_with_items, ValidationError
+from payments import add_payment, PAYMENT_METHODS, get_payment_method_options
 from ct_logger import get_logger
 from customer_page import render_customer_page
 from order_edit_page import render_order_edit_page
@@ -281,6 +282,8 @@ with tab1:
         "channel": "",
         "order_status": "",
         "selected_items": [],
+        "deposit": 0.0,
+        "payment_method": "not_paid",  # Default: ยังไม่ได้ชำระ
         "note": "",
     }
 
@@ -481,8 +484,32 @@ with tab1:
 
         st.markdown("---")
 
-        # Note
-        st.text_input("หมายเหตุ", key="note", placeholder="ระบุรายละเอียดเพิ่มเติม (ถ้ามี)")
+        # Deposit, Payment Method & Note
+        st.markdown("#### 💰 เงินมัดจำ & การชำระเงิน")
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.number_input(
+                "เงินมัดจำ (บาท)",
+                key="deposit",
+                min_value=0.0,
+                step=100.0,
+                help="จำนวนเงินมัดจำที่ลูกค้าจ่ายมา (ถ้ามี)"
+            )
+
+        with col2:
+            # Payment method - แสดงเฉพาะเมื่อมี deposit > 0
+            payment_options = list(PAYMENT_METHODS.items())
+            st.selectbox(
+                "ช่องทางชำระเงิน",
+                options=[k for k, v in payment_options],
+                format_func=lambda x: PAYMENT_METHODS[x],
+                key="payment_method",
+                help="เลือกช่องทางที่ลูกค้าชำระเงินมัดจำ (ถ้ามี)"
+            )
+
+        with col3:
+            st.text_input("หมายเหตุ", key="note", placeholder="ระบุรายละเอียดเพิ่มเติม (ถ้ามี)")
 
         st.markdown("---")
 
@@ -584,9 +611,28 @@ with tab1:
                 item_codes=item_codes,
                 upsell_flags=upsell_flags,
                 note=st.session_state["note"],
+                deposit=float(st.session_state.get("deposit", 0.0)),
             )
 
             logger.info(f"Order completed successfully: {order_id} (Total: {total})")
+
+            # บันทึก payment record ถ้ามี deposit และเลือก payment method
+            deposit_amount = float(st.session_state.get("deposit", 0.0))
+            payment_method = st.session_state.get("payment_method", "not_paid")
+
+            if deposit_amount > 0 and payment_method != "not_paid" and ws_payments is not None:
+                try:
+                    payment_id = add_payment(
+                        ws_payments=ws_payments,
+                        order_id=order_id,
+                        amount=deposit_amount,
+                        payment_method=payment_method,
+                        note=f"เงินมัดจำ ({PAYMENT_METHODS.get(payment_method, payment_method)})"
+                    )
+                    logger.info(f"Payment record created: {payment_id} for deposit {deposit_amount}")
+                except Exception as e:
+                    logger.error(f"Failed to create payment record: {e}")
+                    st.warning(f"⚠️ บันทึก Order สำเร็จ แต่ไม่สามารถบันทึกการชำระเงินได้: {e}")
 
             # Success message
             msg = st.empty()

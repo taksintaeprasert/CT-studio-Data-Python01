@@ -18,9 +18,9 @@ EXPECTED_HEADERS = {
         'artist_id',
         'channel',
         'order_status',
-        'total_price',  # เปลี่ยนจาก total_income
-        'note',
-        'total_paid'  # เพิ่ม column ใหม่
+        'total_income',  # ยอดรวมทั้งหมด (deposit + items)
+        'deposit',  # เงินมัดจำ
+        'note'
     ],
     'order_items': [
         'order_item_id',
