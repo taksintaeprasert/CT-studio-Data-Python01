@@ -77,7 +77,7 @@ def update_order(order_id: str, row_index: int, updated_data: Dict):
         logger.info(f"Updating order {order_id} at row {row_index}")
 
         # อัพเดทแต่ละ column
-        # สมมติโครงสร้าง: order_id, created_at, customer_id, appointment_date, appointment_time, sales_id, artist_id, channel, order_status, total_income, note
+        # โครงสร้าง: order_id, created_at, customer_id, appointment_date, appointment_time, sales_id, artist_id, channel, order_status, total_income, deposit, note
 
         if 'appointment_date' in updated_data:
             ws_orders.update_cell(row_index, 4, updated_data['appointment_date'])
@@ -97,8 +97,11 @@ def update_order(order_id: str, row_index: int, updated_data: Dict):
         if 'order_status' in updated_data:
             ws_orders.update_cell(row_index, 9, updated_data['order_status'])
 
+        if 'deposit' in updated_data:
+            ws_orders.update_cell(row_index, 11, updated_data['deposit'])
+
         if 'note' in updated_data:
-            ws_orders.update_cell(row_index, 11, updated_data['note'])
+            ws_orders.update_cell(row_index, 12, updated_data['note'])
 
         logger.info(f"Order {order_id} updated successfully")
 
@@ -402,11 +405,24 @@ def show_order_editor_inline(order_data, order_id, row_index, master_items, staf
     if delete_key not in st.session_state:
         st.session_state[delete_key] = []
 
-    # แสดงข้อมูลลูกค้า และปุ่มลบ
-    col1, col2 = st.columns([4, 1])
+    # แสดงข้อมูลลูกค้า และปุ่มต่างๆ
+    col1, col2, col3 = st.columns([3, 1.5, 1])
     with col1:
         st.info(f"**ลูกค้า:** {order_data.get('customer_id', 'N/A')}")
+
     with col2:
+        # ปุ่มเปลี่ยนสถานะจอง → เข้ารับบริการ (แสดงเฉพาะเมื่อ status = booking)
+        if order_data.get('order_status', '').lower() == 'booking':
+            if st.button("✅ เข้ารับบริการ", key=f"booking_to_active_{order_id}", type="primary", use_container_width=True):
+                try:
+                    update_order(order_id, row_index, {'order_status': 'active'})
+                    st.success(f"✅ เปลี่ยนสถานะเป็น 'เข้ารับบริการ' แล้ว!")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ {str(e)}")
+
+    with col3:
         if st.button("🗑️ ลบ Order", key=f"delete_order_{order_id}", type="secondary", use_container_width=True):
             if st.session_state.get(f'confirm_delete_{order_id}', False):
                 try:

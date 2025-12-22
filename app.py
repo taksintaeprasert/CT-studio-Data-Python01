@@ -281,6 +281,7 @@ with tab1:
         "channel": "",
         "order_status": "",
         "selected_items": [],
+        "deposit": 0.0,
         "note": "",
     }
 
@@ -481,8 +482,21 @@ with tab1:
 
         st.markdown("---")
 
-        # Note
-        st.text_input("หมายเหตุ", key="note", placeholder="ระบุรายละเอียดเพิ่มเติม (ถ้ามี)")
+        # Deposit & Note
+        st.markdown("#### 💰 เงินมัดจำ & หมายเหตุ")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.number_input(
+                "เงินมัดจำ (บาท)",
+                key="deposit",
+                min_value=0.0,
+                step=100.0,
+                help="จำนวนเงินมัดจำที่ลูกค้าโอนมา (ถ้ามี)"
+            )
+
+        with col2:
+            st.text_input("หมายเหตุ", key="note", placeholder="ระบุรายละเอียดเพิ่มเติม (ถ้ามี)")
 
         st.markdown("---")
 
@@ -584,6 +598,7 @@ with tab1:
                 item_codes=item_codes,
                 upsell_flags=upsell_flags,
                 note=st.session_state["note"],
+                deposit=float(st.session_state.get("deposit", 0.0)),
             )
 
             logger.info(f"Order completed successfully: {order_id} (Total: {total})")
