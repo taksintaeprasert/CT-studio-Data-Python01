@@ -7,9 +7,10 @@ from typing import List, Dict
 import time
 from datetime import datetime, date
 
-from sheets import ws_orders, ws_order_items, ws_master_item, ws_staff, ws_customers
+from sheets import ws_orders, ws_order_items, ws_master_item, ws_staff, ws_customers, ws_payments
 from sheets_helper import safe_get_orders, safe_get_order_items
 from orders import ValidationError
+from payments import add_payment, calculate_total_paid, PAYMENT_METHODS
 from ct_logger import get_logger
 
 # Initialize
@@ -413,14 +414,13 @@ def show_order_editor_inline(order_data, order_id, row_index, master_items, staf
     with col2:
         # ปุ่มเปลี่ยนสถานะจอง → เข้ารับบริการ (แสดงเฉพาะเมื่อ status = booking)
         if order_data.get('order_status', '').lower() == 'booking':
+            checkin_key = f"show_checkin_payment_{order_id}"
+            if checkin_key not in st.session_state:
+                st.session_state[checkin_key] = False
+
             if st.button("✅ เข้ารับบริการ", key=f"booking_to_active_{order_id}", type="primary", use_container_width=True):
-                try:
-                    update_order(order_id, row_index, {'order_status': 'active'})
-                    st.success(f"✅ เปลี่ยนสถานะเป็น 'เข้ารับบริการ' แล้ว!")
-                    time.sleep(1)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ {str(e)}")
+                st.session_state[checkin_key] = True
+                st.rerun()
 
     with col3:
         if st.button("🗑️ ลบ Order", key=f"delete_order_{order_id}", type="secondary", use_container_width=True):
@@ -436,6 +436,94 @@ def show_order_editor_inline(order_data, order_id, row_index, master_items, staf
                 st.session_state[f'confirm_delete_{order_id}'] = True
                 st.warning("⚠️ กดอีกครั้งเพื่อยืนยันการลบ")
                 st.rerun()
+
+    # ฟอร์มบันทึกการชำระเงิน (แสดงเมื่อกดปุ่ม "เข้ารับบริการ")
+    checkin_key = f"show_checkin_payment_{order_id}"
+    if st.session_state.get(checkin_key, False):
+        with st.container():
+            st.markdown("---")
+            st.markdown("### 💵 บันทึกการรับชำระเงิน")
+
+            # คำนวณยอดเงิน
+            total_income = to_float(order_data.get('total_income', 0))
+            total_paid = 0.0
+            if ws_payments is not None:
+                try:
+                    total_paid = calculate_total_paid(ws_payments, order_id)
+                except:
+                    pass
+
+            balance = max(0, total_income - total_paid)
+
+            col_info1, col_info2, col_info3 = st.columns(3)
+            with col_info1:
+                st.metric("ยอดรวม", f"฿{total_income:,.2f}")
+            with col_info2:
+                st.metric("จ่ายแล้ว", f"฿{total_paid:,.2f}")
+            with col_info3:
+                st.metric("ค้างชำระ", f"฿{balance:,.2f}")
+
+            st.markdown("---")
+
+            with st.form(f"checkin_payment_form_{order_id}"):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    payment_amount = st.number_input(
+                        "จำนวนเงินที่รับ (บาท)",
+                        min_value=0.0,
+                        value=balance,
+                        step=100.0,
+                        key=f"checkin_payment_amount_{order_id}"
+                    )
+
+                with col2:
+                    payment_options = [(k, v) for k, v in PAYMENT_METHODS.items() if k != 'not_paid']
+                    payment_method = st.selectbox(
+                        "ช่องทางชำระเงิน",
+                        options=[k for k, v in payment_options],
+                        format_func=lambda x: PAYMENT_METHODS[x],
+                        key=f"checkin_payment_method_{order_id}"
+                    )
+
+                payment_note = st.text_input(
+                    "หมายเหตุ (ถ้ามี)",
+                    key=f"checkin_payment_note_{order_id}",
+                    placeholder="เช่น: จ่ายส่วนที่เหลือ"
+                )
+
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    submit_payment = st.form_submit_button("💾 บันทึกและเข้ารับบริการ", type="primary", use_container_width=True)
+                with col_btn2:
+                    cancel_payment = st.form_submit_button("❌ ยกเลิก", use_container_width=True)
+
+            if cancel_payment:
+                st.session_state[checkin_key] = False
+                st.rerun()
+
+            if submit_payment:
+                try:
+                    # บันทึก payment (ถ้ามีจำนวนเงิน > 0)
+                    if payment_amount > 0 and ws_payments is not None:
+                        payment_id = add_payment(
+                            ws_payments=ws_payments,
+                            order_id=order_id,
+                            amount=payment_amount,
+                            payment_method=payment_method,
+                            note=payment_note or f"รับชำระเมื่อเข้ารับบริการ ({PAYMENT_METHODS.get(payment_method, payment_method)})"
+                        )
+                        logger.info(f"Payment recorded: {payment_id} for {payment_amount} via {payment_method}")
+
+                    # เปลี่ยนสถานะเป็น active
+                    update_order(order_id, row_index, {'order_status': 'active'})
+
+                    st.session_state[checkin_key] = False
+                    st.success(f"✅ บันทึกสำเร็จ! เปลี่ยนสถานะเป็น 'เข้ารับบริการ' แล้ว")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ เกิดข้อผิดพลาด: {str(e)}")
 
     # ฟอร์มแก้ไข
     with st.form(f"edit_order_form_{order_id}"):

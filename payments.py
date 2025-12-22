@@ -53,18 +53,18 @@ def add_payment(
         ws_payments: worksheet object สำหรับ payments
         order_id: รหัส order
         amount: จำนวนเงินที่รับ
-        payment_method: วิธีชำระ (cash, transfer, credit_card_3%)
+        payment_method: วิธีชำระ (cash, transfer, promptpay, credit_card)
         note: หมายเหตุ
 
     Returns:
         payment_id
     """
     try:
-        payment_id = f"PAY-{uuid.uuid4().hex[:8]}"
-        payment_date = datetime.now().isoformat()
+        payment_id = f"PAY-{uuid.uuid4().hex[:8].upper()}"
+        payment_date = datetime.now().strftime("%Y-%m-%d")  # Format: YYYY-MM-DD
 
-        # คำนวณเงินสุทธิ
-        net_amount = calculate_payment_amount(amount, payment_method)
+        # คำนวณเงินสุทธิ (ปัจจุบันไม่หักค่าธรรมเนียม)
+        net_amount = amount
 
         row = [
             payment_id,
@@ -76,7 +76,7 @@ def add_payment(
             note
         ]
 
-        logger.info(f"Adding payment: {payment_id} for order {order_id}, amount: {net_amount}")
+        logger.info(f"Adding payment: {payment_id} for order {order_id}, amount: {net_amount}, method: {payment_method}")
         ws_payments.append_row(row)
 
         return payment_id
@@ -199,3 +199,18 @@ def get_payment_summary(ws_payments, order_id: str, total_price: float) -> Dict:
             'payment_count': 0,
             'payments': []
         }
+
+
+# Payment method constants
+PAYMENT_METHODS = {
+    'cash': '💵 เงินสด',
+    'transfer': '🏦 โอนธนาคาร',
+    'promptpay': '📱 PromptPay',
+    'credit_card': '💳 บัตรเครดิต',
+    'not_paid': '❌ ยังไม่ได้ชำระ'
+}
+
+
+def get_payment_method_options():
+    """รายการ payment methods สำหรับ dropdown (ไม่รวม 'ยังไม่ได้ชำระ')"""
+    return {k: v for k, v in PAYMENT_METHODS.items() if k != 'not_paid'}
