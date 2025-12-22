@@ -52,7 +52,7 @@ def filter_by_date_range(data: List[Dict], date_field: str, start_date: date, en
 
 def calculate_sales(orders: List[Dict], start_date: date, end_date: date) -> float:
     """
-    คำนวณยอด Sales (total_price รวมของ orders ที่สร้างในช่วงเวลา)
+    คำนวณยอด Sales (total_income รวมของ orders ที่สร้างในช่วงเวลา)
 
     Args:
         orders: list of orders
@@ -62,13 +62,16 @@ def calculate_sales(orders: List[Dict], start_date: date, end_date: date) -> flo
         ยอด sales
     """
     filtered_orders = filter_by_date_range(orders, 'created_at', start_date, end_date)
-    total_sales = sum(float(o.get('total_price', 0) or 0) for o in filtered_orders)
+    total_sales = sum(float(o.get('total_income', 0) or 0) for o in filtered_orders)
     return total_sales
 
 
 def calculate_income(payments: List[Dict], start_date: date, end_date: date) -> float:
     """
     คำนวณยอด Income จริง (เงินที่รับในช่วงเวลา)
+
+    Note: ปัจจุบันใช้ข้อมูลจาก payments sheet (ถ้ามี)
+    ถ้าไม่มีข้อมูล payments จะคืนค่า 0 (ต้องบันทึก payment ใน payments sheet)
 
     Args:
         payments: list of payments
@@ -77,6 +80,9 @@ def calculate_income(payments: List[Dict], start_date: date, end_date: date) -> 
     Returns:
         ยอด income
     """
+    if not payments:
+        return 0.0
+
     filtered_payments = filter_by_date_range(payments, 'payment_date', start_date, end_date)
     total_income = sum(float(p.get('net_amount', 0) or 0) for p in filtered_payments)
     return total_income
@@ -128,7 +134,7 @@ def calculate_aov(orders: List[Dict], start_date: date, end_date: date) -> float
     if not filtered_orders:
         return 0.0
 
-    total_sales = sum(float(o.get('total_price', 0) or 0) for o in filtered_orders)
+    total_sales = sum(float(o.get('total_income', 0) or 0) for o in filtered_orders)
     return total_sales / len(filtered_orders)
 
 
@@ -150,7 +156,7 @@ def calculate_revenue_per_customer(orders: List[Dict], start_date: date, end_dat
     if not unique_customers:
         return 0.0
 
-    total_sales = sum(float(o.get('total_price', 0) or 0) for o in filtered_orders)
+    total_sales = sum(float(o.get('total_income', 0) or 0) for o in filtered_orders)
     return total_sales / len(unique_customers)
 
 
@@ -209,7 +215,7 @@ def calculate_channel_performance(orders: List[Dict], start_date: date, end_date
             channels[channel] = {'orders': 0, 'sales': 0.0}
 
         channels[channel]['orders'] += 1
-        channels[channel]['sales'] += float(order.get('total_price', 0) or 0)
+        channels[channel]['sales'] += float(order.get('total_income', 0) or 0)
 
     return channels
 
