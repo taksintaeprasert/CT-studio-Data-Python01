@@ -102,8 +102,8 @@ def create_order(
     try:
         order_id = f"TEST-{datetime.now().strftime('%d%m%y%H%M%S')}"
         created_at = datetime.now().isoformat()
-        # total_income เริ่มต้นเป็น deposit (จะอัพเดทอีกครั้งหลังเพิ่ม items)
-        total_income = deposit
+        # total_income เริ่มต้นเป็น 0 (จะอัพเดทหลังเพิ่ม items)
+        total_income = 0
 
         row = [
             order_id,
@@ -116,7 +116,7 @@ def create_order(
             channel,
             order_status,
             total_income,
-            deposit,  # เพิ่มคอลัมน์ deposit
+            deposit,  # เงินมัดจำ (แยกจาก total_income)
             note
         ]
 
@@ -174,7 +174,7 @@ def add_order_item(
 
 
 def update_order_total(ws_orders, ws_order_items, order_id: str) -> float:
-    """อัพเดทยอดรวมของ order (รวมเงินมัดจำ + ราคาบริการ)"""
+    """อัพเดทยอดรวมของ order (ราคาบริการทั้งหมด - ไม่รวมเงินมัดจำ)"""
 
     logger.debug(f"Updating total for order: {order_id}")
 
@@ -197,25 +197,14 @@ def update_order_total(ws_orders, ws_order_items, order_id: str) -> float:
         order_items = [i for i in items if str(i["order_id"]) == str(order_id)]
         items_total = sum(to_number(i["list_price"]) for i in order_items)
 
-        # ดึงข้อมูล deposit จาก order
+        # total_income = ราคาบริการทั้งหมด (ไม่บวก deposit)
+        # deposit เก็บแยกใน column deposit
+        total_income = items_total
+
+        logger.debug(f"Calculated: items={items_total}, total_income={total_income}")
+
+        # ดึงข้อมูล orders เพื่อหา row index
         orders = ws_orders.get_all_records()
-        order_data = next(
-            (r for r in orders if str(r["order_id"]) == str(order_id)),
-            None
-        )
-
-        if order_data is None:
-            error_msg = f"ไม่พบ Order ID '{order_id}' สำหรับอัพเดทยอดรวม"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-
-        # ดึง deposit (ถ้ามี)
-        deposit = to_number(order_data.get("deposit", 0))
-
-        # total_income = deposit + ราคาบริการทั้งหมด
-        total_income = deposit + items_total
-
-        logger.debug(f"Calculated: deposit={deposit}, items={items_total}, total={total_income}")
 
         # หา row index
         row_index = next(
@@ -231,7 +220,7 @@ def update_order_total(ws_orders, ws_order_items, order_id: str) -> float:
         # อัพเดท column 10 (total_income)
         ws_orders.update_cell(row_index, 10, total_income)
 
-        logger.info(f"Order total updated: {order_id} = {total_income} (deposit: {deposit}, items: {items_total})")
+        logger.info(f"Order total updated: {order_id} = {total_income} (items: {items_total})")
         return total_income
 
     except Exception as e:
