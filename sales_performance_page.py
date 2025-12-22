@@ -135,7 +135,7 @@ def render_sales_performance():
             st.warning("ไม่พบ Sales ในระบบ")
             return
 
-        sales_options = {s['staff_id']: f"{s['full_name']} ({s['staff_id']})" for s in sales_list}
+        sales_options = {s['staff_id']: f"{s.get('staff_name', s['staff_id'])} ({s['staff_id']})" for s in sales_list}
 
         selected_sales = st.selectbox(
             "เลือก Sales",
@@ -180,7 +180,7 @@ def render_sales_performance():
     # แสดง Sales info
     sales_info = next((s for s in sales_list if s['staff_id'] == selected_sales), None)
     if sales_info:
-        st.markdown(f"### 💼 {sales_info['full_name']} ({selected_sales})")
+        st.markdown(f"### 💼 {sales_info.get('staff_name', selected_sales)} ({selected_sales})")
     else:
         st.markdown(f"### 💼 Sales: {selected_sales}")
 
