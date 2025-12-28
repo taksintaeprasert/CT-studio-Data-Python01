@@ -194,7 +194,7 @@ export default function NewOrderPage() {
     setSaving(true)
 
     try {
-      let finalCustomerId = customerId
+      let finalCustomerId: number | null = null
 
       // Create new customer if needed
       if (isNewCustomer) {
@@ -205,24 +205,34 @@ export default function NewOrderPage() {
             phone: newPhone || null,
             contact_channel: newContactChannel,
           })
-          .select()
+          .select('id')
           .single()
 
-        if (customerError) {
+        if (customerError || !newCustomer) {
           console.error('Customer creation error:', customerError)
-          alert(`ไม่สามารถสร้างลูกค้าใหม่: ${customerError.message}`)
+          alert(`ไม่สามารถสร้างลูกค้าใหม่: ${customerError?.message || 'ไม่ได้รับข้อมูลลูกค้า'}`)
           return
         }
-        finalCustomerId = newCustomer.id.toString()
+        console.log('New customer created:', newCustomer)
+        finalCustomerId = newCustomer.id
+      } else {
+        // Existing customer - parse ID from string
+        finalCustomerId = parseInt(customerId)
+        if (isNaN(finalCustomerId)) {
+          alert('กรุณาเลือกลูกค้า')
+          return
+        }
       }
 
-      // Create order - pass IDs as-is (supports both integer and UUID)
+      console.log('Creating order with customer_id:', finalCustomerId)
+
+      // Create order
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
           customer_id: finalCustomerId,
-          sales_id: salesId || null,
-          artist_id: artistId || null,
+          sales_id: salesId ? parseInt(salesId) : null,
+          artist_id: artistId ? parseInt(artistId) : null,
           appointment_date: appointmentDate || null,
           appointment_time: appointmentTime || null,
           order_status: orderType,
