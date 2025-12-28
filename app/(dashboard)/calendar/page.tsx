@@ -498,30 +498,35 @@ export default function CalendarPage() {
               {dayAppointments.map(apt => (
                 <div
                   key={apt.id}
-                  className={`rounded-xl overflow-hidden border-2 ${getArtistBorderColor(apt.artist_id)} bg-white dark:bg-gray-800 shadow-md`}
+                  className={`rounded-xl overflow-hidden border-2 ${getArtistBorderColor(apt.artist_id)} bg-white dark:bg-gray-800 shadow-lg`}
                 >
-                  {/* Header - Product + Time + Artist */}
-                  <div className={`px-4 py-3 ${getArtistColor(apt.artist_id)} text-white`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <h4 className="font-bold text-lg truncate">{apt.product_name}</h4>
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        apt.item_status === 'completed' ? 'bg-white/30' : 'bg-black/20'
-                      }`}>
-                        {apt.item_status}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4 mt-1 text-white/90 text-sm">
-                      <span className="flex items-center gap-1 font-medium">
+                  {/* Header - Product + Time + Artist in one line */}
+                  <div className={`px-4 py-4 ${getArtistColor(apt.artist_id)} text-white`}>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {/* Product Name */}
+                      <h4 className="font-bold text-xl">{apt.product_name}</h4>
+
+                      {/* Time Badge with Gradient */}
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 shadow-lg">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         {formatTime(apt.appointment_time)}
                       </span>
-                      <span className="flex items-center gap-1">
+
+                      {/* Artist Badge */}
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold bg-white/25 backdrop-blur-sm">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         {apt.artist_name || 'No Artist'}
+                      </span>
+
+                      {/* Status Badge */}
+                      <span className={`ml-auto px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
+                        apt.item_status === 'completed' ? 'bg-green-400/30 text-green-100' : 'bg-black/20'
+                      }`}>
+                        {apt.item_status}
                       </span>
                     </div>
                   </div>
