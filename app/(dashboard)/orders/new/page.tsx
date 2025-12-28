@@ -216,13 +216,13 @@ export default function NewOrderPage() {
         finalCustomerId = newCustomer.id.toString()
       }
 
-      // Create order
+      // Create order - pass IDs as-is (supports both integer and UUID)
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
-          customer_id: parseInt(finalCustomerId),
-          sales_id: salesId ? parseInt(salesId) : null,
-          artist_id: artistId ? parseInt(artistId) : null,
+          customer_id: finalCustomerId,
+          sales_id: salesId || null,
+          artist_id: artistId || null,
           appointment_date: appointmentDate || null,
           appointment_time: appointmentTime || null,
           order_status: orderType,
