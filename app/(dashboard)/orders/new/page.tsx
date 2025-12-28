@@ -23,6 +23,7 @@ interface Product {
   product_name: string
   list_price: number
   category: string | null
+  is_free?: boolean
 }
 
 interface SelectedProduct {
@@ -59,6 +60,11 @@ export default function NewOrderPage() {
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([])
   const [selectedProductId, setSelectedProductId] = useState('')
 
+  // Search & Suggest
+  const [productSearch, setProductSearch] = useState('')
+  const [showDropdown, setShowDropdown] = useState(false)
+  const [suggestedProduct, setSuggestedProduct] = useState<Product | null>(null)
+
   const router = useRouter()
   const supabase = createClient()
 
@@ -70,7 +76,7 @@ export default function NewOrderPage() {
     const [customersRes, staffRes, productsRes] = await Promise.all([
       supabase.from('customers').select('id, full_name, phone').eq('is_active', true).order('full_name'),
       supabase.from('staff').select('id, staff_name, role').eq('is_active', true).order('staff_name'),
-      supabase.from('products').select('id, product_code, product_name, list_price, category').eq('is_active', true).order('product_name'),
+      supabase.from('products').select('id, product_code, product_name, list_price, category, is_free').eq('is_active', true).order('product_name'),
     ])
 
     console.log('Products loaded:', productsRes.data?.length || 0)
@@ -80,19 +86,38 @@ export default function NewOrderPage() {
     setLoading(false)
   }
 
-  const addProduct = () => {
-    if (!selectedProductId) {
-      alert('กรุณาเลือกสินค้า/บริการก่อน')
-      return
+  // Find related free product (e.g., Eyebrow Tattoo → Eyebrow Touch Up)
+  const findRelatedFreeProduct = (product: Product): Product | null => {
+    if (!product.category) return null
+
+    // Look for free touch-up or free products in same category
+    const relatedFree = products.find(p =>
+      p.id !== product.id &&
+      p.is_free &&
+      p.category === product.category &&
+      !selectedProducts.some(sp => sp.product_id === p.id)
+    )
+
+    // Or look for "Touch Up" / "Free" products matching the main service
+    if (!relatedFree) {
+      const mainName = product.product_name.toLowerCase()
+      return products.find(p =>
+        p.id !== product.id &&
+        (p.list_price === 0 || p.is_free) &&
+        (p.product_name.toLowerCase().includes('touch up') ||
+         p.product_name.toLowerCase().includes('free') ||
+         p.product_name.toLowerCase().includes('ฟรี')) &&
+        p.product_name.toLowerCase().includes(product.category?.toLowerCase() || '') &&
+        !selectedProducts.some(sp => sp.product_id === p.id)
+      ) || null
     }
 
-    // Use string comparison to handle both number and string IDs from Supabase
-    const product = products.find(p => String(p.id) === selectedProductId)
-    if (!product) {
-      console.error('Product not found. selectedProductId:', selectedProductId, 'products:', products.map(p => ({ id: p.id, type: typeof p.id })))
-      alert('ไม่พบสินค้าที่เลือก')
-      return
-    }
+    return relatedFree
+  }
+
+  const addProductById = (productId: string) => {
+    const product = products.find(p => String(p.id) === productId)
+    if (!product) return
 
     if (selectedProducts.find(p => p.product_id === product.id)) {
       alert('สินค้านี้ถูกเลือกไปแล้ว')
@@ -106,7 +131,34 @@ export default function NewOrderPage() {
       is_upsell: false,
     }
     setSelectedProducts(prev => [...prev, newProduct])
+
+    // Check for related free product
+    const relatedFree = findRelatedFreeProduct(product)
+    if (relatedFree) {
+      setSuggestedProduct(relatedFree)
+    }
+
+    // Clear search
+    setProductSearch('')
     setSelectedProductId('')
+    setShowDropdown(false)
+  }
+
+  const addSuggestedProduct = () => {
+    if (!suggestedProduct) return
+
+    const newProduct: SelectedProduct = {
+      product_id: suggestedProduct.id,
+      product_name: suggestedProduct.product_name,
+      price: suggestedProduct.list_price,
+      is_upsell: false,
+    }
+    setSelectedProducts(prev => [...prev, newProduct])
+    setSuggestedProduct(null)
+  }
+
+  const dismissSuggestion = () => {
+    setSuggestedProduct(null)
   }
 
   const removeProduct = (productId: number) => {
@@ -218,6 +270,17 @@ export default function NewOrderPage() {
   const salesStaff = staff.filter(s => s.role === 'sales' || s.role === 'admin')
   const artists = staff.filter(s => s.role === 'artist')
   const availableProducts = products.filter(p => !selectedProducts.some(sp => sp.product_id === p.id))
+
+  // Filter products based on search text
+  const filteredProducts = availableProducts.filter(p => {
+    if (!productSearch.trim()) return true
+    const search = productSearch.toLowerCase()
+    return (
+      p.product_name.toLowerCase().includes(search) ||
+      p.product_code.toLowerCase().includes(search) ||
+      (p.category && p.category.toLowerCase().includes(search))
+    )
+  })
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -384,30 +447,106 @@ export default function NewOrderPage() {
             สินค้า/บริการ <span className="text-red-500">*</span>
           </h2>
 
-          <div className="flex gap-2">
-            <select
-              value={selectedProductId}
-              onChange={(e) => {
-                console.log('Selected:', e.target.value)
-                setSelectedProductId(e.target.value)
-              }}
-              className="select flex-1"
-            >
-              <option value="">-- เลือกสินค้า/บริการ ({availableProducts.length} รายการ) --</option>
-              {availableProducts.map(p => (
-                <option key={p.id} value={String(p.id)}>
-                  [{p.category || 'อื่นๆ'}] {p.product_name} - ฿{p.list_price.toLocaleString()}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={addProduct}
-              className="btn btn-primary"
-            >
-              + เพิ่ม
-            </button>
+          {/* Searchable Product Input */}
+          <div className="relative">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={productSearch}
+                  onChange={(e) => {
+                    setProductSearch(e.target.value)
+                    setShowDropdown(true)
+                  }}
+                  onFocus={() => setShowDropdown(true)}
+                  placeholder={`พิมพ์ค้นหาสินค้า/บริการ... (${availableProducts.length} รายการ)`}
+                  className="input w-full"
+                />
+                {productSearch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProductSearch('')
+                      setShowDropdown(false)
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Dropdown Results */}
+            {showDropdown && filteredProducts.length > 0 && (
+              <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                {filteredProducts.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => addProductById(String(p.id))}
+                    className="w-full px-4 py-3 text-left hover:bg-pink-50 dark:hover:bg-gray-700 flex justify-between items-center border-b dark:border-gray-700 last:border-b-0"
+                  >
+                    <div>
+                      <span className="text-xs text-gray-400 mr-2">[{p.category || 'อื่นๆ'}]</span>
+                      <span className="font-medium dark:text-white">{p.product_name}</span>
+                      {p.is_free && <span className="ml-2 text-xs text-green-500">ฟรี</span>}
+                    </div>
+                    <span className="text-pink-500 font-medium">
+                      {p.is_free || p.list_price === 0 ? 'ฟรี' : `฿${p.list_price.toLocaleString()}`}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {showDropdown && productSearch && filteredProducts.length === 0 && (
+              <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg p-4 text-center text-gray-500">
+                ไม่พบสินค้าที่ค้นหา
+              </div>
+            )}
           </div>
+
+          {/* Click outside to close dropdown */}
+          {showDropdown && (
+            <div
+              className="fixed inset-0 z-10"
+              onClick={() => setShowDropdown(false)}
+            />
+          )}
+
+          {/* Suggestion Banner */}
+          {suggestedProduct && (
+            <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">💡</span>
+                <div>
+                  <p className="text-sm text-green-800 dark:text-green-300 font-medium">
+                    แนะนำเพิ่ม: {suggestedProduct.product_name}
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-400">
+                    {suggestedProduct.is_free || suggestedProduct.list_price === 0 ? 'บริการฟรี' : `฿${suggestedProduct.list_price.toLocaleString()}`}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={addSuggestedProduct}
+                  className="px-3 py-1.5 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600"
+                >
+                  + เพิ่ม
+                </button>
+                <button
+                  type="button"
+                  onClick={dismissSuggestion}
+                  className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-300 dark:hover:bg-gray-600"
+                >
+                  ไม่ใช้
+                </button>
+              </div>
+            </div>
+          )}
 
           {products.length === 0 && (
             <div className="text-center text-orange-500 py-2">
