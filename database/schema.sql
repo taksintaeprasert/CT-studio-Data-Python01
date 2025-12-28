@@ -1,9 +1,6 @@
 -- CT Studio ERP Database Schema
 -- Run this in Supabase SQL Editor
 
--- Enable Row Level Security
-ALTER DATABASE postgres SET "app.jwt_secret" TO 'your-jwt-secret';
-
 -- =============================================
 -- CUSTOMERS TABLE
 -- =============================================
