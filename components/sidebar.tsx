@@ -9,6 +9,7 @@ import { useTheme } from '@/lib/theme-context'
 const menuItems = [
   { href: '/', label: 'แดชบอร์ด', icon: '📊' },
   { href: '/orders', label: 'คำสั่งซื้อ', icon: '📋' },
+  { href: '/service', label: 'บริการลูกค้า', icon: '💆' },
   { href: '/customers', label: 'ลูกค้า', icon: '👥' },
   { href: '/products', label: 'สินค้า/บริการ', icon: '📦' },
   { href: '/sales', label: 'Sales Performance', icon: '📈' },

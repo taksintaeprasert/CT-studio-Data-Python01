@@ -52,12 +52,10 @@ export default function NewOrderPage() {
 
   const [salesId, setSalesId] = useState('')
   const [artistId, setArtistId] = useState('')
-  const [appointmentDate, setAppointmentDate] = useState('')
-  const [appointmentTime, setAppointmentTime] = useState('')
   const [deposit, setDeposit] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('โอนเงิน')
   const [note, setNote] = useState('')
-  const [orderType, setOrderType] = useState<'booking' | 'active'>('booking') // จอง / ใช้บริการ
+  const [orderType, setOrderType] = useState<'booking' | 'paid'>('booking') // จอง / ชำระแล้ว
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([])
   const [selectedProductId, setSelectedProductId] = useState('')
 
@@ -226,15 +224,13 @@ export default function NewOrderPage() {
 
       console.log('Creating order with customer_id:', finalCustomerId)
 
-      // Create order
+      // Create order (no appointment date - appointments are per service item)
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
           customer_id: finalCustomerId,
           sales_id: salesId ? parseInt(salesId) : null,
           artist_id: artistId ? parseInt(artistId) : null,
-          appointment_date: appointmentDate || null,
-          appointment_time: appointmentTime || null,
           order_status: orderType,
           total_income: totalIncome,
           deposit: parseFloat(deposit) || 0,
@@ -462,23 +458,23 @@ export default function NewOrderPage() {
               </div>
             </label>
             <label className={`flex-1 cursor-pointer rounded-lg border-2 p-4 transition-all ${
-              orderType === 'active'
-                ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/20'
-                : 'border-gray-200 dark:border-gray-700 hover:border-pink-300'
+              orderType === 'paid'
+                ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                : 'border-gray-200 dark:border-gray-700 hover:border-green-300'
             }`}>
               <input
                 type="radio"
                 name="orderType"
-                value="active"
-                checked={orderType === 'active'}
-                onChange={() => setOrderType('active')}
+                value="paid"
+                checked={orderType === 'paid'}
+                onChange={() => setOrderType('paid')}
                 className="sr-only"
               />
               <div className="flex items-center gap-3">
-                <span className="text-2xl">✨</span>
+                <span className="text-2xl">✅</span>
                 <div>
-                  <p className="font-bold text-gray-800 dark:text-white">ใช้บริการ</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">ลูกค้ามาใช้บริการ/Upsell</p>
+                  <p className="font-bold text-gray-800 dark:text-white">ชำระแล้ว</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">ลูกค้าชำระเงินครบแล้ว</p>
                 </div>
               </div>
             </label>
@@ -668,29 +664,11 @@ export default function NewOrderPage() {
           )}
         </div>
 
-        {/* Appointment & Payment */}
+        {/* Payment */}
         <div className="card space-y-4">
-          <h2 className="font-bold text-gray-800 dark:text-white border-b pb-2">นัดหมายและการชำระเงิน</h2>
+          <h2 className="font-bold text-gray-800 dark:text-white border-b pb-2">การชำระเงิน</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">วันนัดหมาย</label>
-              <input
-                type="date"
-                value={appointmentDate}
-                onChange={(e) => setAppointmentDate(e.target.value)}
-                className="input"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">เวลานัดหมาย</label>
-              <input
-                type="time"
-                value={appointmentTime}
-                onChange={(e) => setAppointmentTime(e.target.value)}
-                className="input"
-              />
-            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">เงินมัดจำ</label>
               <input
