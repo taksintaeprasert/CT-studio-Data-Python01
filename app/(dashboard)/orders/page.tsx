@@ -7,7 +7,7 @@ import Link from 'next/link'
 interface Order {
   id: number
   order_date: string
-  appointment_date: string | null
+  created_at: string
   order_status: string
   total_income: number
   deposit: number
@@ -33,7 +33,7 @@ export default function OrdersPage() {
       .select(`
         id,
         order_date,
-        appointment_date,
+        created_at,
         order_status,
         total_income,
         deposit,
@@ -72,27 +72,27 @@ export default function OrdersPage() {
   }
 
   const getStatusBadge = (status: string) => {
-    const badges: Record<string, { class: string; label: string }> = {
-      booking: { class: 'badge-booking', label: 'จอง' },
-      active: { class: 'badge-active', label: 'กำลังทำ' },
-      done: { class: 'badge-done', label: 'เสร็จสิ้น' },
-      cancel: { class: 'badge-cancel', label: 'ยกเลิก' },
+    const badges: Record<string, { bg: string; text: string; label: string }> = {
+      booking: { bg: 'bg-yellow-500', text: 'text-white', label: 'จอง' },
+      paid: { bg: 'bg-green-500', text: 'text-white', label: 'ชำระแล้ว' },
+      done: { bg: 'bg-blue-500', text: 'text-white', label: 'เสร็จสิ้น' },
+      cancelled: { bg: 'bg-red-500', text: 'text-white', label: 'ยกเลิก' },
     }
-    return badges[status] || { class: 'badge', label: status }
+    return badges[status] || { bg: 'bg-gray-500', text: 'text-white', label: status }
   }
 
   // Calculate stats
   const stats = {
     total: orders.length,
     booking: orders.filter(o => o.order_status === 'booking').length,
-    active: orders.filter(o => o.order_status === 'active').length,
+    paid: orders.filter(o => o.order_status === 'paid').length,
     done: orders.filter(o => o.order_status === 'done').length,
   }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-gray-500">กำลังโหลด...</div>
+        <div className="text-gray-500 dark:text-gray-400">กำลังโหลด...</div>
       </div>
     )
   }
@@ -102,8 +102,8 @@ export default function OrdersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">คำสั่งซื้อ</h1>
-          <p className="text-gray-500">จัดการรายการคำสั่งซื้อทั้งหมด</p>
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-white">คำสั่งซื้อ</h1>
+          <p className="text-gray-500 dark:text-gray-400">จัดการรายการคำสั่งซื้อทั้งหมด</p>
         </div>
         <Link href="/orders/new" className="btn btn-primary">
           + สร้างออเดอร์ใหม่
@@ -113,20 +113,20 @@ export default function OrdersPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="card text-center">
-          <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
-          <p className="text-sm text-gray-500">ทั้งหมด</p>
+          <p className="text-2xl font-bold text-gray-800 dark:text-white">{stats.total}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">ทั้งหมด</p>
         </div>
         <div className="card text-center">
           <p className="text-2xl font-bold text-yellow-600">{stats.booking}</p>
-          <p className="text-sm text-gray-500">รอนัดหมาย</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">จอง</p>
         </div>
         <div className="card text-center">
-          <p className="text-2xl font-bold text-blue-600">{stats.active}</p>
-          <p className="text-sm text-gray-500">กำลังทำ</p>
+          <p className="text-2xl font-bold text-green-600">{stats.paid}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">ชำระแล้ว</p>
         </div>
         <div className="card text-center">
-          <p className="text-2xl font-bold text-green-600">{stats.done}</p>
-          <p className="text-sm text-gray-500">เสร็จสิ้น</p>
+          <p className="text-2xl font-bold text-blue-600">{stats.done}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">เสร็จสิ้น</p>
         </div>
       </div>
 
@@ -146,9 +146,9 @@ export default function OrdersPage() {
         >
           <option value="">สถานะทั้งหมด</option>
           <option value="booking">จอง</option>
-          <option value="active">กำลังทำ</option>
+          <option value="paid">ชำระแล้ว</option>
           <option value="done">เสร็จสิ้น</option>
-          <option value="cancel">ยกเลิก</option>
+          <option value="cancelled">ยกเลิก</option>
         </select>
       </div>
 
@@ -162,7 +162,7 @@ export default function OrdersPage() {
                 <th>ลูกค้า</th>
                 <th>Sales</th>
                 <th>Artist</th>
-                <th>วันนัดหมาย</th>
+                <th>วันที่สร้าง</th>
                 <th>ยอดเงิน</th>
                 <th>สถานะ</th>
                 <th></th>
@@ -173,14 +173,14 @@ export default function OrdersPage() {
                 const badge = getStatusBadge(order.order_status)
                 return (
                   <tr key={order.id}>
-                    <td className="font-medium">#{order.id}</td>
-                    <td>{order.customers?.full_name || '-'}</td>
-                    <td>{order.sales?.staff_name || '-'}</td>
-                    <td>{order.artist?.staff_name || '-'}</td>
-                    <td>{formatDate(order.appointment_date)}</td>
-                    <td>{formatCurrency(order.total_income)}</td>
+                    <td className="font-medium text-gray-800 dark:text-white">#{order.id}</td>
+                    <td className="text-gray-800 dark:text-white">{order.customers?.full_name || '-'}</td>
+                    <td className="text-gray-600 dark:text-gray-300">{order.sales?.staff_name || '-'}</td>
+                    <td className="text-gray-600 dark:text-gray-300">{order.artist?.staff_name || '-'}</td>
+                    <td className="text-gray-500 dark:text-gray-400 text-sm">{formatDate(order.created_at)}</td>
+                    <td className="text-gray-800 dark:text-white font-medium">{formatCurrency(order.total_income)}</td>
                     <td>
-                      <span className={`badge ${badge.class}`}>{badge.label}</span>
+                      <span className={`${badge.bg} ${badge.text} px-2 py-1 rounded-full text-xs font-medium`}>{badge.label}</span>
                     </td>
                     <td>
                       <Link
@@ -195,7 +195,7 @@ export default function OrdersPage() {
               })}
               {filteredOrders.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center text-gray-500 py-8">
+                  <td colSpan={8} className="text-center text-gray-500 dark:text-gray-400 py-8">
                     ไม่พบรายการ
                   </td>
                 </tr>

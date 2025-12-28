@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 interface Customer {
@@ -29,22 +29,23 @@ interface Order {
   id: number
   customer_id: number
   order_date: string
+  created_at: string
   order_status: 'booking' | 'paid' | 'done' | 'cancelled'
   total_income: number
   deposit: number
   payment_method: string | null
   note: string | null
+  customers: Customer | null
   sales: { staff_name: string } | null
   artist: { staff_name: string } | null
   order_items: OrderItem[]
 }
 
-export default function CustomerServicePage() {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [customer, setCustomer] = useState<Customer | null>(null)
+export default function AppointmentPage() {
   const [orders, setOrders] = useState<Order[]>([])
-  const [loading, setLoading] = useState(false)
-  const [searched, setSearched] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0])
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Selected order for detail view
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
@@ -54,47 +55,40 @@ export default function CustomerServicePage() {
   const [paymentAmount, setPaymentAmount] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('โอนเงิน')
 
+  // Confirmation modal
+  const [confirmAction, setConfirmAction] = useState<{type: string; message: string} | null>(null)
+
   // Item edit modal
   const [editingItem, setEditingItem] = useState<OrderItem | null>(null)
   const [editDate, setEditDate] = useState('')
   const [editTime, setEditTime] = useState('')
   const [editStatus, setEditStatus] = useState<OrderItem['item_status']>('pending')
 
+  // Order edit modal (for corrections)
+  const [showEditOrderModal, setShowEditOrderModal] = useState(false)
+  const [editOrderStatus, setEditOrderStatus] = useState<Order['order_status']>('booking')
+  const [editOrderDeposit, setEditOrderDeposit] = useState('')
+
   const supabase = createClient()
 
-  const searchCustomer = async () => {
-    if (!searchQuery.trim()) {
-      alert('กรุณากรอกชื่อหรือเบอร์โทรศัพท์')
-      return
-    }
+  // Load orders on mount and when date filter changes
+  useEffect(() => {
+    fetchOrders()
+  }, [dateFilter])
 
+  const fetchOrders = async () => {
     setLoading(true)
-    setSearched(true)
     setSelectedOrder(null)
 
-    // Search customer by phone OR name
-    const { data: customerData } = await supabase
-      .from('customers')
-      .select('*')
-      .eq('is_active', true)
-      .or(`phone.ilike.%${searchQuery.trim()}%,full_name.ilike.%${searchQuery.trim()}%`)
-      .limit(1)
-      .single()
+    // Fetch orders created on the selected date
+    const startOfDay = `${dateFilter}T00:00:00`
+    const endOfDay = `${dateFilter}T23:59:59`
 
-    if (!customerData) {
-      setCustomer(null)
-      setOrders([])
-      setLoading(false)
-      return
-    }
-
-    setCustomer(customerData)
-
-    // Fetch orders with items
     const { data: ordersData } = await supabase
       .from('orders')
       .select(`
         *,
+        customers (*),
         sales:staff!orders_sales_id_fkey(staff_name),
         artist:staff!orders_artist_id_fkey(staff_name),
         order_items(
@@ -102,20 +96,29 @@ export default function CustomerServicePage() {
           product:products(product_name, product_code, is_free)
         )
       `)
-      .eq('customer_id', customerData.id)
+      .gte('created_at', startOfDay)
+      .lte('created_at', endOfDay)
       .order('created_at', { ascending: false })
 
     setOrders(ordersData || [])
     setLoading(false)
   }
 
-  const refreshOrders = async () => {
-    if (!customer) return
+  const searchOrders = async () => {
+    if (!searchQuery.trim()) {
+      fetchOrders()
+      return
+    }
 
+    setLoading(true)
+    setSelectedOrder(null)
+
+    // Search by customer name or phone
     const { data: ordersData } = await supabase
       .from('orders')
       .select(`
         *,
+        customers!inner (*),
         sales:staff!orders_sales_id_fkey(staff_name),
         artist:staff!orders_artist_id_fkey(staff_name),
         order_items(
@@ -123,15 +126,39 @@ export default function CustomerServicePage() {
           product:products(product_name, product_code, is_free)
         )
       `)
-      .eq('customer_id', customer.id)
+      .or(`full_name.ilike.%${searchQuery.trim()}%,phone.ilike.%${searchQuery.trim()}%`, { foreignTable: 'customers' })
       .order('created_at', { ascending: false })
+      .limit(20)
 
     setOrders(ordersData || [])
+    setLoading(false)
+  }
+
+  const refreshOrders = async () => {
+    if (searchQuery.trim()) {
+      await searchOrders()
+    } else {
+      await fetchOrders()
+    }
 
     // Update selected order if exists
     if (selectedOrder) {
-      const updated = ordersData?.find(o => o.id === selectedOrder.id)
-      if (updated) setSelectedOrder(updated)
+      const { data: updatedOrder } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          customers (*),
+          sales:staff!orders_sales_id_fkey(staff_name),
+          artist:staff!orders_artist_id_fkey(staff_name),
+          order_items(
+            *,
+            product:products(product_name, product_code, is_free)
+          )
+        `)
+        .eq('id', selectedOrder.id)
+        .single()
+
+      if (updatedOrder) setSelectedOrder(updatedOrder)
     }
   }
 
@@ -159,8 +186,9 @@ export default function CustomerServicePage() {
       note: 'ชำระเพิ่ม',
     })
 
-    // Update order deposit and status
+    // Update order deposit
     const newDeposit = selectedOrder.deposit + amount
+    // Auto-update status to 'paid' if fully paid
     const newStatus = newDeposit >= selectedOrder.total_income ? 'paid' : selectedOrder.order_status
 
     await supabase
@@ -175,14 +203,46 @@ export default function CustomerServicePage() {
     await refreshOrders()
   }
 
-  const updateOrderStatus = async (newStatus: Order['order_status']) => {
+  const handleCancelOrder = () => {
+    setConfirmAction({
+      type: 'cancel',
+      message: 'คุณต้องการยกเลิกออเดอร์นี้ใช่หรือไม่?'
+    })
+  }
+
+  const confirmActionHandler = async () => {
+    if (!selectedOrder || !confirmAction) return
+
+    if (confirmAction.type === 'cancel') {
+      await supabase
+        .from('orders')
+        .update({ order_status: 'cancelled' })
+        .eq('id', selectedOrder.id)
+    }
+
+    setConfirmAction(null)
+    await refreshOrders()
+  }
+
+  const openEditOrderModal = () => {
+    if (!selectedOrder) return
+    setEditOrderStatus(selectedOrder.order_status)
+    setEditOrderDeposit(selectedOrder.deposit.toString())
+    setShowEditOrderModal(true)
+  }
+
+  const saveOrderEdit = async () => {
     if (!selectedOrder) return
 
     await supabase
       .from('orders')
-      .update({ order_status: newStatus })
+      .update({
+        order_status: editOrderStatus,
+        deposit: parseFloat(editOrderDeposit) || 0,
+      })
       .eq('id', selectedOrder.id)
 
+    setShowEditOrderModal(false)
     await refreshOrders()
   }
 
@@ -244,118 +304,129 @@ export default function CustomerServicePage() {
     })
   }
 
+  const formatDateTime = (dateStr: string | null) => {
+    if (!dateStr) return '-'
+    return new Date(dateStr).toLocaleString('th-TH', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  // Filter orders by search (client-side for performance when already loaded)
+  const filteredOrders = orders
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">💆 บริการลูกค้า</h1>
-        <p className="text-gray-500 dark:text-gray-400">ค้นหาและจัดการบริการของลูกค้า</p>
+        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">📅 นัดหมาย</h1>
+        <p className="text-gray-500 dark:text-gray-400">จัดการออเดอร์และนัดหมายบริการ</p>
       </div>
 
-      {/* Search Box */}
+      {/* Filters */}
       <div className="card">
-        <div className="flex gap-4">
+        <div className="flex flex-col md:flex-row gap-4">
+          {/* Date Filter */}
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              วันที่สร้างออเดอร์
+            </label>
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="input w-full"
+            />
+          </div>
+
+          {/* Search */}
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               ค้นหาด้วยชื่อ หรือ เบอร์โทรศัพท์
             </label>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && searchCustomer()}
-              placeholder="พิมพ์ชื่อลูกค้า หรือ เบอร์โทร..."
-              className="input w-full text-lg"
-            />
-          </div>
-          <div className="flex items-end">
-            <button
-              onClick={searchCustomer}
-              disabled={loading}
-              className="btn btn-primary h-[46px] px-8"
-            >
-              {loading ? 'กำลังค้นหา...' : '🔍 ค้นหา'}
-            </button>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && searchOrders()}
+                placeholder="พิมพ์ชื่อลูกค้า หรือ เบอร์โทร..."
+                className="input flex-1"
+              />
+              <button
+                onClick={searchOrders}
+                className="btn btn-primary px-6"
+              >
+                🔍 ค้นหา
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Results */}
-      {searched && !loading && (
+      {/* Content */}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-gray-500 dark:text-gray-400">กำลังโหลด...</div>
+        </div>
+      ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Panel - Customer & Orders List */}
+          {/* Left Panel - Orders List */}
           <div className="lg:col-span-1 space-y-4">
-            {!customer ? (
+            <h3 className="font-bold text-gray-800 dark:text-white">
+              ออเดอร์ ({filteredOrders.length})
+            </h3>
+
+            {filteredOrders.length === 0 ? (
               <div className="card text-center py-12">
-                <p className="text-4xl mb-4">😔</p>
-                <p className="text-gray-500 dark:text-gray-400">ไม่พบลูกค้า</p>
-                <p className="text-sm text-gray-400">"{searchQuery}"</p>
+                <p className="text-4xl mb-4">📭</p>
+                <p className="text-gray-500 dark:text-gray-400">ไม่พบออเดอร์</p>
+                <p className="text-sm text-gray-400">ลองเปลี่ยนวันที่หรือค้นหาใหม่</p>
               </div>
             ) : (
-              <>
-                {/* Customer Info Card */}
-                <div className="card bg-gradient-to-br from-pink-500 to-purple-600 text-white">
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold">
-                      {customer.full_name.charAt(0)}
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold">{customer.full_name}</h2>
-                      <p className="opacity-90">📞 {customer.phone || '-'}</p>
-                      <p className="text-sm opacity-75">{customer.contact_channel || '-'}</p>
-                    </div>
-                  </div>
-                </div>
+              <div className="space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto">
+                {filteredOrders.map(order => {
+                  const statusConfig = getOrderStatusConfig(order.order_status)
+                  const isSelected = selectedOrder?.id === order.id
+                  const remaining = order.total_income - order.deposit
 
-                {/* Orders List */}
-                <div className="space-y-2">
-                  <h3 className="font-bold text-gray-800 dark:text-white">
-                    ออเดอร์ ({orders.length})
-                  </h3>
-
-                  {orders.length === 0 ? (
-                    <div className="card text-center py-6 text-gray-500">
-                      ยังไม่มีออเดอร์
-                    </div>
-                  ) : (
-                    orders.map(order => {
-                      const statusConfig = getOrderStatusConfig(order.order_status)
-                      const isSelected = selectedOrder?.id === order.id
-                      const remaining = order.total_income - order.deposit
-
-                      return (
-                        <button
-                          key={order.id}
-                          onClick={() => setSelectedOrder(order)}
-                          className={`w-full text-left card p-4 transition-all ${
-                            isSelected
-                              ? 'ring-2 ring-pink-500 bg-pink-50 dark:bg-pink-900/20'
-                              : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-bold text-gray-800 dark:text-white">
-                              #{order.id}
-                            </span>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}>
-                              {statusConfig.icon} {statusConfig.label}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-gray-500">{formatDate(order.order_date)}</span>
-                            <span className="font-medium text-pink-600">฿{order.total_income.toLocaleString()}</span>
-                          </div>
-                          {remaining > 0 && order.order_status === 'booking' && (
-                            <div className="mt-2 text-xs text-orange-600 dark:text-orange-400">
-                              ⚠️ ค้างชำระ ฿{remaining.toLocaleString()}
-                            </div>
-                          )}
-                        </button>
-                      )
-                    })
-                  )}
-                </div>
-              </>
+                  return (
+                    <button
+                      key={order.id}
+                      onClick={() => setSelectedOrder(order)}
+                      className={`w-full text-left card p-4 transition-all ${
+                        isSelected
+                          ? 'ring-2 ring-pink-500 bg-pink-50 dark:bg-pink-900/20'
+                          : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-gray-800 dark:text-white">
+                          #{order.id}
+                        </span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}>
+                          {statusConfig.icon} {statusConfig.label}
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-800 dark:text-white font-medium mb-1">
+                        {order.customers?.full_name || '-'}
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400 text-xs">{formatDateTime(order.created_at)}</span>
+                        <span className="font-medium text-pink-600">฿{order.total_income.toLocaleString()}</span>
+                      </div>
+                      {remaining > 0 && order.order_status === 'booking' && (
+                        <div className="mt-2 text-xs text-orange-600 dark:text-orange-400">
+                          ⚠️ ค้างชำระ ฿{remaining.toLocaleString()}
+                        </div>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
             )}
           </div>
 
@@ -374,7 +445,13 @@ export default function CustomerServicePage() {
                     <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
                       Order #{selectedOrder.id}
                     </h2>
-                    <p className="text-gray-500">{formatDate(selectedOrder.order_date)}</p>
+                    <p className="text-gray-400 text-sm">สร้างเมื่อ {formatDateTime(selectedOrder.created_at)}</p>
+                    <p className="text-gray-600 dark:text-gray-300 mt-1">
+                      👤 {selectedOrder.customers?.full_name || '-'}
+                      {selectedOrder.customers?.phone && (
+                        <span className="ml-2 text-sm">📞 {selectedOrder.customers.phone}</span>
+                      )}
+                    </p>
                   </div>
                   <div className={`px-4 py-2 rounded-xl text-lg font-bold ${getOrderStatusConfig(selectedOrder.order_status).bg} ${getOrderStatusConfig(selectedOrder.order_status).text}`}>
                     {getOrderStatusConfig(selectedOrder.order_status).icon} {getOrderStatusConfig(selectedOrder.order_status).label}
@@ -405,38 +482,33 @@ export default function CustomerServicePage() {
 
                 {/* Action Buttons */}
                 <div className="flex flex-wrap gap-3">
-                  {selectedOrder.order_status === 'booking' && (
-                    <>
-                      <button
-                        onClick={openPaymentModal}
-                        className="px-6 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 transition-colors"
-                      >
-                        💰 รับชำระเงิน
-                      </button>
-                      <button
-                        onClick={() => updateOrderStatus('paid')}
-                        className="px-6 py-3 bg-blue-500 text-white rounded-xl font-bold hover:bg-blue-600 transition-colors"
-                      >
-                        ✅ ชำระครบแล้ว
-                      </button>
-                    </>
-                  )}
-                  {selectedOrder.order_status === 'paid' && (
+                  {/* Payment button - always available unless cancelled */}
+                  {selectedOrder.order_status !== 'cancelled' && (
                     <button
-                      onClick={() => updateOrderStatus('done')}
-                      className="px-6 py-3 bg-purple-500 text-white rounded-xl font-bold hover:bg-purple-600 transition-colors"
+                      onClick={openPaymentModal}
+                      className="px-6 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 transition-colors"
                     >
-                      🎉 เสร็จสิ้นทั้งหมด
+                      💰 รับชำระเงิน
                     </button>
                   )}
+
+                  {/* Cancel button */}
                   {selectedOrder.order_status !== 'cancelled' && selectedOrder.order_status !== 'done' && (
                     <button
-                      onClick={() => updateOrderStatus('cancelled')}
+                      onClick={handleCancelOrder}
                       className="px-6 py-3 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl font-medium hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
                     >
                       ❌ ยกเลิก
                     </button>
                   )}
+
+                  {/* Edit button - for corrections */}
+                  <button
+                    onClick={openEditOrderModal}
+                    className="px-6 py-3 bg-blue-500 text-white rounded-xl font-bold hover:bg-blue-600 transition-colors"
+                  >
+                    ✏️ แก้ไข
+                  </button>
                 </div>
 
                 {/* Services List */}
@@ -474,7 +546,7 @@ export default function CustomerServicePage() {
                                   {itemStatus.icon} {itemStatus.label}
                                 </span>
                                 {item.appointment_date && (
-                                  <span className="text-gray-500">
+                                  <span className="text-gray-500 dark:text-gray-400">
                                     📅 {formatDate(item.appointment_date)} {item.appointment_time || ''}
                                   </span>
                                 )}
@@ -517,15 +589,15 @@ export default function CustomerServicePage() {
 
             <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl space-y-2">
               <div className="flex justify-between">
-                <span className="text-gray-500">ยอดรวม</span>
-                <span className="font-bold">฿{selectedOrder.total_income.toLocaleString()}</span>
+                <span className="text-gray-500 dark:text-gray-400">ยอดรวม</span>
+                <span className="font-bold text-gray-800 dark:text-white">฿{selectedOrder.total_income.toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">ชำระแล้ว</span>
+                <span className="text-gray-500 dark:text-gray-400">ชำระแล้ว</span>
                 <span className="font-bold text-green-600">฿{selectedOrder.deposit.toLocaleString()}</span>
               </div>
               <div className="flex justify-between pt-2 border-t dark:border-gray-600">
-                <span className="text-gray-500">ค้างชำระ</span>
+                <span className="text-gray-500 dark:text-gray-400">ค้างชำระ</span>
                 <span className="font-bold text-orange-600">฿{(selectedOrder.total_income - selectedOrder.deposit).toLocaleString()}</span>
               </div>
             </div>
@@ -570,6 +642,89 @@ export default function CustomerServicePage() {
                 className="btn btn-primary flex-1"
               >
                 ✅ ยืนยันรับเงิน
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {confirmAction && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-xl font-bold text-gray-800 dark:text-white">
+              ⚠️ ยืนยันการดำเนินการ
+            </h3>
+            <p className="text-gray-600 dark:text-gray-300">
+              {confirmAction.message}
+            </p>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setConfirmAction(null)}
+                className="btn btn-secondary flex-1"
+              >
+                ไม่ใช่
+              </button>
+              <button
+                onClick={confirmActionHandler}
+                className="btn bg-red-500 hover:bg-red-600 text-white flex-1"
+              >
+                ใช่ ยืนยัน
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Order Edit Modal */}
+      {showEditOrderModal && selectedOrder && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-xl font-bold text-gray-800 dark:text-white">
+              ✏️ แก้ไขออเดอร์
+            </h3>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                สถานะออเดอร์
+              </label>
+              <select
+                value={editOrderStatus}
+                onChange={(e) => setEditOrderStatus(e.target.value as Order['order_status'])}
+                className="select w-full"
+              >
+                <option value="booking">📅 จอง</option>
+                <option value="paid">✅ ชำระแล้ว</option>
+                <option value="done">🎉 เสร็จสิ้น</option>
+                <option value="cancelled">❌ ยกเลิก</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                ยอดที่ชำระแล้ว (฿)
+              </label>
+              <input
+                type="number"
+                value={editOrderDeposit}
+                onChange={(e) => setEditOrderDeposit(e.target.value)}
+                className="input w-full"
+                placeholder="0"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setShowEditOrderModal(false)}
+                className="btn btn-secondary flex-1"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={saveOrderEdit}
+                className="btn btn-primary flex-1"
+              >
+                💾 บันทึก
               </button>
             </div>
           </div>
