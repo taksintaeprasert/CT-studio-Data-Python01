@@ -85,13 +85,16 @@ export default function NewOrderPage() {
       alert('กรุณาเลือกสินค้า/บริการก่อน')
       return
     }
-    const productId = Number(selectedProductId)
-    const product = products.find(p => p.id === productId)
+
+    // Use string comparison to handle both number and string IDs from Supabase
+    const product = products.find(p => String(p.id) === selectedProductId)
     if (!product) {
+      console.error('Product not found. selectedProductId:', selectedProductId, 'products:', products.map(p => ({ id: p.id, type: typeof p.id })))
       alert('ไม่พบสินค้าที่เลือก')
       return
     }
-    if (selectedProducts.find(p => p.product_id === productId)) {
+
+    if (selectedProducts.find(p => p.product_id === product.id)) {
       alert('สินค้านี้ถูกเลือกไปแล้ว')
       return
     }
