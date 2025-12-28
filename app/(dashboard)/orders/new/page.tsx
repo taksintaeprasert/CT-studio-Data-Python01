@@ -81,20 +81,28 @@ export default function NewOrderPage() {
   }
 
   const addProduct = () => {
-    if (!selectedProductId) return
-    const product = products.find(p => p.id === parseInt(selectedProductId))
-    if (!product) return
-    if (selectedProducts.find(p => p.product_id === product.id)) {
+    if (!selectedProductId) {
+      alert('กรุณาเลือกสินค้า/บริการก่อน')
+      return
+    }
+    const productId = Number(selectedProductId)
+    const product = products.find(p => p.id === productId)
+    if (!product) {
+      alert('ไม่พบสินค้าที่เลือก')
+      return
+    }
+    if (selectedProducts.find(p => p.product_id === productId)) {
       alert('สินค้านี้ถูกเลือกไปแล้ว')
       return
     }
 
-    setSelectedProducts([...selectedProducts, {
+    const newProduct: SelectedProduct = {
       product_id: product.id,
       product_name: product.product_name,
       price: product.list_price,
       is_upsell: false,
-    }])
+    }
+    setSelectedProducts(prev => [...prev, newProduct])
     setSelectedProductId('')
   }
 
@@ -376,12 +384,15 @@ export default function NewOrderPage() {
           <div className="flex gap-2">
             <select
               value={selectedProductId}
-              onChange={(e) => setSelectedProductId(e.target.value)}
+              onChange={(e) => {
+                console.log('Selected:', e.target.value)
+                setSelectedProductId(e.target.value)
+              }}
               className="select flex-1"
             >
-              <option value="">-- เลือกสินค้า/บริการ --</option>
+              <option value="">-- เลือกสินค้า/บริการ ({availableProducts.length} รายการ) --</option>
               {availableProducts.map(p => (
-                <option key={p.id} value={p.id}>
+                <option key={p.id} value={String(p.id)}>
                   [{p.category || 'อื่นๆ'}] {p.product_name} - ฿{p.list_price.toLocaleString()}
                 </option>
               ))}
@@ -389,8 +400,7 @@ export default function NewOrderPage() {
             <button
               type="button"
               onClick={addProduct}
-              disabled={!selectedProductId}
-              className="btn btn-primary disabled:opacity-50"
+              className="btn btn-primary"
             >
               + เพิ่ม
             </button>

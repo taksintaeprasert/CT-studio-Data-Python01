@@ -72,8 +72,8 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-800">แดชบอร์ด</h1>
-        <p className="text-gray-500">ภาพรวมของร้าน CT Studio</p>
+        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">แดชบอร์ด</h1>
+        <p className="text-gray-500 dark:text-gray-400">ภาพรวมของร้าน CT Studio</p>
       </div>
 
       {/* Metrics Cards */}
@@ -81,8 +81,8 @@ export default async function DashboardPage() {
         <div className="card card-hover">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-500 text-sm">ยอดจอง</p>
-              <p className="text-2xl font-bold text-gray-800 mt-1">
+              <p className="text-gray-500 dark:text-gray-400 text-sm">ยอดจอง</p>
+              <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">
                 {formatCurrency(metrics.totalBooking)}
               </p>
             </div>
@@ -95,8 +95,8 @@ export default async function DashboardPage() {
         <div className="card card-hover">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-500 text-sm">รายได้รับจริง</p>
-              <p className="text-2xl font-bold text-gray-800 mt-1">
+              <p className="text-gray-500 dark:text-gray-400 text-sm">รายได้รับจริง</p>
+              <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">
                 {formatCurrency(metrics.totalPayments)}
               </p>
             </div>
@@ -109,12 +109,12 @@ export default async function DashboardPage() {
         <div className="card card-hover">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-500 text-sm">จำนวนออเดอร์</p>
-              <p className="text-2xl font-bold text-gray-800 mt-1">
+              <p className="text-gray-500 dark:text-gray-400 text-sm">จำนวนออเดอร์</p>
+              <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">
                 {metrics.totalOrders}
               </p>
             </div>
-            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
               <span className="text-2xl">📋</span>
             </div>
           </div>
@@ -123,12 +123,12 @@ export default async function DashboardPage() {
         <div className="card card-hover">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-500 text-sm">จำนวนลูกค้า</p>
-              <p className="text-2xl font-bold text-gray-800 mt-1">
+              <p className="text-gray-500 dark:text-gray-400 text-sm">จำนวนลูกค้า</p>
+              <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">
                 {metrics.customerCount}
               </p>
             </div>
-            <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center">
               <span className="text-2xl">👥</span>
             </div>
           </div>
@@ -138,7 +138,7 @@ export default async function DashboardPage() {
       {/* Recent Orders */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-gray-800">ออเดอร์ล่าสุด</h2>
+          <h2 className="text-lg font-bold text-gray-800 dark:text-white">ออเดอร์ล่าสุด</h2>
           <Link href="/orders" className="text-pink-500 hover:text-pink-600 text-sm font-medium">
             ดูทั้งหมด →
           </Link>
@@ -178,7 +178,7 @@ export default async function DashboardPage() {
               })}
               {metrics.recentOrders.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center text-gray-500 py-8">
+                  <td colSpan={5} className="text-center text-gray-500 dark:text-gray-400 py-8">
                     ยังไม่มีออเดอร์
                   </td>
                 </tr>
