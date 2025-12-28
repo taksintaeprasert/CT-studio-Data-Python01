@@ -51,7 +51,6 @@ export default function NewOrderPage() {
   const [newContactChannel, setNewContactChannel] = useState('LINE')
 
   const [salesId, setSalesId] = useState('')
-  const [artistId, setArtistId] = useState('')
   const [deposit, setDeposit] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('โอนเงิน')
   const [note, setNote] = useState('')
@@ -225,12 +224,12 @@ export default function NewOrderPage() {
       console.log('Creating order with customer_id:', finalCustomerId)
 
       // Create order (no appointment date - appointments are per service item)
+      // Artist is assigned per service item in Appointments page, not at order level
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
           customer_id: finalCustomerId,
           sales_id: salesId ? parseInt(salesId) : null,
-          artist_id: artistId ? parseInt(artistId) : null,
           order_status: orderType,
           total_income: totalIncome,
           deposit: parseFloat(deposit) || 0,
@@ -292,7 +291,6 @@ export default function NewOrderPage() {
   }
 
   const salesStaff = staff.filter(s => s.role === 'sales' || s.role === 'admin')
-  const artists = staff.filter(s => s.role === 'artist')
   const availableProducts = products.filter(p => !selectedProducts.some(sp => sp.product_id === p.id))
 
   // Filter products based on search text
@@ -484,33 +482,19 @@ export default function NewOrderPage() {
         {/* Staff Assignment */}
         <div className="card space-y-4">
           <h2 className="font-bold text-gray-800 dark:text-white border-b pb-2">พนักงานรับผิดชอบ</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sales</label>
-              <select
-                value={salesId}
-                onChange={(e) => setSalesId(e.target.value)}
-                className="select"
-              >
-                <option value="">-- เลือก Sales --</option>
-                {salesStaff.map(s => (
-                  <option key={s.id} value={s.id}>{s.staff_name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Artist</label>
-              <select
-                value={artistId}
-                onChange={(e) => setArtistId(e.target.value)}
-                className="select"
-              >
-                <option value="">-- เลือก Artist --</option>
-                {artists.map(a => (
-                  <option key={a.id} value={a.id}>{a.staff_name}</option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sales</label>
+            <select
+              value={salesId}
+              onChange={(e) => setSalesId(e.target.value)}
+              className="select"
+            >
+              <option value="">-- เลือก Sales --</option>
+              {salesStaff.map(s => (
+                <option key={s.id} value={s.id}>{s.staff_name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-400 mt-2">* Artist จะเลือกแยกตามบริการในหน้านัดหมาย</p>
           </div>
         </div>
 

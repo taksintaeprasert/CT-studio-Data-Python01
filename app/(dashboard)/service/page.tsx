@@ -3,12 +3,18 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import DateRangeFilter from '@/components/date-range-filter'
+import { useLanguage } from '@/lib/language-context'
 
 interface Customer {
   id: number
   full_name: string
   phone: string | null
   contact_channel: string | null
+}
+
+interface Staff {
+  id: number
+  staff_name: string
 }
 
 interface OrderItem {
@@ -19,6 +25,8 @@ interface OrderItem {
   appointment_date: string | null
   appointment_time: string | null
   item_status: 'pending' | 'scheduled' | 'completed' | 'cancelled'
+  artist_id: number | null
+  artist: { staff_name: string } | null
   product: {
     product_name: string
     product_code: string
@@ -38,12 +46,12 @@ interface Order {
   note: string | null
   customers: Customer | null
   sales: { staff_name: string } | null
-  artist: { staff_name: string } | null
   order_items: OrderItem[]
 }
 
 export default function AppointmentPage() {
   const [orders, setOrders] = useState<Order[]>([])
+  const [artists, setArtists] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -65,12 +73,14 @@ export default function AppointmentPage() {
   const [editDate, setEditDate] = useState('')
   const [editTime, setEditTime] = useState('')
   const [editStatus, setEditStatus] = useState<OrderItem['item_status']>('pending')
+  const [editArtistId, setEditArtistId] = useState<string>('')
 
   // Order edit modal (for corrections)
   const [showEditOrderModal, setShowEditOrderModal] = useState(false)
   const [editOrderStatus, setEditOrderStatus] = useState<Order['order_status']>('booking')
   const [editOrderDeposit, setEditOrderDeposit] = useState('')
 
+  const { t } = useLanguage()
   const supabase = createClient()
 
   const handleDateChange = (start: string, end: string) => {
@@ -79,10 +89,25 @@ export default function AppointmentPage() {
   }
 
   useEffect(() => {
+    fetchArtists()
+  }, [])
+
+  useEffect(() => {
     if (startDate && endDate) {
       fetchOrders()
     }
   }, [startDate, endDate])
+
+  const fetchArtists = async () => {
+    const { data } = await supabase
+      .from('staff')
+      .select('id, staff_name')
+      .eq('role', 'artist')
+      .eq('is_active', true)
+      .order('staff_name')
+
+    setArtists(data || [])
+  }
 
   const fetchOrders = async () => {
     if (!startDate || !endDate) return
@@ -96,9 +121,9 @@ export default function AppointmentPage() {
         *,
         customers (*),
         sales:staff!orders_sales_id_fkey(staff_name),
-        artist:staff!orders_artist_id_fkey(staff_name),
         order_items(
           *,
+          artist:staff!order_items_artist_id_fkey(staff_name),
           product:products(product_name, product_code, is_free)
         )
       `)
@@ -125,9 +150,9 @@ export default function AppointmentPage() {
         *,
         customers!inner (*),
         sales:staff!orders_sales_id_fkey(staff_name),
-        artist:staff!orders_artist_id_fkey(staff_name),
         order_items(
           *,
+          artist:staff!order_items_artist_id_fkey(staff_name),
           product:products(product_name, product_code, is_free)
         )
       `)
@@ -153,9 +178,9 @@ export default function AppointmentPage() {
           *,
           customers (*),
           sales:staff!orders_sales_id_fkey(staff_name),
-          artist:staff!orders_artist_id_fkey(staff_name),
           order_items(
             *,
+            artist:staff!order_items_artist_id_fkey(staff_name),
             product:products(product_name, product_code, is_free)
           )
         `)
@@ -252,6 +277,7 @@ export default function AppointmentPage() {
     setEditDate(item.appointment_date || '')
     setEditTime(item.appointment_time || '')
     setEditStatus(item.item_status)
+    setEditArtistId(item.artist_id ? String(item.artist_id) : '')
   }
 
   const saveItemEdit = async () => {
@@ -263,6 +289,7 @@ export default function AppointmentPage() {
         appointment_date: editDate || null,
         appointment_time: editTime || null,
         item_status: editStatus,
+        artist_id: editArtistId ? parseInt(editArtistId) : null,
       })
       .eq('id', editingItem.id)
 
@@ -286,9 +313,9 @@ export default function AppointmentPage() {
   const getItemStatusConfig = (status: OrderItem['item_status']) => {
     switch (status) {
       case 'pending':
-        return { label: 'Pending', color: 'text-gray-500' }
+        return { label: t('appointments.pending'), color: 'text-gray-500' }
       case 'scheduled':
-        return { label: 'Scheduled', color: 'text-blue-500' }
+        return { label: t('appointments.scheduled'), color: 'text-blue-500' }
       case 'completed':
         return { label: 'Completed', color: 'text-green-500' }
       case 'cancelled':
@@ -320,8 +347,8 @@ export default function AppointmentPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Appointments</h1>
-        <p className="text-gray-500 dark:text-gray-400">Manage orders and service appointments</p>
+        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">{t('appointments.title')}</h1>
+        <p className="text-gray-500 dark:text-gray-400">{t('appointments.subtitle')}</p>
       </div>
 
       {/* Filters */}
@@ -344,7 +371,7 @@ export default function AppointmentPage() {
             onClick={searchOrders}
             className="btn btn-primary px-6"
           >
-            Search
+            {t('common.search')}
           </button>
         </div>
       </div>
@@ -352,7 +379,7 @@ export default function AppointmentPage() {
       {/* Content */}
       {loading ? (
         <div className="flex items-center justify-center py-12">
-          <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+          <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -401,7 +428,7 @@ export default function AppointmentPage() {
                       </div>
                       {remaining > 0 && order.order_status === 'booking' && (
                         <div className="mt-2 text-xs text-orange-600 dark:text-orange-400">
-                          Remaining: ฿{remaining.toLocaleString()}
+                          {t('common.remaining')}: ฿{remaining.toLocaleString()}
                         </div>
                       )}
                     </button>
@@ -415,7 +442,7 @@ export default function AppointmentPage() {
           <div className="lg:col-span-2">
             {!selectedOrder ? (
               <div className="card text-center py-16">
-                <p className="text-gray-500 dark:text-gray-400 text-lg">Select an order to view details</p>
+                <p className="text-gray-500 dark:text-gray-400 text-lg">{t('appointments.selectOrder')}</p>
               </div>
             ) : (
               <div className="card space-y-6">
@@ -441,19 +468,19 @@ export default function AppointmentPage() {
                 {/* Payment Summary */}
                 <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                   <div className="text-center">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Total</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{t('common.total')}</p>
                     <p className="text-2xl font-bold text-gray-800 dark:text-white">
                       ฿{selectedOrder.total_income.toLocaleString()}
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Paid</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{t('common.paid')}</p>
                     <p className="text-2xl font-bold text-green-600">
                       ฿{selectedOrder.deposit.toLocaleString()}
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Remaining</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{t('common.remaining')}</p>
                     <p className={`text-2xl font-bold ${selectedOrder.total_income - selectedOrder.deposit > 0 ? 'text-orange-600' : 'text-green-600'}`}>
                       ฿{(selectedOrder.total_income - selectedOrder.deposit).toLocaleString()}
                     </p>
@@ -467,7 +494,7 @@ export default function AppointmentPage() {
                       onClick={openPaymentModal}
                       className="px-6 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 transition-colors"
                     >
-                      Receive Payment
+                      {t('appointments.receivePayment')}
                     </button>
                   )}
 
@@ -476,7 +503,7 @@ export default function AppointmentPage() {
                       onClick={handleCancelOrder}
                       className="px-6 py-3 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl font-medium hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
                     >
-                      Cancel
+                      {t('appointments.cancel')}
                     </button>
                   )}
 
@@ -484,14 +511,14 @@ export default function AppointmentPage() {
                     onClick={openEditOrderModal}
                     className="px-6 py-3 bg-blue-500 text-white rounded-xl font-bold hover:bg-blue-600 transition-colors"
                   >
-                    Edit
+                    {t('appointments.edit')}
                   </button>
                 </div>
 
                 {/* Services List */}
                 <div>
                   <h3 className="font-bold text-gray-800 dark:text-white mb-3">
-                    Services ({selectedOrder.order_items.length})
+                    {t('appointments.services')} ({selectedOrder.order_items.length})
                   </h3>
                   <div className="space-y-3">
                     {selectedOrder.order_items.map(item => {
@@ -509,12 +536,12 @@ export default function AppointmentPage() {
                                 </span>
                                 {item.product?.is_free && (
                                   <span className="px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300 rounded text-xs">
-                                    Free
+                                    {t('common.free')}
                                   </span>
                                 )}
                                 {item.is_upsell && (
                                   <span className="px-2 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 rounded text-xs">
-                                    Upsell
+                                    {t('common.upsell')}
                                   </span>
                                 )}
                               </div>
@@ -528,12 +555,17 @@ export default function AppointmentPage() {
                                   </span>
                                 )}
                               </div>
+                              {item.artist && (
+                                <div className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                  Artist: <span className="font-medium text-pink-600">{item.artist.staff_name}</span>
+                                </div>
+                              )}
                             </div>
                             <button
                               onClick={() => openItemEdit(item)}
                               className="px-4 py-2 bg-pink-500 text-white rounded-lg text-sm font-medium hover:bg-pink-600 transition-colors"
                             >
-                              Manage
+                              {t('appointments.manage')}
                             </button>
                           </div>
                         </div>
@@ -545,7 +577,7 @@ export default function AppointmentPage() {
                 {selectedOrder.note && (
                   <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl">
                     <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                      Note: {selectedOrder.note}
+                      {t('common.note')}: {selectedOrder.note}
                     </p>
                   </div>
                 )}
@@ -560,27 +592,27 @@ export default function AppointmentPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6 space-y-4">
             <h3 className="text-xl font-bold text-gray-800 dark:text-white">
-              Receive Payment
+              {t('appointments.receivePayment')}
             </h3>
 
             <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl space-y-2">
               <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-gray-400">Total</span>
+                <span className="text-gray-500 dark:text-gray-400">{t('common.total')}</span>
                 <span className="font-bold text-gray-800 dark:text-white">฿{selectedOrder.total_income.toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-gray-400">Paid</span>
+                <span className="text-gray-500 dark:text-gray-400">{t('common.paid')}</span>
                 <span className="font-bold text-green-600">฿{selectedOrder.deposit.toLocaleString()}</span>
               </div>
               <div className="flex justify-between pt-2 border-t dark:border-gray-600">
-                <span className="text-gray-500 dark:text-gray-400">Remaining</span>
+                <span className="text-gray-500 dark:text-gray-400">{t('common.remaining')}</span>
                 <span className="font-bold text-orange-600">฿{(selectedOrder.total_income - selectedOrder.deposit).toLocaleString()}</span>
               </div>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Amount
+                {t('common.amount')}
               </label>
               <input
                 type="number"
@@ -593,7 +625,7 @@ export default function AppointmentPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Payment Method
+                {t('common.paymentMethod')}
               </label>
               <select
                 value={paymentMethod}
@@ -611,13 +643,13 @@ export default function AppointmentPage() {
                 onClick={() => setShowPaymentModal(false)}
                 className="btn btn-secondary flex-1"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={processPayment}
                 className="btn btn-primary flex-1"
               >
-                Confirm
+                {t('common.confirm')}
               </button>
             </div>
           </div>
@@ -629,7 +661,7 @@ export default function AppointmentPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6 space-y-4">
             <h3 className="text-xl font-bold text-gray-800 dark:text-white">
-              Confirm Action
+              {t('common.confirm')}
             </h3>
             <p className="text-gray-600 dark:text-gray-300">
               {confirmAction.message}
@@ -639,13 +671,13 @@ export default function AppointmentPage() {
                 onClick={() => setConfirmAction(null)}
                 className="btn btn-secondary flex-1"
               >
-                No
+                {t('common.no')}
               </button>
               <button
                 onClick={confirmActionHandler}
                 className="btn bg-red-500 hover:bg-red-600 text-white flex-1"
               >
-                Yes, Confirm
+                {t('common.yes')}, {t('common.confirm')}
               </button>
             </div>
           </div>
@@ -657,7 +689,7 @@ export default function AppointmentPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6 space-y-4">
             <h3 className="text-xl font-bold text-gray-800 dark:text-white">
-              Edit Order
+              {t('appointments.edit')} Order
             </h3>
 
             <div>
@@ -694,47 +726,66 @@ export default function AppointmentPage() {
                 onClick={() => setShowEditOrderModal(false)}
                 className="btn btn-secondary flex-1"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={saveOrderEdit}
                 className="btn btn-primary flex-1"
               >
-                Save
+                {t('common.save')}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Item Edit Modal */}
+      {/* Item Edit Modal with Artist Selection */}
       {editingItem && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6 space-y-4">
             <h3 className="text-lg font-bold text-gray-800 dark:text-white">
-              Manage: {editingItem.product?.product_name}
+              {t('appointments.manage')}: {editingItem.product?.product_name}
             </h3>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Service Status
+                {t('appointments.serviceStatus')}
               </label>
               <select
                 value={editStatus}
                 onChange={(e) => setEditStatus(e.target.value as OrderItem['item_status'])}
                 className="select w-full"
               >
-                <option value="pending">Pending</option>
-                <option value="scheduled">Scheduled</option>
+                <option value="pending">{t('appointments.pending')}</option>
+                <option value="scheduled">{t('appointments.scheduled')}</option>
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+
+            {/* Artist Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t('appointments.artist')}
+              </label>
+              <select
+                value={editArtistId}
+                onChange={(e) => setEditArtistId(e.target.value)}
+                className="select w-full"
+              >
+                <option value="">{t('appointments.selectArtist')}</option>
+                {artists.map(artist => (
+                  <option key={artist.id} value={artist.id}>
+                    {artist.staff_name}
+                  </option>
+                ))}
               </select>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Appointment Date
+                  {t('appointments.appointmentDate')}
                 </label>
                 <input
                   type="date"
@@ -745,7 +796,7 @@ export default function AppointmentPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Time
+                  {t('appointments.time')}
                 </label>
                 <input
                   type="time"
@@ -761,13 +812,13 @@ export default function AppointmentPage() {
                 onClick={() => setEditingItem(null)}
                 className="btn btn-secondary flex-1"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={saveItemEdit}
                 className="btn btn-primary flex-1"
               >
-                Save
+                {t('common.save')}
               </button>
             </div>
           </div>

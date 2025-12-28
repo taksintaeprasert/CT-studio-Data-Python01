@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import DateRangeFilter from '@/components/date-range-filter'
+import { useLanguage } from '@/lib/language-context'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -16,6 +17,11 @@ import { Bar } from 'react-chartjs-2'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
+interface Staff {
+  id: number
+  staff_name: string
+}
+
 interface SalesData {
   id: number
   staff_name: string
@@ -27,11 +33,14 @@ interface SalesData {
 }
 
 export default function SalesPerformancePage() {
+  const [allStaff, setAllStaff] = useState<Staff[]>([])
   const [salesData, setSalesData] = useState<SalesData[]>([])
   const [loading, setLoading] = useState(true)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [selectedStaffId, setSelectedStaffId] = useState<string>('')
 
+  const { t } = useLanguage()
   const supabase = createClient()
 
   const handleDateChange = (start: string, end: string) => {
@@ -40,24 +49,45 @@ export default function SalesPerformancePage() {
   }
 
   useEffect(() => {
+    fetchStaffList()
+  }, [])
+
+  useEffect(() => {
     if (startDate && endDate) {
       fetchSalesData()
     }
-  }, [startDate, endDate])
+  }, [startDate, endDate, selectedStaffId])
+
+  const fetchStaffList = async () => {
+    const { data } = await supabase
+      .from('staff')
+      .select('id, staff_name')
+      .in('role', ['sales', 'admin'])
+      .eq('is_active', true)
+      .order('staff_name')
+
+    setAllStaff(data || [])
+  }
 
   const fetchSalesData = async () => {
     if (!startDate || !endDate) return
 
     setLoading(true)
 
-    // Get staff
-    const { data: staff } = await supabase
+    // Get staff to filter
+    let staffQuery = supabase
       .from('staff')
       .select('id, staff_name')
       .in('role', ['sales', 'admin'])
       .eq('is_active', true)
 
-    if (!staff) {
+    if (selectedStaffId) {
+      staffQuery = staffQuery.eq('id', parseInt(selectedStaffId))
+    }
+
+    const { data: staff } = await staffQuery
+
+    if (!staff || staff.length === 0) {
       setSalesData([])
       setLoading(false)
       return
@@ -179,43 +209,64 @@ export default function SalesPerformancePage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Sales Performance</h1>
-        <p className="text-gray-500 dark:text-gray-400">Sales team performance analytics</p>
+        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">{t('sales.title')}</h1>
+        <p className="text-gray-500 dark:text-gray-400">{t('sales.subtitle')}</p>
       </div>
 
-      {/* Date Filter */}
-      <div className="card">
-        <DateRangeFilter onDateChange={handleDateChange} />
+      {/* Filters */}
+      <div className="card space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <DateRangeFilter onDateChange={handleDateChange} />
+
+          {/* Staff Filter */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t('sales.filterByStaff')}:
+            </label>
+            <select
+              value={selectedStaffId}
+              onChange={(e) => setSelectedStaffId(e.target.value)}
+              className="select min-w-[200px]"
+            >
+              <option value="">{t('sales.allStaff')}</option>
+              {allStaff.map(staff => (
+                <option key={staff.id} value={staff.id}>
+                  {staff.staff_name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       {loading ? (
         <div className="card text-center py-12">
-          <p className="text-gray-500 dark:text-gray-400">Loading...</p>
+          <p className="text-gray-500 dark:text-gray-400">{t('common.loading')}</p>
         </div>
       ) : (
         <>
           {/* Summary Stats */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="card">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Total Sales</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t('sales.totalSales')}</p>
               <p className="text-2xl font-bold text-pink-600 mt-1">
                 {formatCurrency(salesData.reduce((sum, s) => sum + s.totalSales, 0))}
               </p>
             </div>
             <div className="card">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Total Orders</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t('sales.totalOrders')}</p>
               <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">
                 {salesData.reduce((sum, s) => sum + s.orderCount, 0)}
               </p>
             </div>
             <div className="card">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Completed</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t('sales.completed')}</p>
               <p className="text-2xl font-bold text-green-600 mt-1">
                 {salesData.reduce((sum, s) => sum + s.completedOrders, 0)}
               </p>
             </div>
             <div className="card">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Avg Upsell Rate</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t('sales.avgUpsellRate')}</p>
               <p className="text-2xl font-bold text-purple-600 mt-1">
                 {salesData.length > 0 ? (salesData.reduce((sum, s) => sum + s.upsellRate, 0) / salesData.length).toFixed(1) : 0}%
               </p>
@@ -226,13 +277,13 @@ export default function SalesPerformancePage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Sales Chart */}
             <div className="card">
-              <h3 className="font-bold text-gray-800 dark:text-white mb-4">Sales by Staff</h3>
+              <h3 className="font-bold text-gray-800 dark:text-white mb-4">{t('sales.salesByStaff')}</h3>
               <div className="h-64">
                 {salesData.length > 0 ? (
                   <Bar data={chartData} options={chartOptions} />
                 ) : (
                   <div className="flex items-center justify-center h-full text-gray-400">
-                    No data available
+                    {t('sales.noData')}
                   </div>
                 )}
               </div>
@@ -240,13 +291,13 @@ export default function SalesPerformancePage() {
 
             {/* Orders Chart */}
             <div className="card">
-              <h3 className="font-bold text-gray-800 dark:text-white mb-4">Orders by Staff</h3>
+              <h3 className="font-bold text-gray-800 dark:text-white mb-4">{t('sales.ordersByStaff')}</h3>
               <div className="h-64">
                 {salesData.length > 0 ? (
                   <Bar data={orderChartData} options={chartOptions} />
                 ) : (
                   <div className="flex items-center justify-center h-full text-gray-400">
-                    No data available
+                    {t('sales.noData')}
                   </div>
                 )}
               </div>
@@ -254,13 +305,13 @@ export default function SalesPerformancePage() {
 
             {/* Upsell Rate Chart */}
             <div className="card lg:col-span-2">
-              <h3 className="font-bold text-gray-800 dark:text-white mb-4">Upsell Rate by Staff</h3>
+              <h3 className="font-bold text-gray-800 dark:text-white mb-4">{t('sales.upsellRateByStaff')}</h3>
               <div className="h-64">
                 {salesData.length > 0 ? (
                   <Bar data={upsellChartData} options={chartOptions} />
                 ) : (
                   <div className="flex items-center justify-center h-full text-gray-400">
-                    No data available
+                    {t('sales.noData')}
                   </div>
                 )}
               </div>
@@ -278,7 +329,7 @@ export default function SalesPerformancePage() {
               return (
                 <div key={sales.id} className="card relative">
                   {/* Rank Badge */}
-                  {index < 3 && (
+                  {index < 3 && !selectedStaffId && (
                     <div className={`absolute -top-2 -right-2 w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
                       index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : 'bg-amber-600'
                     }`}>
@@ -290,7 +341,7 @@ export default function SalesPerformancePage() {
 
                   <div className="space-y-3">
                     <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-gray-400">Total Sales</span>
+                      <span className="text-gray-500 dark:text-gray-400">{t('sales.totalSales')}</span>
                       <span className="font-bold text-pink-600">{formatCurrency(sales.totalSales)}</span>
                     </div>
                     <div className="flex justify-between">
@@ -298,7 +349,7 @@ export default function SalesPerformancePage() {
                       <span className="font-medium text-gray-800 dark:text-white">{sales.orderCount}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-gray-400">Completed</span>
+                      <span className="text-gray-500 dark:text-gray-400">{t('sales.completed')}</span>
                       <span className="font-medium text-green-600">{sales.completedOrders}</span>
                     </div>
                     <div className="flex justify-between">
@@ -307,11 +358,11 @@ export default function SalesPerformancePage() {
                     </div>
                     <div className="pt-2 border-t dark:border-gray-700">
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-gray-400">Avg/Order</span>
+                        <span className="text-gray-500 dark:text-gray-400">{t('sales.avgPerOrder')}</span>
                         <span className="font-medium text-gray-800 dark:text-white">{formatCurrency(avgPerOrder)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-gray-400">Completion</span>
+                        <span className="text-gray-500 dark:text-gray-400">{t('sales.completion')}</span>
                         <span className="font-medium text-gray-800 dark:text-white">{completionRate.toFixed(1)}%</span>
                       </div>
                     </div>
@@ -322,7 +373,7 @@ export default function SalesPerformancePage() {
 
             {salesData.length === 0 && (
               <div className="col-span-full text-center text-gray-500 dark:text-gray-400 py-12">
-                No data in this period
+                {t('sales.noData')}
               </div>
             )}
           </div>
