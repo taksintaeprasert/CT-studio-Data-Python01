@@ -126,16 +126,16 @@ const translations: Record<Language, Record<string, string>> = {
   th: {
     // Navigation
     'nav.dashboard': 'Dashboard',
-    'nav.orders': 'Orders',
-    'nav.appointments': 'Appointments',
-    'nav.calendar': 'Calendar',
-    'nav.customers': 'Customers',
-    'nav.products': 'Products',
+    'nav.orders': 'คำสั่งซื้อ',
+    'nav.appointments': 'นัดหมาย',
+    'nav.calendar': 'ปฏิทิน',
+    'nav.customers': 'ลูกค้า',
+    'nav.products': 'สินค้า/บริการ',
     'nav.sales': 'Sales Performance',
-    'nav.staff': 'Staff',
-    'nav.logout': 'Logout',
-    'nav.darkMode': 'Dark Mode',
-    'nav.lightMode': 'Light Mode',
+    'nav.staff': 'พนักงาน',
+    'nav.logout': 'ออกจากระบบ',
+    'nav.darkMode': 'โหมดมืด',
+    'nav.lightMode': 'โหมดสว่าง',
 
     // Dashboard
     'dashboard.title': 'Dashboard',
@@ -240,8 +240,10 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>('th')
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    setMounted(true)
     const saved = localStorage.getItem('language') as Language
     if (saved && (saved === 'en' || saved === 'th')) {
       setLanguageState(saved)
@@ -257,6 +259,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     return translations[language][key] || key
   }
 
+  // Return children without context during SSR to avoid hydration mismatch
+  if (!mounted) {
+    return <>{children}</>
+  }
+
   return (
     <LanguageContext.Provider value={{ language, setLanguage, t }}>
       {children}
@@ -266,8 +273,13 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
 export function useLanguage() {
   const context = useContext(LanguageContext)
-  if (!context) {
-    throw new Error('useLanguage must be used within a LanguageProvider')
+  // Return default values if not within LanguageProvider or during SSR
+  if (context === undefined) {
+    return {
+      language: 'th' as Language,
+      setLanguage: () => {},
+      t: (key: string) => translations['th'][key] || key,
+    }
   }
   return context
 }
