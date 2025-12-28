@@ -241,7 +241,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
       {/* Info Note */}
       <div className="card bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
         <p className="text-blue-800 dark:text-blue-200 text-sm">
-          💡 หากต้องการชำระเงินหรือเปลี่ยนสถานะ กรุณาไปที่หน้า <Link href="/service" className="font-bold underline hover:text-blue-600">นัดหมาย</Link>
+          To receive payment or change status, please go to <Link href="/service" className="font-bold underline hover:text-blue-600">Appointments</Link> page.
         </p>
       </div>
     </div>
