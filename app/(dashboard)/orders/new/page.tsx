@@ -57,6 +57,7 @@ export default function NewOrderPage() {
   const [deposit, setDeposit] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('โอนเงิน')
   const [note, setNote] = useState('')
+  const [orderType, setOrderType] = useState<'booking' | 'active'>('booking') // จอง / ใช้บริการ
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([])
   const [selectedProductId, setSelectedProductId] = useState('')
 
@@ -207,7 +208,11 @@ export default function NewOrderPage() {
           .select()
           .single()
 
-        if (customerError) throw customerError
+        if (customerError) {
+          console.error('Customer creation error:', customerError)
+          alert(`ไม่สามารถสร้างลูกค้าใหม่: ${customerError.message}`)
+          return
+        }
         finalCustomerId = newCustomer.id.toString()
       }
 
@@ -220,7 +225,7 @@ export default function NewOrderPage() {
           artist_id: artistId ? parseInt(artistId) : null,
           appointment_date: appointmentDate || null,
           appointment_time: appointmentTime || null,
-          order_status: 'booking',
+          order_status: orderType,
           total_income: totalIncome,
           deposit: parseFloat(deposit) || 0,
           payment_method: paymentMethod,
@@ -229,7 +234,11 @@ export default function NewOrderPage() {
         .select()
         .single()
 
-      if (orderError) throw orderError
+      if (orderError) {
+        console.error('Order creation error:', orderError)
+        alert(`ไม่สามารถสร้างออเดอร์: ${orderError.message}`)
+        return
+      }
 
       // Create order items
       const orderItems = selectedProducts.map(p => ({
@@ -238,22 +247,31 @@ export default function NewOrderPage() {
         is_upsell: p.is_upsell,
       }))
 
-      await supabase.from('order_items').insert(orderItems)
+      const { error: itemsError } = await supabase.from('order_items').insert(orderItems)
+      if (itemsError) {
+        console.error('Order items error:', itemsError)
+        alert(`ไม่สามารถเพิ่มรายการสินค้า: ${itemsError.message}`)
+        return
+      }
 
       // Create initial payment if deposit > 0
       if (parseFloat(deposit) > 0) {
-        await supabase.from('payments').insert({
+        const { error: paymentError } = await supabase.from('payments').insert({
           order_id: order.id,
           amount: parseFloat(deposit),
           payment_method: paymentMethod,
           note: 'มัดจำ',
         })
+        if (paymentError) {
+          console.error('Payment error:', paymentError)
+        }
       }
 
       router.push(`/orders/${order.id}`)
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error creating order:', error)
-      alert('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      alert(`เกิดข้อผิดพลาด: ${errorMessage}`)
     } finally {
       setSaving(false)
     }
@@ -406,6 +424,55 @@ export default function NewOrderPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Order Type */}
+        <div className="card space-y-4">
+          <h2 className="font-bold text-gray-800 dark:text-white border-b pb-2">ประเภทออเดอร์</h2>
+          <div className="flex gap-4">
+            <label className={`flex-1 cursor-pointer rounded-lg border-2 p-4 transition-all ${
+              orderType === 'booking'
+                ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/20'
+                : 'border-gray-200 dark:border-gray-700 hover:border-pink-300'
+            }`}>
+              <input
+                type="radio"
+                name="orderType"
+                value="booking"
+                checked={orderType === 'booking'}
+                onChange={() => setOrderType('booking')}
+                className="sr-only"
+              />
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">📅</span>
+                <div>
+                  <p className="font-bold text-gray-800 dark:text-white">จอง</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">ลูกค้าจองผ่านออนไลน์</p>
+                </div>
+              </div>
+            </label>
+            <label className={`flex-1 cursor-pointer rounded-lg border-2 p-4 transition-all ${
+              orderType === 'active'
+                ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/20'
+                : 'border-gray-200 dark:border-gray-700 hover:border-pink-300'
+            }`}>
+              <input
+                type="radio"
+                name="orderType"
+                value="active"
+                checked={orderType === 'active'}
+                onChange={() => setOrderType('active')}
+                className="sr-only"
+              />
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">✨</span>
+                <div>
+                  <p className="font-bold text-gray-800 dark:text-white">ใช้บริการ</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">ลูกค้ามาใช้บริการ/Upsell</p>
+                </div>
+              </div>
+            </label>
+          </div>
         </div>
 
         {/* Staff Assignment */}
