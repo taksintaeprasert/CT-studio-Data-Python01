@@ -4,7 +4,7 @@
 -- Clear existing products (optional - comment out if you want to keep existing)
 -- TRUNCATE TABLE products RESTART IDENTITY CASCADE;
 
--- Insert products
+-- Insert products (duplicates removed)
 INSERT INTO products (product_code, product_name, category, list_price, is_free, is_active)
 VALUES
   ('B9D12950(50%)', 'BROW', 'BROW', 12950.0, false, true),
@@ -76,9 +76,7 @@ VALUES
   ('LVL(FREE990)', 'LASH', 'LASH', 0.0, true, true),
   ('BCB14950(50%)', 'BROW', 'BROW', 14950.0, false, true),
   ('LVL1990', 'LASH', 'LASH', 1990.0, false, true),
-  ('LS5000FREE', 'LASER', 'LASER', 0.0, true, true),
   ('BCBFREE15900', 'BROW', 'BROW', 0.0, true, true),
-  ('LS5000FREE', 'LASER', 'LASER', 0.0, true, true),
   ('LVL1000', 'LASH', 'LASH', 1000.0, false, true),
   ('SMP6900', 'HAIR', 'HAIR', 6900.0, false, true),
   ('LVL1000(TU)', 'LASH', 'LASH', 1000.0, false, true),
@@ -100,7 +98,6 @@ VALUES
   ('LS5090FREE', 'LASER', 'LASER', 0.0, true, true),
   ('HAIRFREE25900', 'HAIRLINER', 'HAIRLINER', 25900.0, false, true),
   ('B9D8900', 'BROW', 'BROW', 8900.0, false, true),
-  ('LS5000FREE', 'LASER', 'LASER', 0.0, true, true),
   ('BB1450(Pro)', 'BBGLOW', 'BBGLOW', 1450.0, false, true),
   ('LBS1590(10Y)', 'LASH', 'LASH', 1590.0, false, true),
   ('BBFREE(10Y)', 'BBGLOW', 'BBGLOW', 0.0, true, true),
@@ -131,7 +128,6 @@ VALUES
   ('B9DFREE8900', 'BROW', 'BROW', 0.0, true, true),
   ('CHEEK8900', 'CHEEK', 'CHEEK', 8900.0, false, true),
   ('LS900', 'LASER', 'LASER', 900.0, false, true),
-  ('LPL300', 'LASH', 'LASH', 300.0, false, true),
   ('LIP3900', 'LIP', 'LIP', 3900.0, false, true),
   ('BKN16900', 'BIKINI', 'BIKINI', 16900.0, false, true),
   ('BBFREE(DUO)', 'BBGLOW', 'BBGLOW', 0.0, true, true),
@@ -139,7 +135,6 @@ VALUES
   ('LVL1590', 'LASH', 'LASH', 1590.0, false, true),
   ('LIP2950(50%)', 'LIP', 'LIP', 2950.0, false, true),
   ('LBSFREE(DUO)', 'LASH', 'LASH', 0.0, true, true),
-  ('BBFREE(DUO)', 'BBGLOW', 'BBGLOW', 0.0, true, true),
   ('BKN4900', 'BIKINI', 'BIKINI', 4900.0, false, true),
   ('LVL1290', 'LASH', 'LASH', 1290.0, false, true),
   ('NIP5900', 'NIPPLE', 'NIPPLE', 5900.0, false, true),
@@ -175,4 +170,4 @@ ON CONFLICT (product_code) DO UPDATE SET
   list_price = EXCLUDED.list_price,
   is_free = EXCLUDED.is_free;
 
--- Total: 162 products imported
+-- Total: 157 unique products imported
