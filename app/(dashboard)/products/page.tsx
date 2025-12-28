@@ -138,8 +138,8 @@ export default function ProductsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">สินค้า/บริการ</h1>
-          <p className="text-gray-500">
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-white">สินค้า/บริการ</h1>
+          <p className="text-gray-500 dark:text-gray-400">
             จัดการรายการสินค้าและบริการ ({products.length} รายการ) |
             ราคาเฉลี่ย {formatCurrency(avgPrice)}
           </p>
@@ -189,7 +189,7 @@ export default function ProductsPage() {
                   <td className="font-mono text-sm">{product.product_code}</td>
                   <td className="font-medium">{product.product_name}</td>
                   <td>
-                    <span className="px-2 py-1 bg-gray-100 rounded text-sm">
+                    <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 rounded text-sm">
                       {product.category || '-'}
                     </span>
                   </td>
@@ -233,13 +233,13 @@ export default function ProductsPage() {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-md p-6 space-y-4">
-            <h3 className="text-lg font-bold text-gray-800">
+          <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-white">
               {editingProduct ? 'แก้ไขสินค้า' : 'เพิ่มสินค้าใหม่'}
             </h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   รหัสสินค้า <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -252,7 +252,7 @@ export default function ProductsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   ชื่อสินค้า/บริการ <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -264,7 +264,7 @@ export default function ProductsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">หมวดหมู่</label>
                 <input
                   type="text"
                   value={category}
@@ -280,7 +280,7 @@ export default function ProductsPage() {
                 </datalist>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">ราคา (บาท)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">ราคา (บาท)</label>
                 <input
                   type="number"
                   value={listPrice}
@@ -298,7 +298,7 @@ export default function ProductsPage() {
                   onChange={(e) => setIsFree(e.target.checked)}
                   className="rounded"
                 />
-                <label htmlFor="is_free" className="text-sm text-gray-700">บริการฟรี</label>
+                <label htmlFor="is_free" className="text-sm text-gray-700 dark:text-gray-300">บริการฟรี</label>
               </div>
               <div className="flex gap-2 pt-2">
                 <button type="button" onClick={closeModal} className="btn btn-secondary flex-1">

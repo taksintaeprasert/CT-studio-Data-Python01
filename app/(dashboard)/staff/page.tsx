@@ -10,10 +10,12 @@ interface Staff {
   role: 'admin' | 'sales' | 'artist'
 }
 
+type TabType = 'sales' | 'artist'
+
 export default function StaffPage() {
   const [staffList, setStaffList] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
-  const [roleFilter, setRoleFilter] = useState('')
+  const [activeTab, setActiveTab] = useState<TabType>('sales')
   const [showModal, setShowModal] = useState(false)
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null)
 
@@ -32,14 +34,13 @@ export default function StaffPage() {
       .from('staff')
       .select('*')
       .eq('is_active', true)
-      .order('role')
       .order('staff_name')
 
     setStaffList(data || [])
     setLoading(false)
   }
 
-  const openModal = (staff?: Staff) => {
+  const openModal = (staff?: Staff, defaultRole?: 'sales' | 'artist') => {
     if (staff) {
       setEditingStaff(staff)
       setStaffName(staff.staff_name)
@@ -49,7 +50,7 @@ export default function StaffPage() {
       setEditingStaff(null)
       setStaffName('')
       setEmail('')
-      setRole('sales')
+      setRole(defaultRole || activeTab)
     }
     setShowModal(true)
   }
@@ -94,18 +95,10 @@ export default function StaffPage() {
     fetchStaff()
   }
 
-  const getRoleBadge = (role: string) => {
-    const badges: Record<string, { class: string; label: string }> = {
-      admin: { class: 'bg-red-100 text-red-700', label: 'Admin' },
-      sales: { class: 'bg-blue-100 text-blue-700', label: 'Sales' },
-      artist: { class: 'bg-purple-100 text-purple-700', label: 'Artist' },
-    }
-    return badges[role] || { class: 'bg-gray-100 text-gray-700', label: role }
-  }
-
-  const filteredStaff = staffList.filter(s =>
-    !roleFilter || s.role === roleFilter
-  )
+  // Filter staff by tab
+  const salesStaff = staffList.filter(s => s.role === 'sales' || s.role === 'admin')
+  const artistStaff = staffList.filter(s => s.role === 'artist')
+  const currentStaff = activeTab === 'sales' ? salesStaff : artistStaff
 
   // Stats
   const stats = {
@@ -117,7 +110,7 @@ export default function StaffPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-gray-500">กำลังโหลด...</div>
+        <div className="text-gray-500 dark:text-gray-400">กำลังโหลด...</div>
       </div>
     )
   }
@@ -127,11 +120,11 @@ export default function StaffPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">พนักงาน</h1>
-          <p className="text-gray-500">จัดการข้อมูลพนักงานทั้งหมด ({staffList.length} คน)</p>
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-white">พนักงาน</h1>
+          <p className="text-gray-500 dark:text-gray-400">จัดการข้อมูลพนักงานทั้งหมด ({staffList.length} คน)</p>
         </div>
-        <button onClick={() => openModal()} className="btn btn-primary">
-          + เพิ่มพนักงาน
+        <button onClick={() => openModal(undefined, activeTab)} className="btn btn-primary">
+          + เพิ่ม{activeTab === 'sales' ? 'พนักงานขาย' : 'ช่าง'}
         </button>
       </div>
 
@@ -139,29 +132,41 @@ export default function StaffPage() {
       <div className="grid grid-cols-3 gap-4">
         <div className="card text-center">
           <p className="text-2xl font-bold text-red-600">{stats.admin}</p>
-          <p className="text-sm text-gray-500">Admin</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Admin</p>
         </div>
         <div className="card text-center">
           <p className="text-2xl font-bold text-blue-600">{stats.sales}</p>
-          <p className="text-sm text-gray-500">Sales</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Sales</p>
         </div>
         <div className="card text-center">
           <p className="text-2xl font-bold text-purple-600">{stats.artist}</p>
-          <p className="text-sm text-gray-500">Artist</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Artist</p>
         </div>
       </div>
 
-      {/* Filter */}
-      <select
-        value={roleFilter}
-        onChange={(e) => setRoleFilter(e.target.value)}
-        className="select w-full sm:w-48"
-      >
-        <option value="">ตำแหน่งทั้งหมด</option>
-        <option value="admin">Admin</option>
-        <option value="sales">Sales</option>
-        <option value="artist">Artist</option>
-      </select>
+      {/* Tabs */}
+      <div className="flex gap-2 border-b dark:border-gray-700">
+        <button
+          onClick={() => setActiveTab('sales')}
+          className={`px-6 py-3 font-medium transition-all border-b-2 -mb-px ${
+            activeTab === 'sales'
+              ? 'text-blue-600 border-blue-600'
+              : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
+        >
+          🛒 Sales / Admin ({salesStaff.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('artist')}
+          className={`px-6 py-3 font-medium transition-all border-b-2 -mb-px ${
+            activeTab === 'artist'
+              ? 'text-purple-600 border-purple-600'
+              : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
+        >
+          🎨 Artist ({artistStaff.length})
+        </button>
+      </div>
 
       {/* Table */}
       <div className="card p-0 overflow-hidden">
@@ -176,14 +181,20 @@ export default function StaffPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredStaff.map((staff) => {
-                const badge = getRoleBadge(staff.role)
+              {currentStaff.map((staff) => {
+                const badgeClass = staff.role === 'admin'
+                  ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'
+                  : staff.role === 'sales'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                  : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
+                const badgeLabel = staff.role === 'admin' ? 'Admin' : staff.role === 'sales' ? 'Sales' : 'Artist'
+
                 return (
                   <tr key={staff.id}>
                     <td className="font-medium">{staff.staff_name}</td>
-                    <td className="text-gray-600">{staff.email}</td>
+                    <td>{staff.email}</td>
                     <td>
-                      <span className={`badge ${badge.class}`}>{badge.label}</span>
+                      <span className={`badge ${badgeClass}`}>{badgeLabel}</span>
                     </td>
                     <td>
                       <div className="flex gap-2">
@@ -204,9 +215,9 @@ export default function StaffPage() {
                   </tr>
                 )
               })}
-              {filteredStaff.length === 0 && (
+              {currentStaff.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="text-center text-gray-500 py-8">
+                  <td colSpan={4} className="text-center text-gray-500 dark:text-gray-400 py-8">
                     ไม่พบรายการ
                   </td>
                 </tr>
@@ -219,13 +230,13 @@ export default function StaffPage() {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-md p-6 space-y-4">
-            <h3 className="text-lg font-bold text-gray-800">
+          <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-white">
               {editingStaff ? 'แก้ไขพนักงาน' : 'เพิ่มพนักงานใหม่'}
             </h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   ชื่อ <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -237,7 +248,7 @@ export default function StaffPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   อีเมล <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -249,11 +260,11 @@ export default function StaffPage() {
                   required
                 />
                 {editingStaff && (
-                  <p className="text-xs text-gray-500 mt-1">ไม่สามารถแก้ไขอีเมลได้</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">ไม่สามารถแก้ไขอีเมลได้</p>
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   ตำแหน่ง <span className="text-red-500">*</span>
                 </label>
                 <select
