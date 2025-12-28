@@ -27,10 +27,12 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [artists, setArtists] = useState<Staff[]>([])
-  const [selectedArtist, setSelectedArtist] = useState<string>('')
+  const [selectedArtistIds, setSelectedArtistIds] = useState<Set<number>>(new Set())
+  const [showNoArtist, setShowNoArtist] = useState(true)
   const [loading, setLoading] = useState(true)
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [dayAppointments, setDayAppointments] = useState<Appointment[]>([])
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false)
 
   const { t, language } = useLanguage()
   const supabase = createClient()
@@ -49,7 +51,14 @@ export default function CalendarPage() {
 
   useEffect(() => {
     fetchAppointments()
-  }, [currentDate, selectedArtist])
+  }, [currentDate])
+
+  // Initialize all artists as selected when artists are loaded
+  useEffect(() => {
+    if (artists.length > 0 && selectedArtistIds.size === 0) {
+      setSelectedArtistIds(new Set(artists.map(a => a.id)))
+    }
+  }, [artists])
 
   const fetchArtists = async () => {
     const { data } = await supabase
@@ -70,7 +79,7 @@ export default function CalendarPage() {
     const firstDay = new Date(year, month, 1).toISOString().split('T')[0]
     const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0]
 
-    let query = supabase
+    const { data } = await supabase
       .from('order_items')
       .select(`
         id,
@@ -91,12 +100,6 @@ export default function CalendarPage() {
       .lte('appointment_date', lastDay)
       .neq('item_status', 'cancelled')
 
-    if (selectedArtist) {
-      query = query.eq('artist_id', parseInt(selectedArtist))
-    }
-
-    const { data } = await query
-
     const mapped: Appointment[] = (data || []).map((item: any) => ({
       id: item.id,
       order_id: item.order_id,
@@ -115,6 +118,45 @@ export default function CalendarPage() {
     setLoading(false)
   }
 
+  const toggleArtist = (artistId: number) => {
+    const newSet = new Set(selectedArtistIds)
+    if (newSet.has(artistId)) {
+      newSet.delete(artistId)
+    } else {
+      newSet.add(artistId)
+    }
+    setSelectedArtistIds(newSet)
+  }
+
+  const selectAllArtists = () => {
+    setSelectedArtistIds(new Set(artists.map(a => a.id)))
+    setShowNoArtist(true)
+  }
+
+  const deselectAllArtists = () => {
+    setSelectedArtistIds(new Set())
+    setShowNoArtist(false)
+  }
+
+  // Filter appointments based on selected artists
+  const filterAppointments = (appts: Appointment[]) => {
+    return appts.filter(apt => {
+      if (apt.artist_id === null) {
+        return showNoArtist
+      }
+      return selectedArtistIds.has(apt.artist_id)
+    })
+  }
+
+  // Sort appointments by time (earliest first)
+  const sortByTime = (appts: Appointment[]) => {
+    return [...appts].sort((a, b) => {
+      const timeA = a.appointment_time || '99:99:99'
+      const timeB = b.appointment_time || '99:99:99'
+      return timeA.localeCompare(timeB)
+    })
+  }
+
   const getDaysInMonth = () => {
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
@@ -125,12 +167,10 @@ export default function CalendarPage() {
 
     const days: { date: number | null; dateStr: string }[] = []
 
-    // Add empty cells for days before the first day of the month
     for (let i = 0; i < startingDay; i++) {
       days.push({ date: null, dateStr: '' })
     }
 
-    // Add the days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
       days.push({ date: day, dateStr })
@@ -140,7 +180,8 @@ export default function CalendarPage() {
   }
 
   const getAppointmentsForDay = (dateStr: string) => {
-    return appointments.filter(a => a.appointment_date === dateStr)
+    const dayAppts = appointments.filter(a => a.appointment_date === dateStr)
+    return sortByTime(filterAppointments(dayAppts))
   }
 
   const prevMonth = () => {
@@ -162,6 +203,13 @@ export default function CalendarPage() {
     setSelectedDay(dateStr)
     setDayAppointments(getAppointmentsForDay(dateStr))
   }
+
+  // Update day appointments when filter changes
+  useEffect(() => {
+    if (selectedDay) {
+      setDayAppointments(getAppointmentsForDay(selectedDay))
+    }
+  }, [selectedArtistIds, showNoArtist, appointments])
 
   const isToday = (dateStr: string) => {
     const today = new Date().toISOString().split('T')[0]
@@ -196,7 +244,29 @@ export default function CalendarPage() {
     return colors[artistId % colors.length]
   }
 
+  const getArtistBorderColor = (artistId: number | null) => {
+    if (!artistId) return 'border-gray-400'
+    const colors = [
+      'border-pink-500',
+      'border-purple-500',
+      'border-indigo-500',
+      'border-blue-500',
+      'border-teal-500',
+      'border-green-500',
+      'border-orange-500',
+      'border-red-500',
+    ]
+    return colors[artistId % colors.length]
+  }
+
+  const formatTime = (time: string | null) => {
+    if (!time) return '--:--'
+    return time.substring(0, 5)
+  }
+
   const days = getDaysInMonth()
+  const selectedCount = selectedArtistIds.size + (showNoArtist ? 1 : 0)
+  const totalCount = artists.length + 1
 
   return (
     <div className="space-y-6">
@@ -207,20 +277,81 @@ export default function CalendarPage() {
           <p className="text-gray-500 dark:text-gray-400">{t('calendar.subtitle')}</p>
         </div>
 
-        {/* Artist Filter */}
-        <div className="flex items-center gap-4">
-          <select
-            value={selectedArtist}
-            onChange={(e) => setSelectedArtist(e.target.value)}
-            className="select min-w-[200px]"
+        {/* Artist Filter - Checkbox Style */}
+        <div className="relative">
+          <button
+            onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
-            <option value="">{t('calendar.allArtists')}</option>
-            {artists.map(artist => (
-              <option key={artist.id} value={artist.id}>
-                {artist.staff_name}
-              </option>
-            ))}
-          </select>
+            <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            <span className="font-medium text-gray-700 dark:text-gray-200">
+              {language === 'th' ? 'กรอง Artist' : 'Filter Artists'}
+            </span>
+            <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-pink-100 dark:bg-pink-900 text-pink-600 dark:text-pink-300">
+              {selectedCount}/{totalCount}
+            </span>
+            <svg className={`w-4 h-4 text-gray-500 transition-transform ${showFilterDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {/* Dropdown */}
+          {showFilterDropdown && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowFilterDropdown(false)} />
+              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                {/* Select All / Deselect All */}
+                <div className="p-3 border-b dark:border-gray-700 flex gap-2">
+                  <button
+                    onClick={selectAllArtists}
+                    className="flex-1 px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+                  >
+                    {language === 'th' ? 'เลือกทั้งหมด' : 'Select All'}
+                  </button>
+                  <button
+                    onClick={deselectAllArtists}
+                    className="flex-1 px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+                  >
+                    {language === 'th' ? 'ยกเลิกทั้งหมด' : 'Deselect All'}
+                  </button>
+                </div>
+
+                {/* Artist Checkboxes */}
+                <div className="max-h-64 overflow-y-auto p-2">
+                  {artists.map(artist => (
+                    <label
+                      key={artist.id}
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedArtistIds.has(artist.id)}
+                        onChange={() => toggleArtist(artist.id)}
+                        className="w-4 h-4 text-pink-500 rounded border-gray-300 focus:ring-pink-500"
+                      />
+                      <div className={`w-3 h-3 rounded-full ${getArtistColor(artist.id)}`} />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{artist.staff_name}</span>
+                    </label>
+                  ))}
+                  {/* No Artist option */}
+                  <label className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 border-t dark:border-gray-700 mt-1 pt-3">
+                    <input
+                      type="checkbox"
+                      checked={showNoArtist}
+                      onChange={() => setShowNoArtist(!showNoArtist)}
+                      className="w-4 h-4 text-pink-500 rounded border-gray-300 focus:ring-pink-500"
+                    />
+                    <div className="w-3 h-3 rounded-full bg-gray-400" />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      {language === 'th' ? 'ไม่มี Artist' : 'No Artist'}
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -286,7 +417,7 @@ export default function CalendarPage() {
                   return <div key={`empty-${index}`} className="h-24 lg:h-28" />
                 }
 
-                const dayAppointments = getAppointmentsForDay(day.dateStr)
+                const filteredDayAppts = getAppointmentsForDay(day.dateStr)
                 const dayOfWeek = new Date(day.dateStr).getDay()
                 const isSunday = dayOfWeek === 0
                 const isSaturday = dayOfWeek === 6
@@ -317,7 +448,7 @@ export default function CalendarPage() {
 
                     {/* Appointments preview */}
                     <div className="space-y-0.5 overflow-hidden">
-                      {dayAppointments.slice(0, 3).map(apt => (
+                      {filteredDayAppts.slice(0, 3).map(apt => (
                         <div
                           key={apt.id}
                           className={`text-xs px-1 py-0.5 rounded truncate text-white ${getArtistColor(apt.artist_id)}`}
@@ -325,9 +456,9 @@ export default function CalendarPage() {
                           {apt.product_name}
                         </div>
                       ))}
-                      {dayAppointments.length > 3 && (
+                      {filteredDayAppts.length > 3 && (
                         <div className="text-xs text-gray-500 dark:text-gray-400 px-1">
-                          +{dayAppointments.length - 3} more
+                          +{filteredDayAppts.length - 3} more
                         </div>
                       )}
                     </div>
@@ -340,7 +471,7 @@ export default function CalendarPage() {
 
         {/* Day Detail Panel */}
         <div className="card">
-          <h3 className="font-bold text-gray-800 dark:text-white mb-4">
+          <h3 className="font-bold text-gray-800 dark:text-white mb-4 pb-3 border-b dark:border-gray-700">
             {selectedDay ? (
               <>
                 {t('calendar.appointments')} - {new Date(selectedDay).toLocaleDateString(language === 'th' ? 'th-TH' : 'en-US', {
@@ -363,59 +494,62 @@ export default function CalendarPage() {
               {t('calendar.noAppointments')}
             </div>
           ) : (
-            <div className="space-y-3 max-h-[calc(100vh-350px)] overflow-y-auto">
+            <div className="space-y-4 max-h-[calc(100vh-350px)] overflow-y-auto">
               {dayAppointments.map(apt => (
                 <div
                   key={apt.id}
-                  className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-l-4"
-                  style={{ borderLeftColor: apt.artist_id ? '' : '#9ca3af' }}
+                  className={`rounded-xl overflow-hidden border-2 ${getArtistBorderColor(apt.artist_id)} bg-white dark:bg-gray-800 shadow-md`}
                 >
-                  <div className={`w-full h-1 rounded-full mb-2 ${getArtistColor(apt.artist_id)}`} />
-
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <span className="font-bold text-gray-800 dark:text-white">
-                      {apt.product_name}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded text-xs text-white ${getStatusColor(apt.item_status)}`}>
-                      {apt.item_status}
-                    </span>
+                  {/* Header - Product + Time + Artist */}
+                  <div className={`px-4 py-3 ${getArtistColor(apt.artist_id)} text-white`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="font-bold text-lg truncate">{apt.product_name}</h4>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                        apt.item_status === 'completed' ? 'bg-white/30' : 'bg-black/20'
+                      }`}>
+                        {apt.item_status}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 mt-1 text-white/90 text-sm">
+                      <span className="flex items-center gap-1 font-medium">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {formatTime(apt.appointment_time)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {apt.artist_name || 'No Artist'}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="text-sm space-y-1 text-gray-600 dark:text-gray-300">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span>{apt.appointment_time || '-'}</span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
+                  {/* Body - Customer & Order Details */}
+                  <div className="px-4 py-3 space-y-2">
+                    <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
                       <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                       </svg>
-                      <span>{apt.customer_name}</span>
+                      <span className="font-medium">{apt.customer_name}</span>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span>Artist: {apt.artist_name || '-'}</span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                       </svg>
                       <span>Order #{apt.order_id}</span>
                     </div>
 
                     {apt.note && (
-                      <div className="flex items-start gap-2 mt-2 pt-2 border-t dark:border-gray-600">
-                        <svg className="w-4 h-4 text-gray-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                        </svg>
-                        <span className="text-xs">{apt.note}</span>
+                      <div className="pt-2 mt-2 border-t dark:border-gray-700">
+                        <div className="flex items-start gap-2 text-gray-500 dark:text-gray-400 text-sm">
+                          <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                          </svg>
+                          <span>{apt.note}</span>
+                        </div>
                       </div>
                     )}
                   </div>
