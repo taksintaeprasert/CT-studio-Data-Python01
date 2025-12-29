@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -9,6 +11,9 @@ interface Customer {
   id: number
   full_name: string
   phone: string | null
+  contact_channel?: string | null
+  province?: string | null
+  source_channel?: string | null
 }
 
 interface Staff {
@@ -63,6 +68,12 @@ export default function NewOrderPage() {
   const [showDropdown, setShowDropdown] = useState(false)
   const [suggestedProduct, setSuggestedProduct] = useState<Product | null>(null)
 
+  // Customer search states
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
+  const [phoneSuggestions, setPhoneSuggestions] = useState<Customer[]>([])
+  const [existingCustomerWarning, setExistingCustomerWarning] = useState<Customer | null>(null)
+
   const router = useRouter()
   const supabase = createClient()
 
@@ -72,7 +83,7 @@ export default function NewOrderPage() {
 
   const fetchData = async () => {
     const [customersRes, staffRes, productsRes] = await Promise.all([
-      supabase.from('customers').select('id, full_name, phone').eq('is_active', true).order('full_name'),
+      supabase.from('customers').select('id, full_name, phone, contact_channel, province, source_channel').eq('is_active', true).order('full_name'),
       supabase.from('staff').select('id, staff_name, role').eq('is_active', true).order('staff_name'),
       supabase.from('products').select('id, product_code, product_name, list_price, category, is_free').eq('is_active', true).order('product_name'),
     ])
@@ -82,6 +93,58 @@ export default function NewOrderPage() {
     setStaff(staffRes.data || [])
     setProducts(productsRes.data || [])
     setLoading(false)
+  }
+
+  // Search phone number for existing customers (for new customer form)
+  const searchByPhone = (phone: string) => {
+    setNewPhone(phone)
+    setExistingCustomerWarning(null)
+
+    if (phone.length >= 3) {
+      const matches = customers.filter(c =>
+        c.phone && c.phone.includes(phone)
+      )
+      setPhoneSuggestions(matches)
+
+      // Exact match warning
+      const exactMatch = customers.find(c => c.phone === phone)
+      if (exactMatch) {
+        setExistingCustomerWarning(exactMatch)
+      }
+    } else {
+      setPhoneSuggestions([])
+    }
+  }
+
+  // Select existing customer from phone suggestion
+  const selectFromPhoneSuggestion = (customer: Customer) => {
+    // Switch to existing customer mode and select this customer
+    setIsNewCustomer(false)
+    setCustomerId(String(customer.id))
+    setCustomerSearch(customer.full_name + (customer.phone ? ` (${customer.phone})` : ''))
+    setPhoneSuggestions([])
+    setExistingCustomerWarning(null)
+    // Clear new customer fields
+    setNewFirstName('')
+    setNewLastName('')
+    setNewPhone('')
+  }
+
+  // Filter customers for search
+  const filteredCustomers = customers.filter(c => {
+    if (!customerSearch.trim()) return true
+    const search = customerSearch.toLowerCase()
+    return (
+      c.full_name.toLowerCase().includes(search) ||
+      (c.phone && c.phone.includes(search))
+    )
+  })
+
+  // Select customer from dropdown
+  const selectCustomer = (customer: Customer) => {
+    setCustomerId(String(customer.id))
+    setCustomerSearch(customer.full_name + (customer.phone ? ` (${customer.phone})` : ''))
+    setShowCustomerDropdown(false)
   }
 
   // Find related free product (e.g., Eyebrow Tattoo → Eyebrow Touch Up)
@@ -349,24 +412,64 @@ export default function NewOrderPage() {
           </div>
 
           {!isNewCustomer ? (
-            // Existing Customer
-            <div>
+            // Existing Customer - Searchable
+            <div className="relative">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                เลือกลูกค้า <span className="text-red-500">*</span>
+                ค้นหาลูกค้า (ชื่อ หรือ เบอร์โทร) <span className="text-red-500">*</span>
               </label>
-              <select
-                value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
-                className="select"
-                required={!isNewCustomer}
-              >
-                <option value="">-- เลือกลูกค้า --</option>
-                {customers.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.full_name} {c.phone ? `(${c.phone})` : ''}
-                  </option>
-                ))}
-              </select>
+              <input
+                type="text"
+                value={customerSearch}
+                onChange={(e) => {
+                  setCustomerSearch(e.target.value)
+                  setCustomerId('')
+                  setShowCustomerDropdown(true)
+                }}
+                onFocus={() => setShowCustomerDropdown(true)}
+                placeholder="พิมพ์ชื่อ หรือ เบอร์โทร..."
+                className="input w-full"
+              />
+
+              {/* Customer Dropdown */}
+              {showCustomerDropdown && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowCustomerDropdown(false)} />
+                  <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {filteredCustomers.slice(0, 50).map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => selectCustomer(c)}
+                        className="w-full px-4 py-3 text-left hover:bg-pink-50 dark:hover:bg-gray-700 flex justify-between items-center border-b dark:border-gray-700 last:border-b-0"
+                      >
+                        <div>
+                          <span className="font-medium dark:text-white">{c.full_name}</span>
+                          {c.phone && <span className="text-gray-500 dark:text-gray-400 ml-2">({c.phone})</span>}
+                        </div>
+                        {c.contact_channel && (
+                          <span className="text-xs text-gray-400">{c.contact_channel}</span>
+                        )}
+                      </button>
+                    ))}
+                    {filteredCustomers.length === 0 && (
+                      <div className="p-4 text-center text-gray-500">ไม่พบลูกค้า</div>
+                    )}
+                    {filteredCustomers.length > 50 && (
+                      <div className="p-2 text-center text-gray-400 text-sm">แสดง 50 จาก {filteredCustomers.length} รายการ - พิมพ์เพิ่มเพื่อกรอง</div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Selected customer indicator */}
+              {customerId && (
+                <div className="mt-2 flex items-center gap-2 text-green-600 dark:text-green-400 text-sm">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  เลือกแล้ว: {customers.find(c => c.id === parseInt(customerId))?.full_name}
+                </div>
+              )}
             </div>
           ) : (
             // New Customer Form
@@ -413,19 +516,61 @@ export default function NewOrderPage() {
                   <option value="Walk-in">Walk-in</option>
                 </select>
               </div>
-              <div>
+              <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   เบอร์โทร <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="tel"
                   value={newPhone}
-                  onChange={(e) => setNewPhone(e.target.value)}
-                  className="input"
+                  onChange={(e) => searchByPhone(e.target.value)}
+                  className={`input ${existingCustomerWarning ? 'border-yellow-500 focus:ring-yellow-500' : ''}`}
                   placeholder="0xx-xxx-xxxx"
                   required={isNewCustomer}
                 />
+
+                {/* Phone suggestions dropdown */}
+                {phoneSuggestions.length > 0 && !existingCustomerWarning && (
+                  <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                    <div className="p-2 text-xs text-gray-500 border-b dark:border-gray-700">พบเบอร์ที่คล้ายกัน:</div>
+                    {phoneSuggestions.map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => selectFromPhoneSuggestion(c)}
+                        className="w-full px-4 py-2 text-left hover:bg-yellow-50 dark:hover:bg-gray-700 text-sm"
+                      >
+                        <span className="font-medium dark:text-white">{c.full_name}</span>
+                        <span className="text-gray-500 dark:text-gray-400 ml-2">({c.phone})</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              {/* Existing customer warning */}
+              {existingCustomerWarning && (
+                <div className="md:col-span-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl">⚠️</span>
+                    <div className="flex-1">
+                      <p className="font-medium text-yellow-800 dark:text-yellow-200">ลูกค้ามีข้อมูลในระบบแล้ว!</p>
+                      <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                        ชื่อ: {existingCustomerWarning.full_name}<br />
+                        เบอร์โทร: {existingCustomerWarning.phone}<br />
+                        {existingCustomerWarning.contact_channel && <>ช่องทาง: {existingCustomerWarning.contact_channel}</>}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => selectFromPhoneSuggestion(existingCustomerWarning)}
+                        className="mt-3 px-4 py-2 bg-yellow-500 text-white rounded-lg text-sm font-medium hover:bg-yellow-600"
+                      >
+                        ใช้ข้อมูลลูกค้าเดิม
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

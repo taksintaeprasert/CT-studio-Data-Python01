@@ -26,6 +26,9 @@ export default function DateRangeFilter({
     const start = new Date()
 
     switch (range) {
+      case 'today':
+        // start and end are already today
+        break
       case '7':
         start.setDate(end.getDate() - 7)
         break
@@ -74,7 +77,17 @@ export default function DateRangeFilter({
   return (
     <div className={`flex flex-wrap items-center gap-3 ${className}`}>
       {showQuickOptions && (
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => handleQuickRangeChange('today')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              quickRange === 'today'
+                ? 'bg-pink-500 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            Today
+          </button>
           <button
             onClick={() => handleQuickRangeChange('7')}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
