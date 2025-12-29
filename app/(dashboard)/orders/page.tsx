@@ -26,6 +26,8 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const supabase = createClient()
 
   const handleDateChange = (start: string, end: string) => {
@@ -62,6 +64,30 @@ export default function OrdersPage() {
 
     setOrders(data || [])
     setLoading(false)
+  }
+
+  const deleteOrder = async (orderId: number) => {
+    setDeleting(true)
+    try {
+      // Delete order items first
+      await supabase.from('order_items').delete().eq('order_id', orderId)
+      // Delete payments
+      await supabase.from('payments').delete().eq('order_id', orderId)
+      // Delete the order
+      const { error } = await supabase.from('orders').delete().eq('id', orderId)
+
+      if (error) {
+        alert(`ไม่สามารถลบออเดอร์: ${error.message}`)
+      } else {
+        setOrders(orders.filter(o => o.id !== orderId))
+      }
+    } catch (err) {
+      console.error('Delete error:', err)
+      alert('เกิดข้อผิดพลาดในการลบ')
+    } finally {
+      setDeleting(false)
+      setDeleteConfirm(null)
+    }
   }
 
   const filteredOrders = orders.filter((order) => {
@@ -202,12 +228,26 @@ export default function OrdersPage() {
                         <span className={`${badge.bg} ${badge.text} px-2 py-1 rounded-full text-xs font-medium`}>{badge.label}</span>
                       </td>
                       <td>
-                        <Link
-                          href={`/orders/${order.id}`}
-                          className="text-pink-500 hover:text-pink-600 font-medium"
-                        >
-                          View
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/orders/${order.id}`}
+                            className="text-pink-500 hover:text-pink-600 font-medium"
+                          >
+                            View
+                          </Link>
+                          <Link
+                            href={`/orders/${order.id}/edit`}
+                            className="text-blue-500 hover:text-blue-600 font-medium"
+                          >
+                            Edit
+                          </Link>
+                          <button
+                            onClick={() => setDeleteConfirm(order.id)}
+                            className="text-red-500 hover:text-red-600 font-medium"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -221,6 +261,35 @@ export default function OrdersPage() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">ยืนยันการลบ</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              คุณต้องการลบออเดอร์ #{deleteConfirm} หรือไม่?<br />
+              <span className="text-red-500 text-sm">การกระทำนี้ไม่สามารถย้อนกลับได้</span>
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+                disabled={deleting}
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={() => deleteOrder(deleteConfirm)}
+                className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50"
+                disabled={deleting}
+              >
+                {deleting ? 'กำลังลบ...' : 'ลบออเดอร์'}
+              </button>
+            </div>
           </div>
         </div>
       )}
