@@ -33,6 +33,7 @@ interface Product {
 
 interface SelectedProduct {
   product_id: number
+  product_code: string
   product_name: string
   price: number
   is_upsell: boolean
@@ -187,6 +188,7 @@ export default function NewOrderPage() {
 
     const newProduct: SelectedProduct = {
       product_id: product.id,
+      product_code: product.product_code,
       product_name: product.product_name,
       price: product.list_price,
       is_upsell: false,
@@ -210,6 +212,7 @@ export default function NewOrderPage() {
 
     const newProduct: SelectedProduct = {
       product_id: suggestedProduct.id,
+      product_code: suggestedProduct.product_code,
       product_name: suggestedProduct.product_name,
       price: suggestedProduct.list_price,
       is_upsell: false,
@@ -690,7 +693,7 @@ export default function NewOrderPage() {
                     className="w-full px-4 py-3 text-left hover:bg-pink-50 dark:hover:bg-gray-700 flex justify-between items-center border-b dark:border-gray-700 last:border-b-0"
                   >
                     <div>
-                      <span className="text-xs text-gray-400 mr-2">[{p.category || 'อื่นๆ'}]</span>
+                      <span className="text-xs text-pink-500 font-mono mr-2">[{p.product_code}]</span>
                       <span className="font-medium dark:text-white">{p.product_name}</span>
                       {p.is_free && <span className="ml-2 text-xs text-green-500">ฟรี</span>}
                     </div>
@@ -761,6 +764,7 @@ export default function NewOrderPage() {
               {selectedProducts.map(p => (
                 <div key={p.product_id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-xs text-pink-500 font-mono">[{p.product_code}]</span>
                     <span className="font-medium dark:text-white">{p.product_name}</span>
                     <span className="text-gray-500 dark:text-gray-400">฿{p.price.toLocaleString()}</span>
                     <label className="flex items-center gap-1 text-sm">
