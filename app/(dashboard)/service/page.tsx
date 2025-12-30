@@ -59,6 +59,10 @@ export default function AppointmentPage() {
   const [endDate, setEndDate] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Filter for unscheduled services
+  const [showUnscheduledOnly, setShowUnscheduledOnly] = useState(false)
+  const [showFreeOnlyUnscheduled, setShowFreeOnlyUnscheduled] = useState(false)
+
   // Selected order for detail view
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
@@ -345,6 +349,33 @@ export default function AppointmentPage() {
     })
   }
 
+  // Check if order has unscheduled paid services
+  const hasUnscheduledPaidService = (order: Order) => {
+    return order.order_items.some(
+      item => !item.appointment_date && !item.product?.is_free
+    )
+  }
+
+  // Check if order has unscheduled free services
+  const hasUnscheduledFreeService = (order: Order) => {
+    return order.order_items.some(
+      item => !item.appointment_date && item.product?.is_free
+    )
+  }
+
+  // Filter orders based on unscheduled filter
+  const filteredOrders = orders.filter(order => {
+    if (!showUnscheduledOnly) return true
+
+    if (showFreeOnlyUnscheduled) {
+      // Show only orders with unscheduled FREE services
+      return hasUnscheduledFreeService(order)
+    } else {
+      // Show orders with ANY unscheduled services
+      return order.order_items.some(item => !item.appointment_date)
+    }
+  })
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -376,6 +407,44 @@ export default function AppointmentPage() {
             {t('common.search')}
           </button>
         </div>
+
+        {/* Unscheduled Filter */}
+        <div className="flex flex-wrap items-center gap-4 p-3 bg-gradient-to-r from-orange-500 to-pink-500 rounded-xl">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showUnscheduledOnly}
+              onChange={(e) => {
+                setShowUnscheduledOnly(e.target.checked)
+                if (!e.target.checked) setShowFreeOnlyUnscheduled(false)
+              }}
+              className="w-5 h-5 rounded accent-white"
+            />
+            <span className="font-bold text-white">
+              Show Unscheduled Only
+            </span>
+          </label>
+
+          {showUnscheduledOnly && (
+            <label className="flex items-center gap-2 cursor-pointer ml-4 px-3 py-1 bg-white/20 rounded-lg">
+              <input
+                type="checkbox"
+                checked={showFreeOnlyUnscheduled}
+                onChange={(e) => setShowFreeOnlyUnscheduled(e.target.checked)}
+                className="w-4 h-4 rounded accent-green-400"
+              />
+              <span className="text-white text-sm font-medium">
+                Free Services Only
+              </span>
+            </label>
+          )}
+
+          {showUnscheduledOnly && (
+            <span className="ml-auto text-white/80 text-sm">
+              Found: {filteredOrders.length} orders
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Content */}
@@ -388,31 +457,39 @@ export default function AppointmentPage() {
           {/* Left Panel - Orders List */}
           <div className="lg:col-span-1 space-y-4">
             <h3 className="font-bold text-gray-800 dark:text-white">
-              Orders ({orders.length})
+              Orders ({filteredOrders.length})
             </h3>
 
-            {orders.length === 0 ? (
+            {filteredOrders.length === 0 ? (
               <div className="card text-center py-12">
                 <p className="text-gray-500 dark:text-gray-400">No orders found</p>
-                <p className="text-sm text-gray-400">Try changing the date range</p>
+                <p className="text-sm text-gray-400">Try changing the date range or filter</p>
               </div>
             ) : (
-              <div className="space-y-2 max-h-[calc(100vh-350px)] overflow-y-auto">
-                {orders.map(order => {
+              <div className="space-y-2 max-h-[calc(100vh-400px)] overflow-y-auto">
+                {filteredOrders.map(order => {
                   const statusConfig = getOrderStatusConfig(order.order_status)
                   const isSelected = selectedOrder?.id === order.id
                   const remaining = order.total_income - order.deposit
+                  const hasPaidUnscheduled = hasUnscheduledPaidService(order)
 
                   return (
                     <button
                       key={order.id}
                       onClick={() => setSelectedOrder(order)}
-                      className={`w-full text-left card p-4 transition-all ${
+                      className={`w-full text-left card p-4 transition-all relative ${
                         isSelected
                           ? 'ring-2 ring-pink-500 bg-pink-50 dark:bg-pink-900/20'
                           : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                       }`}
                     >
+                      {/* Warning indicator for paid services without appointments */}
+                      {hasPaidUnscheduled && (
+                        <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center animate-pulse" title="Has paid service without appointment">
+                          <span className="text-white text-xs font-bold">!</span>
+                        </div>
+                      )}
+
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-bold text-gray-800 dark:text-white">
                           #{order.id}
@@ -431,6 +508,14 @@ export default function AppointmentPage() {
                       {remaining > 0 && order.order_status === 'booking' && (
                         <div className="mt-2 text-xs text-orange-600 dark:text-orange-400">
                           {t('common.remaining')}: ฿{remaining.toLocaleString()}
+                        </div>
+                      )}
+
+                      {/* Show unscheduled services count */}
+                      {hasPaidUnscheduled && (
+                        <div className="mt-2 text-xs text-red-500 font-medium flex items-center gap-1">
+                          <span>⚠</span>
+                          <span>Paid service needs appointment</span>
                         </div>
                       )}
                     </button>
