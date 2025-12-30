@@ -298,17 +298,8 @@ export function createDailyReportFlex(report: DailyReportData): object {
               type: 'box',
               layout: 'vertical',
               contents: [
-                { type: 'text', text: 'Paid', size: 'xxs', color: '#8c8c8c', align: 'center' },
-                { type: 'text', text: `฿${report.totalPaidAmount.toLocaleString()}`, size: 'sm', weight: 'bold', align: 'center', color: '#10B981' },
-              ],
-              flex: 1,
-            },
-            {
-              type: 'box',
-              layout: 'vertical',
-              contents: [
-                { type: 'text', text: 'Done', size: 'xxs', color: '#8c8c8c', align: 'center' },
-                { type: 'text', text: `฿${report.totalDoneAmount.toLocaleString()}`, size: 'sm', weight: 'bold', align: 'center', color: '#3B82F6' },
+                { type: 'text', text: 'Income', size: 'xxs', color: '#8c8c8c', align: 'center' },
+                { type: 'text', text: `฿${report.totalRealIncome.toLocaleString()}`, size: 'sm', weight: 'bold', align: 'center', color: '#10B981' },
               ],
               flex: 1,
             },
@@ -316,20 +307,6 @@ export function createDailyReportFlex(report: DailyReportData): object {
           margin: 'md',
           paddingAll: 'sm',
           backgroundColor: '#f9fafb',
-          cornerRadius: 'md',
-        },
-
-        // Real Income
-        {
-          type: 'box',
-          layout: 'horizontal',
-          contents: [
-            { type: 'text', text: '💰 รายได้จริงวันนี้', size: 'sm', weight: 'bold', flex: 3 },
-            { type: 'text', text: `฿${report.totalRealIncome.toLocaleString()}`, size: 'lg', weight: 'bold', color: '#EC4899', align: 'end', flex: 3 },
-          ],
-          margin: 'lg',
-          paddingAll: 'md',
-          backgroundColor: '#fdf2f8',
           cornerRadius: 'md',
         },
 
