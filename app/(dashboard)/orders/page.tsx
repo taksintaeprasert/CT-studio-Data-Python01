@@ -236,75 +236,137 @@ export default function OrdersPage() {
         </select>
       </div>
 
-      {/* Table */}
+      {/* Content */}
       {loading ? (
         <div className="card text-center py-12">
           <p className="text-gray-500 dark:text-gray-400">Loading...</p>
         </div>
       ) : (
-        <div className="card p-0 overflow-hidden">
-          <div className="table-container">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Customer</th>
-                  <th>Sales</th>
-                  <th>Created</th>
-                  <th>Amount</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredOrders.map((order) => {
-                  const badge = getStatusBadge(order.order_status)
-                  return (
-                    <tr key={order.id}>
-                      <td className="font-medium text-gray-800 dark:text-white">#{order.id}</td>
-                      <td className="text-gray-800 dark:text-white">{order.customers?.full_name || '-'}</td>
-                      <td className="text-gray-600 dark:text-gray-300">{order.sales?.staff_name || '-'}</td>
-                      <td className="text-gray-500 dark:text-gray-400 text-sm">{formatDate(order.created_at)}</td>
-                      <td className="text-gray-800 dark:text-white font-medium">{formatCurrency(order.total_income)}</td>
-                      <td>
-                        <span className={`${badge.bg} ${badge.text} px-2 py-1 rounded-full text-xs font-medium`}>{badge.label}</span>
-                      </td>
-                      <td>
-                        <div className="flex items-center gap-2">
-                          <Link
-                            href={`/orders/${order.id}`}
-                            className="text-pink-500 hover:text-pink-600 font-medium"
-                          >
-                            View
-                          </Link>
-                          <Link
-                            href={`/orders/${order.id}/edit`}
-                            className="text-blue-500 hover:text-blue-600 font-medium"
-                          >
-                            Edit
-                          </Link>
-                          <button
-                            onClick={() => setDeleteConfirm(order.id)}
-                            className="text-red-500 hover:text-red-600 font-medium"
-                          >
-                            Delete
-                          </button>
+        <>
+          {/* Mobile Card View */}
+          <div className="sm:hidden space-y-3">
+            {filteredOrders.length === 0 ? (
+              <div className="card text-center py-8">
+                <p className="text-gray-500 dark:text-gray-400">No orders found</p>
+              </div>
+            ) : (
+              filteredOrders.map((order) => {
+                const badge = getStatusBadge(order.order_status)
+                return (
+                  <div key={order.id} className="card p-4">
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-bold text-gray-800 dark:text-white">#{order.id}</span>
+                          <span className={`${badge.bg} ${badge.text} px-2 py-0.5 rounded-full text-xs font-medium`}>
+                            {badge.label}
+                          </span>
                         </div>
+                        <p className="text-gray-800 dark:text-white font-medium">
+                          {order.customers?.full_name || '-'}
+                        </p>
+                      </div>
+                      <p className="text-lg font-bold text-pink-600">
+                        {formatCurrency(order.total_income)}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-3">
+                      <span>{order.sales?.staff_name || '-'}</span>
+                      <span>{formatDate(order.created_at)}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-3 border-t dark:border-gray-700">
+                      <Link
+                        href={`/orders/${order.id}`}
+                        className="flex-1 text-center py-2 bg-pink-500 text-white rounded-lg font-medium text-sm"
+                      >
+                        View
+                      </Link>
+                      <Link
+                        href={`/orders/${order.id}/edit`}
+                        className="flex-1 text-center py-2 bg-blue-500 text-white rounded-lg font-medium text-sm"
+                      >
+                        Edit
+                      </Link>
+                      <button
+                        onClick={() => setDeleteConfirm(order.id)}
+                        className="px-3 py-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg font-medium text-sm"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden sm:block card p-0 overflow-hidden">
+            <div className="table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Customer</th>
+                    <th>Sales</th>
+                    <th>Created</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.map((order) => {
+                    const badge = getStatusBadge(order.order_status)
+                    return (
+                      <tr key={order.id}>
+                        <td className="font-medium text-gray-800 dark:text-white">#{order.id}</td>
+                        <td className="text-gray-800 dark:text-white">{order.customers?.full_name || '-'}</td>
+                        <td className="text-gray-600 dark:text-gray-300">{order.sales?.staff_name || '-'}</td>
+                        <td className="text-gray-500 dark:text-gray-400 text-sm">{formatDate(order.created_at)}</td>
+                        <td className="text-gray-800 dark:text-white font-medium">{formatCurrency(order.total_income)}</td>
+                        <td>
+                          <span className={`${badge.bg} ${badge.text} px-2 py-1 rounded-full text-xs font-medium`}>{badge.label}</span>
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <Link
+                              href={`/orders/${order.id}`}
+                              className="text-pink-500 hover:text-pink-600 font-medium"
+                            >
+                              View
+                            </Link>
+                            <Link
+                              href={`/orders/${order.id}/edit`}
+                              className="text-blue-500 hover:text-blue-600 font-medium"
+                            >
+                              Edit
+                            </Link>
+                            <button
+                              onClick={() => setDeleteConfirm(order.id)}
+                              className="text-red-500 hover:text-red-600 font-medium"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {filteredOrders.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="text-center text-gray-500 dark:text-gray-400 py-8">
+                        No orders found
                       </td>
                     </tr>
-                  )
-                })}
-                {filteredOrders.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="text-center text-gray-500 dark:text-gray-400 py-8">
-                      No orders found
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Delete Confirmation Modal */}

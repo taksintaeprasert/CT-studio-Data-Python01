@@ -494,9 +494,13 @@ export default function AppointmentPage() {
                         <span className="font-bold text-gray-800 dark:text-white">
                           #{order.id}
                         </span>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}>
-                          {statusConfig.label}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}>
+                            {statusConfig.label}
+                          </span>
+                          {/* Mobile tap indicator */}
+                          <span className="lg:hidden text-pink-500 text-sm">→</span>
+                        </div>
                       </div>
                       <div className="text-sm text-gray-800 dark:text-white font-medium mb-1">
                         {order.customers?.full_name || '-'}
@@ -525,8 +529,8 @@ export default function AppointmentPage() {
             )}
           </div>
 
-          {/* Right Panel - Order Detail */}
-          <div className="lg:col-span-2">
+          {/* Right Panel - Order Detail (Desktop only) */}
+          <div className="lg:col-span-2 hidden lg:block">
             {!selectedOrder ? (
               <div className="card text-center py-16">
                 <p className="text-gray-500 dark:text-gray-400 text-lg">{t('appointments.selectOrder')}</p>
@@ -671,6 +675,152 @@ export default function AppointmentPage() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Order Detail Modal */}
+      {selectedOrder && (
+        <div className="fixed inset-0 bg-black/50 flex items-end lg:hidden z-40">
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl w-full max-h-[90vh] overflow-y-auto animate-slide-up">
+            {/* Mobile Header with Close Button */}
+            <div className="sticky top-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-800 dark:text-white">
+                Order #{selectedOrder.id}
+              </h2>
+              <button
+                onClick={() => setSelectedOrder(null)}
+                className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Order Status & Customer */}
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-gray-600 dark:text-gray-300 font-medium">
+                    {selectedOrder.customers?.full_name || '-'}
+                  </p>
+                  {selectedOrder.customers?.phone && (
+                    <p className="text-sm text-gray-400">{selectedOrder.customers.phone}</p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-1">{formatDateTime(selectedOrder.created_at)}</p>
+                </div>
+                <div className={`px-3 py-1.5 rounded-xl text-sm font-bold ${getOrderStatusConfig(selectedOrder.order_status).bg} ${getOrderStatusConfig(selectedOrder.order_status).text}`}>
+                  {getOrderStatusConfig(selectedOrder.order_status).label}
+                </div>
+              </div>
+
+              {/* Payment Summary */}
+              <div className="grid grid-cols-3 gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                <div className="text-center">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('common.total')}</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white">
+                    ฿{selectedOrder.total_income.toLocaleString()}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('common.paid')}</p>
+                  <p className="text-lg font-bold text-green-600">
+                    ฿{selectedOrder.deposit.toLocaleString()}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('common.remaining')}</p>
+                  <p className={`text-lg font-bold ${selectedOrder.total_income - selectedOrder.deposit > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                    ฿{(selectedOrder.total_income - selectedOrder.deposit).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2">
+                {selectedOrder.order_status !== 'cancelled' && (
+                  <button
+                    onClick={openPaymentModal}
+                    className="flex-1 px-4 py-3 bg-green-500 text-white rounded-xl font-bold"
+                  >
+                    {t('appointments.receivePayment')}
+                  </button>
+                )}
+                <button
+                  onClick={openEditOrderModal}
+                  className="px-4 py-3 bg-blue-500 text-white rounded-xl font-bold"
+                >
+                  {t('appointments.edit')}
+                </button>
+              </div>
+
+              {/* Services List */}
+              <div>
+                <h3 className="font-bold text-gray-800 dark:text-white mb-2">
+                  {t('appointments.services')} ({selectedOrder.order_items.length})
+                </h3>
+                <div className="space-y-2">
+                  {selectedOrder.order_items.map(item => {
+                    const itemStatus = getItemStatusConfig(item.item_status)
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1 mb-1 flex-wrap">
+                              <span className="text-xs text-pink-500 font-mono">[{item.product?.product_code}]</span>
+                              {item.product?.is_free && (
+                                <span className="px-1.5 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300 rounded text-xs">
+                                  {t('common.free')}
+                                </span>
+                              )}
+                            </div>
+                            <p className="font-medium text-gray-800 dark:text-white text-sm truncate">
+                              {item.product?.product_name}
+                            </p>
+                            <div className="flex items-center gap-2 text-xs mt-1">
+                              <span className={`font-medium ${itemStatus.color}`}>
+                                {itemStatus.label}
+                              </span>
+                              {item.appointment_date && (
+                                <span className="text-gray-400">
+                                  {formatDate(item.appointment_date)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => openItemEdit(item)}
+                            className="px-3 py-1.5 bg-pink-500 text-white rounded-lg text-xs font-medium shrink-0"
+                          >
+                            {t('appointments.manage')}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {selectedOrder.note && (
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                    {t('common.note')}: {selectedOrder.note}
+                  </p>
+                </div>
+              )}
+
+              {/* Cancel Order Button (at bottom) */}
+              {selectedOrder.order_status !== 'cancelled' && selectedOrder.order_status !== 'done' && (
+                <button
+                  onClick={handleCancelOrder}
+                  className="w-full px-4 py-3 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl font-medium"
+                >
+                  {t('appointments.cancel')}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
