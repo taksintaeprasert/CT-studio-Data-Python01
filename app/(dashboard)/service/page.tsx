@@ -532,7 +532,8 @@ export default function AppointmentPage() {
                         >
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <span className="text-xs text-pink-500 font-mono">[{item.product?.product_code}]</span>
                                 <span className="font-bold text-gray-800 dark:text-white">
                                   {item.product?.product_name}
                                 </span>

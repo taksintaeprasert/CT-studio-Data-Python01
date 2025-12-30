@@ -54,7 +54,7 @@ export default function NewOrderPage() {
   const [newFirstName, setNewFirstName] = useState('')
   const [newLastName, setNewLastName] = useState('')
   const [newPhone, setNewPhone] = useState('')
-  const [newContactChannel, setNewContactChannel] = useState('LINE')
+  const [newContactChannel, setNewContactChannel] = useState('line')
 
   const [salesId, setSalesId] = useState('')
   const [deposit, setDeposit] = useState('')
@@ -512,11 +512,12 @@ export default function NewOrderPage() {
                   onChange={(e) => setNewContactChannel(e.target.value)}
                   className="select"
                 >
-                  <option value="LINE">LINE</option>
-                  <option value="Facebook">Facebook</option>
-                  <option value="Instagram">Instagram</option>
-                  <option value="Call">โทรศัพท์</option>
-                  <option value="Walk-in">Walk-in</option>
+                  <option value="line">line</option>
+                  <option value="facebook">facebook</option>
+                  <option value="instagram">instagram</option>
+                  <option value="tiktok">tiktok</option>
+                  <option value="call">call</option>
+                  <option value="walk-in">walk-in</option>
                 </select>
               </div>
               <div className="relative">
