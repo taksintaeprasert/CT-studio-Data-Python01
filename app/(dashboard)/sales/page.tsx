@@ -54,6 +54,11 @@ export default function SalesPerformancePage() {
   const [chatInputs, setChatInputs] = useState<Record<number, number>>({})
   const [savingChat, setSavingChat] = useState(false)
 
+  // Daily report
+  const [sendingReport, setSendingReport] = useState(false)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportDate, setReportDate] = useState('')
+
   const { t } = useLanguage()
   const supabase = createClient()
 
@@ -269,6 +274,42 @@ export default function SalesPerformancePage() {
     }
   }
 
+  // Open daily report modal
+  const openReportModal = () => {
+    const today = new Date().toISOString().split('T')[0]
+    setReportDate(today)
+    setShowReportModal(true)
+  }
+
+  // Send daily report via LINE
+  const sendDailyReport = async () => {
+    if (!reportDate) return
+
+    setSendingReport(true)
+
+    try {
+      const response = await fetch('/api/daily-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: reportDate }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        alert('ส่ง Daily Report ไป LINE สำเร็จ!')
+        setShowReportModal(false)
+      } else {
+        alert(`ไม่สามารถส่ง Report: ${result.error}`)
+      }
+    } catch (err) {
+      console.error('Send report error:', err)
+      alert('เกิดข้อผิดพลาดในการส่ง Report')
+    } finally {
+      setSendingReport(false)
+    }
+  }
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -322,6 +363,13 @@ export default function SalesPerformancePage() {
               className="btn btn-secondary"
             >
               + บันทึกจำนวนแชท
+            </button>
+            <button
+              type="button"
+              onClick={openReportModal}
+              className="btn btn-primary"
+            >
+              📊 ส่ง Daily Report
             </button>
           </div>
         </div>
@@ -522,6 +570,58 @@ export default function SalesPerformancePage() {
                 disabled={savingChat}
               >
                 {savingChat ? 'กำลังบันทึก...' : 'บันทึก'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Daily Report Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-xl">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">📊 ส่ง Daily Report ไป LINE</h3>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">เลือกวันที่</label>
+              <input
+                type="date"
+                value={reportDate}
+                onChange={(e) => setReportDate(e.target.value)}
+                className="input w-full"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Report จะถูกส่งไปยัง LINE ที่ตั้งค่าไว้
+              </p>
+            </div>
+
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6">
+              <p className="text-sm font-medium text-gray-800 dark:text-white mb-2">ข้อมูลที่จะส่ง:</p>
+              <ul className="text-xs text-gray-600 dark:text-gray-300 space-y-1">
+                <li>• สรุปภาพรวม (Chat, Orders, CR%)</li>
+                <li>• ยอด Booking / Paid / Done</li>
+                <li>• รายได้จริงวันนี้</li>
+                <li>• ผลงาน Sales แต่ละคน</li>
+                <li>• บริการที่ขายได้</li>
+              </ul>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowReportModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+                disabled={sendingReport}
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={sendDailyReport}
+                className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50"
+                disabled={sendingReport}
+              >
+                {sendingReport ? 'กำลังส่ง...' : '📤 ส่ง Report'}
               </button>
             </div>
           </div>
