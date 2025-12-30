@@ -15,15 +15,23 @@ interface Order {
   total_income: number
   deposit: number
   customers: { full_name: string } | null
-  sales: { staff_name: string } | null
-  artist: { staff_name: string } | null
+  sales: { id: number; staff_name: string } | null
+  order_items: { products: { product_code: string } | null }[]
+}
+
+interface Staff {
+  id: number
+  staff_name: string
 }
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
+  const [allStaff, setAllStaff] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [salesFilter, setSalesFilter] = useState('')
+  const [productCodeFilter, setProductCodeFilter] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
@@ -36,10 +44,24 @@ export default function OrdersPage() {
   }
 
   useEffect(() => {
+    fetchStaffList()
+  }, [])
+
+  useEffect(() => {
     if (startDate && endDate) {
       fetchOrders()
     }
   }, [startDate, endDate])
+
+  const fetchStaffList = async () => {
+    const { data } = await supabase
+      .from('staff')
+      .select('id, staff_name')
+      .in('role', ['sales', 'admin'])
+      .eq('is_active', true)
+      .order('staff_name')
+    setAllStaff(data || [])
+  }
 
   const fetchOrders = async () => {
     if (!startDate || !endDate) return
@@ -55,8 +77,8 @@ export default function OrdersPage() {
         total_income,
         deposit,
         customers (full_name),
-        sales:staff!orders_sales_id_fkey (staff_name),
-        artist:staff!orders_artist_id_fkey (staff_name)
+        sales:staff!orders_sales_id_fkey (id, staff_name),
+        order_items (products (product_code))
       `)
       .gte('created_at', `${startDate}T00:00:00`)
       .lte('created_at', `${endDate}T23:59:59`)
@@ -94,7 +116,12 @@ export default function OrdersPage() {
     const matchSearch = order.customers?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
       order.id.toString().includes(search)
     const matchStatus = !statusFilter || order.order_status === statusFilter
-    return matchSearch && matchStatus
+    const matchSales = !salesFilter || order.sales?.id === parseInt(salesFilter)
+    const matchProductCode = !productCodeFilter ||
+      order.order_items?.some(item =>
+        item.products?.product_code?.toLowerCase().includes(productCodeFilter.toLowerCase())
+      )
+    return matchSearch && matchStatus && matchSales && matchProductCode
   })
 
   const formatCurrency = (amount: number) => {
@@ -171,20 +198,37 @@ export default function OrdersPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
         <input
           type="text"
-          placeholder="Search by name or ID..."
+          placeholder="ค้นหาชื่อ หรือ ID..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="input flex-1"
+          className="input flex-1 min-w-[200px]"
         />
+        <input
+          type="text"
+          placeholder="รหัสสินค้า..."
+          value={productCodeFilter}
+          onChange={(e) => setProductCodeFilter(e.target.value)}
+          className="input w-full sm:w-40"
+        />
+        <select
+          value={salesFilter}
+          onChange={(e) => setSalesFilter(e.target.value)}
+          className="select w-full sm:w-40"
+        >
+          <option value="">Sales ทั้งหมด</option>
+          {allStaff.map(staff => (
+            <option key={staff.id} value={staff.id}>{staff.staff_name}</option>
+          ))}
+        </select>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="select w-full sm:w-48"
+          className="select w-full sm:w-40"
         >
-          <option value="">All Status</option>
+          <option value="">สถานะทั้งหมด</option>
           <option value="booking">Booking</option>
           <option value="paid">Paid</option>
           <option value="done">Completed</option>
@@ -206,7 +250,6 @@ export default function OrdersPage() {
                   <th>ID</th>
                   <th>Customer</th>
                   <th>Sales</th>
-                  <th>Artist</th>
                   <th>Created</th>
                   <th>Amount</th>
                   <th>Status</th>
@@ -221,7 +264,6 @@ export default function OrdersPage() {
                       <td className="font-medium text-gray-800 dark:text-white">#{order.id}</td>
                       <td className="text-gray-800 dark:text-white">{order.customers?.full_name || '-'}</td>
                       <td className="text-gray-600 dark:text-gray-300">{order.sales?.staff_name || '-'}</td>
-                      <td className="text-gray-600 dark:text-gray-300">{order.artist?.staff_name || '-'}</td>
                       <td className="text-gray-500 dark:text-gray-400 text-sm">{formatDate(order.created_at)}</td>
                       <td className="text-gray-800 dark:text-white font-medium">{formatCurrency(order.total_income)}</td>
                       <td>
@@ -254,7 +296,7 @@ export default function OrdersPage() {
                 })}
                 {filteredOrders.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="text-center text-gray-500 dark:text-gray-400 py-8">
+                    <td colSpan={7} className="text-center text-gray-500 dark:text-gray-400 py-8">
                       No orders found
                     </td>
                   </tr>
