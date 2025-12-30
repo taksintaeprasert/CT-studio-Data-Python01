@@ -338,6 +338,37 @@ export default function NewOrderPage() {
         }
       }
 
+      // Send LINE notification (non-blocking)
+      try {
+        const customerName = isNewCustomer
+          ? `${newFirstName.trim()} ${newLastName.trim()}`
+          : customers.find(c => c.id === parseInt(customerId))?.full_name || 'Unknown'
+
+        const salesName = salesId
+          ? staff.find(s => s.id === parseInt(salesId))?.staff_name || '-'
+          : '-'
+
+        await fetch('/api/line-notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'new_order',
+            data: {
+              orderId: order.id,
+              customerName,
+              salesName,
+              products: selectedProducts.map(p => `[${p.product_code}] ${p.product_name}`),
+              totalAmount: totalIncome,
+              deposit: parseFloat(deposit) || 0,
+              status: orderType,
+            },
+          }),
+        })
+      } catch (notifyError) {
+        // Don't fail the order creation if notification fails
+        console.error('LINE notification error:', notifyError)
+      }
+
       router.push(`/orders/${order.id}`)
     } catch (error: unknown) {
       console.error('Error creating order:', error)
