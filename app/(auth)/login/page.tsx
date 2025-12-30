@@ -100,6 +100,13 @@ export default function LoginPage() {
           <p>CT Studio ERP v1.0</p>
           <p className="mt-1">Powered by Next.js + Supabase</p>
         </div>
+
+        {/* Demo Credentials */}
+        <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm">
+          <p className="font-medium text-gray-700 mb-1">Demo Login:</p>
+          <p className="text-gray-600">User: admin@admin.com</p>
+          <p className="text-gray-600">Password: 1234</p>
+        </div>
       </div>
     </div>
   )
