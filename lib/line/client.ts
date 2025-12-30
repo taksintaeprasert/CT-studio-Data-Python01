@@ -159,9 +159,9 @@ export interface DailyReportData {
 
 // Create Daily Report Flex Message
 export function createDailyReportFlex(report: DailyReportData): object {
-  // Format date in Thai
+  // Format date in English
   const dateObj = new Date(report.date)
-  const dateStr = dateObj.toLocaleDateString('th-TH', {
+  const dateStr = dateObj.toLocaleDateString('en-US', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -190,7 +190,7 @@ export function createDailyReportFlex(report: DailyReportData): object {
       layout: 'horizontal',
       contents: [
         { type: 'text', text: s.category, size: 'xs', flex: 3, color: '#555555' },
-        { type: 'text', text: `${s.count} คน`, size: 'xs', flex: 2, align: 'center' },
+        { type: 'text', text: `${s.count} pax`, size: 'xs', flex: 2, align: 'center' },
         { type: 'text', text: `฿${s.amount.toLocaleString()}`, size: 'xs', flex: 2, align: 'end', color: '#EC4899' },
       ],
       margin: 'sm',
@@ -228,7 +228,7 @@ export function createDailyReportFlex(report: DailyReportData): object {
         // Summary Section
         {
           type: 'text',
-          text: '📈 สรุปภาพรวม',
+          text: '📈 Summary',
           weight: 'bold',
           size: 'sm',
           color: '#1f2937',
@@ -252,15 +252,6 @@ export function createDailyReportFlex(report: DailyReportData): object {
               contents: [
                 { type: 'text', text: 'Orders', size: 'xxs', color: '#8c8c8c', align: 'center' },
                 { type: 'text', text: String(report.totalOrders), size: 'lg', weight: 'bold', align: 'center', color: '#F59E0B' },
-              ],
-              flex: 1,
-            },
-            {
-              type: 'box',
-              layout: 'vertical',
-              contents: [
-                { type: 'text', text: 'Close', size: 'xxs', color: '#8c8c8c', align: 'center' },
-                { type: 'text', text: String(report.totalClose), size: 'lg', weight: 'bold', align: 'center', color: '#10B981' },
               ],
               flex: 1,
             },
@@ -315,7 +306,7 @@ export function createDailyReportFlex(report: DailyReportData): object {
         // Sales Performance
         {
           type: 'text',
-          text: '👥 ผลงาน Sales',
+          text: '👥 Sales Performance',
           weight: 'bold',
           size: 'sm',
           color: '#1f2937',
@@ -340,14 +331,14 @@ export function createDailyReportFlex(report: DailyReportData): object {
         // Services Sold
         {
           type: 'text',
-          text: '💅 บริการที่ขายได้',
+          text: '💅 Services Sold',
           weight: 'bold',
           size: 'sm',
           color: '#1f2937',
           margin: 'lg',
         },
         ...(serviceRows.length > 0 ? serviceRows : [
-          { type: 'text', text: 'ไม่มีข้อมูล', size: 'xs', color: '#8c8c8c', margin: 'sm' },
+          { type: 'text', text: 'No data', size: 'xs', color: '#8c8c8c', margin: 'sm' },
         ]),
       ],
       paddingAll: 'lg',
