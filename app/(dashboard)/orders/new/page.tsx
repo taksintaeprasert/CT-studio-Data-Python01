@@ -61,6 +61,7 @@ export default function NewOrderPage() {
   const [paymentMethod, setPaymentMethod] = useState('โอนเงิน')
   const [note, setNote] = useState('')
   const [orderType, setOrderType] = useState<'booking' | 'paid'>('booking') // จอง / ชำระแล้ว
+  const [createdAt, setCreatedAt] = useState(new Date().toISOString().split('T')[0]) // วันที่สร้างออเดอร์
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([])
   const [selectedProductId, setSelectedProductId] = useState('')
 
@@ -301,6 +302,7 @@ export default function NewOrderPage() {
           deposit: parseFloat(deposit) || 0,
           payment_method: paymentMethod,
           note: note || null,
+          created_at: `${createdAt}T${new Date().toTimeString().slice(0, 8)}`, // ใช้วันที่ที่เลือก + เวลาปัจจุบัน
         })
         .select()
         .single()
@@ -610,9 +612,24 @@ export default function NewOrderPage() {
           )}
         </div>
 
-        {/* Order Type */}
+        {/* Order Type & Date */}
         <div className="card space-y-4">
           <h2 className="font-bold text-gray-800 dark:text-white border-b pb-2">ประเภทออเดอร์</h2>
+
+          {/* Order Date */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              วันที่สร้างออเดอร์
+            </label>
+            <input
+              type="date"
+              value={createdAt}
+              onChange={(e) => setCreatedAt(e.target.value)}
+              className="input w-full sm:w-auto"
+            />
+            <p className="text-xs text-gray-400 mt-1">* ปรับได้กรณีลืมสร้างออเดอร์ย้อนหลัง</p>
+          </div>
+
           <div className="flex gap-4">
             <label className={`flex-1 cursor-pointer rounded-lg border-2 p-4 transition-all ${
               orderType === 'booking'
