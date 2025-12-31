@@ -55,6 +55,8 @@ export default function NewOrderPage() {
   const [newLastName, setNewLastName] = useState('')
   const [newPhone, setNewPhone] = useState('')
   const [newContactChannel, setNewContactChannel] = useState('line')
+  const [newNickname, setNewNickname] = useState('')
+  const [newAge, setNewAge] = useState('')
 
   const [salesId, setSalesId] = useState('')
   const [deposit, setDeposit] = useState('')
@@ -296,6 +298,8 @@ export default function NewOrderPage() {
             full_name: `${newFirstName.trim()} ${newLastName.trim()}`,
             phone: newPhone || null,
             contact_channel: newContactChannel,
+            nickname: newNickname.trim() || null,
+            age: newAge ? parseInt(newAge) : null,
           })
           .select('id')
           .single()
@@ -611,6 +615,36 @@ export default function NewOrderPage() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Nickname (optional) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  ชื่อเล่น
+                </label>
+                <input
+                  type="text"
+                  value={newNickname}
+                  onChange={(e) => setNewNickname(e.target.value)}
+                  className="input"
+                  placeholder="ชื่อเล่น (ไม่บังคับ)"
+                />
+              </div>
+
+              {/* Age (optional) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  อายุ
+                </label>
+                <input
+                  type="number"
+                  value={newAge}
+                  onChange={(e) => setNewAge(e.target.value)}
+                  className="input"
+                  placeholder="อายุ (ไม่บังคับ)"
+                  min="1"
+                  max="120"
+                />
               </div>
 
               {/* Existing customer warning */}
