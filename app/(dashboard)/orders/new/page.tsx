@@ -69,6 +69,7 @@ export default function NewOrderPage() {
   const [productSearch, setProductSearch] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
   const [suggestedProduct, setSuggestedProduct] = useState<Product | null>(null)
+  const [missingFreeProduct, setMissingFreeProduct] = useState<string | null>(null) // เก็บ code ที่แนะนำให้สร้าง
 
   // Customer search states
   const [customerSearch, setCustomerSearch] = useState('')
@@ -149,33 +150,51 @@ export default function NewOrderPage() {
     setShowCustomerDropdown(false)
   }
 
-  // Find related free product (e.g., Eyebrow Tattoo → Eyebrow Touch Up)
-  const findRelatedFreeProduct = (product: Product): Product | null => {
-    if (!product.category) return null
+  // Extract price code from product code (e.g., "10900" from "LIP10900" or "BROW5900")
+  const extractPriceCode = (productCode: string): string | null => {
+    // Match digits at the end of the code (e.g., LIP10900 → 10900, BROW5900 → 5900)
+    const match = productCode.match(/(\d+)$/)
+    return match ? match[1] : null
+  }
 
-    // Look for free touch-up or free products in same category
-    const relatedFree = products.find(p =>
-      p.id !== product.id &&
-      p.is_free &&
-      p.category === product.category &&
-      !selectedProducts.some(sp => sp.product_id === p.id)
-    )
+  // Find related free product by matching price code
+  // e.g., LIP10900 → LIPFREE10900 or LIP10900FREE
+  const findRelatedFreeProduct = (product: Product): { found: Product | null; suggestedCode: string | null } => {
+    const priceCode = extractPriceCode(product.product_code)
 
-    // Or look for "Touch Up" / "Free" products matching the main service
-    if (!relatedFree) {
-      const mainName = product.product_name.toLowerCase()
-      return products.find(p =>
-        p.id !== product.id &&
-        (p.list_price === 0 || p.is_free) &&
-        (p.product_name.toLowerCase().includes('touch up') ||
-         p.product_name.toLowerCase().includes('free') ||
-         p.product_name.toLowerCase().includes('ฟรี')) &&
-        p.product_name.toLowerCase().includes(product.category?.toLowerCase() || '') &&
-        !selectedProducts.some(sp => sp.product_id === p.id)
-      ) || null
+    if (!priceCode) {
+      return { found: null, suggestedCode: null }
     }
 
-    return relatedFree
+    // Extract base code (letters before the price) e.g., "LIP" from "LIP10900"
+    const baseCode = product.product_code.replace(/\d+$/, '')
+
+    // Look for free product with same price code
+    // Pattern 1: BASEFREE + PRICE (e.g., LIPFREE10900)
+    // Pattern 2: BASE + PRICE + FREE (e.g., LIP10900FREE)
+    // Pattern 3: Any free product containing both base and price code
+    const relatedFree = products.find(p => {
+      if (p.id === product.id) return false
+      if (!p.is_free && p.list_price !== 0) return false
+      if (selectedProducts.some(sp => sp.product_id === p.id)) return false
+
+      const pCode = p.product_code.toUpperCase()
+      const baseUpper = baseCode.toUpperCase()
+
+      // Check if this free product matches our price code
+      return (
+        pCode.includes(priceCode) &&
+        (pCode.includes(baseUpper) || pCode.includes('FREE'))
+      )
+    })
+
+    if (relatedFree) {
+      return { found: relatedFree, suggestedCode: null }
+    }
+
+    // No matching free product found - suggest creating one
+    const suggestedCode = `${baseCode}FREE${priceCode}`
+    return { found: null, suggestedCode }
   }
 
   const addProductById = (productId: string) => {
@@ -196,10 +215,18 @@ export default function NewOrderPage() {
     }
     setSelectedProducts(prev => [...prev, newProduct])
 
-    // Check for related free product
-    const relatedFree = findRelatedFreeProduct(product)
-    if (relatedFree) {
-      setSuggestedProduct(relatedFree)
+    // Clear previous suggestions
+    setSuggestedProduct(null)
+    setMissingFreeProduct(null)
+
+    // Check for related free product (only for non-free products)
+    if (!product.is_free && product.list_price > 0) {
+      const { found, suggestedCode } = findRelatedFreeProduct(product)
+      if (found) {
+        setSuggestedProduct(found)
+      } else if (suggestedCode) {
+        setMissingFreeProduct(suggestedCode)
+      }
     }
 
     // Clear search
@@ -224,6 +251,7 @@ export default function NewOrderPage() {
 
   const dismissSuggestion = () => {
     setSuggestedProduct(null)
+    setMissingFreeProduct(null)
   }
 
   const removeProduct = (productId: number) => {
@@ -769,14 +797,14 @@ export default function NewOrderPage() {
             />
           )}
 
-          {/* Suggestion Banner */}
+          {/* Suggestion Banner - Found Free Product */}
           {suggestedProduct && (
             <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-2xl">💡</span>
                 <div>
                   <p className="text-sm text-green-800 dark:text-green-300 font-medium">
-                    แนะนำเพิ่ม: {suggestedProduct.product_name}
+                    แนะนำเพิ่ม: [{suggestedProduct.product_code}] {suggestedProduct.product_name}
                   </p>
                   <p className="text-xs text-green-600 dark:text-green-400">
                     {suggestedProduct.is_free || suggestedProduct.list_price === 0 ? 'บริการฟรี' : `฿${suggestedProduct.list_price.toLocaleString()}`}
@@ -799,6 +827,30 @@ export default function NewOrderPage() {
                   ไม่ใช้
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Suggestion Banner - Missing Free Product (need to create) */}
+          {missingFreeProduct && (
+            <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">⚠️</span>
+                <div>
+                  <p className="text-sm text-yellow-800 dark:text-yellow-300 font-medium">
+                    ไม่พบบริการฟรีที่ตรงกัน
+                  </p>
+                  <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                    แนะนำให้สร้างสินค้า: <span className="font-mono font-bold">{missingFreeProduct}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={dismissSuggestion}
+                className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-300 dark:hover:bg-gray-600"
+              >
+                ปิด
+              </button>
             </div>
           )}
 
