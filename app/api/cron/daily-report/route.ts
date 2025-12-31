@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
         sales_id,
         order_status,
         total_income,
+        deposit,
         order_items (
           product_id,
           products (
@@ -72,15 +73,8 @@ export async function GET(request: NextRequest) {
       .select('staff_id, chat_count')
       .eq('date', reportDate)
 
-    // Get payments for the date (actual income received)
-    const { data: payments } = await supabase
-      .from('payments')
-      .select('amount, order_id')
-      .gte('created_at', `${reportDate}T00:00:00`)
-      .lte('created_at', `${reportDate}T23:59:59`)
-
-    // Calculate total income from payments
-    const totalPaymentsIncome = payments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0
+    // Calculate total income from deposits (same as Dashboard)
+    const totalDepositsIncome = orders?.reduce((sum, o) => sum + (o.deposit || 0), 0) || 0
 
     // Calculate stats for each staff
     const salesReports = staff.map((s) => {
@@ -118,8 +112,8 @@ export async function GET(request: NextRequest) {
     const totalBookingAmount = salesReports.reduce((sum, s) => sum + s.bookingAmount, 0)
     const totalPaidAmount = salesReports.reduce((sum, s) => sum + s.paidAmount, 0)
     const totalDoneAmount = salesReports.reduce((sum, s) => sum + s.doneAmount, 0)
-    // Use payments table for actual income received today
-    const totalRealIncome = totalPaymentsIncome
+    // Use deposits from orders created today (same as Dashboard)
+    const totalRealIncome = totalDepositsIncome
 
     // Calculate services sold by category
     const serviceMap = new Map<string, { count: number; amount: number }>()
