@@ -3,6 +3,10 @@ const nextConfig = {
   // Enable standalone output for Vercel
   output: 'standalone',
 
+  // Disable trailing slash redirects (fixes 308 redirect issue)
+  trailingSlash: false,
+  skipTrailingSlashRedirect: true,
+
   // Optimize images
   images: {
     domains: [],

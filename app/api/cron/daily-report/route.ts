@@ -195,3 +195,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 })
   }
 }
+
+// Also support POST for external cron services like cron-job.org
+export async function POST(request: NextRequest) {
+  return GET(request)
+}
