@@ -255,25 +255,53 @@ export default function SalesPerformancePage() {
     try {
       // Get all sales staff
       const salesStaffIds = allStaff.map(s => s.id)
+      const errors: string[] = []
 
       // Upsert chat counts for each staff
       for (const staffId of salesStaffIds) {
         const chatCount = chatInputs[staffId] || 0
 
-        await supabase
+        // First try to check if record exists
+        const { data: existing } = await supabase
           .from('chat_counts')
-          .upsert({
-            staff_id: staffId,
-            date: chatDate,
-            chat_count: chatCount,
-          }, {
-            onConflict: 'staff_id,date',
-          })
+          .select('id')
+          .eq('staff_id', staffId)
+          .eq('date', chatDate)
+          .maybeSingle()
+
+        let error
+        if (existing) {
+          // Update existing record
+          const result = await supabase
+            .from('chat_counts')
+            .update({ chat_count: chatCount, updated_at: new Date().toISOString() })
+            .eq('id', existing.id)
+          error = result.error
+        } else {
+          // Insert new record
+          const result = await supabase
+            .from('chat_counts')
+            .insert({
+              staff_id: staffId,
+              date: chatDate,
+              chat_count: chatCount,
+            })
+          error = result.error
+        }
+
+        if (error) {
+          console.error(`Error saving chat count for staff ${staffId}:`, error)
+          errors.push(`Staff ID ${staffId}: ${error.message}`)
+        }
       }
 
-      setShowChatModal(false)
-      // Refresh data
-      fetchSalesData()
+      if (errors.length > 0) {
+        alert(`เกิดข้อผิดพลาด:\n${errors.join('\n')}`)
+      } else {
+        setShowChatModal(false)
+        // Refresh data
+        fetchSalesData()
+      }
     } catch (err) {
       console.error('Save chat count error:', err)
       alert('เกิดข้อผิดพลาดในการบันทึก')
