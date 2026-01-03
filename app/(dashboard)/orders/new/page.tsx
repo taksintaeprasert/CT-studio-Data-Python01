@@ -159,8 +159,23 @@ export default function NewOrderPage() {
     return match ? match[1] : null
   }
 
-  // Find related free product by matching price code
-  // e.g., LIP10900 → LIPFREE10900 or LIP10900FREE
+  // Extract all digits from product code (for FREE products that have digits in middle)
+  // e.g., LIP9900FREE → 9900, LIPFREE6900 → 6900
+  const extractAllDigits = (productCode: string): string | null => {
+    const match = productCode.match(/(\d+)/)
+    return match ? match[1] : null
+  }
+
+  // Extract base code (letters at the start) from product code
+  // e.g., LIP10900 → LIP, LIPFREE6900 → LIP, BROW5900FREE → BROW
+  const extractBaseCode = (productCode: string): string => {
+    // Get letters at the start, stop at first digit or "FREE"
+    const match = productCode.toUpperCase().match(/^([A-Z]+?)(?:FREE|\d)/)
+    return match ? match[1] : productCode.replace(/[\dFREE]+/gi, '')
+  }
+
+  // Find related free product by matching EXACT base code and EXACT price code
+  // e.g., LIP6900 → LIP6900FREE or LIPFREE6900 (must be LIP + 6900)
   const findRelatedFreeProduct = (product: Product): { found: Product | null; suggestedCode: string | null } => {
     const priceCode = extractPriceCode(product.product_code)
 
@@ -168,25 +183,27 @@ export default function NewOrderPage() {
       return { found: null, suggestedCode: null }
     }
 
-    // Extract base code (letters before the price) e.g., "LIP" from "LIP10900"
-    const baseCode = product.product_code.replace(/\d+$/, '')
+    // Extract base code e.g., "LIP" from "LIP10900"
+    const baseCode = extractBaseCode(product.product_code)
 
-    // Look for free product with same price code
-    // Pattern 1: BASEFREE + PRICE (e.g., LIPFREE10900)
-    // Pattern 2: BASE + PRICE + FREE (e.g., LIP10900FREE)
-    // Pattern 3: Any free product containing both base and price code
+    // Look for free product with EXACT same base code AND EXACT same price code
     const relatedFree = products.find(p => {
       if (p.id === product.id) return false
       if (!p.is_free && p.list_price !== 0) return false
       if (selectedProducts.some(sp => sp.product_id === p.id)) return false
 
       const pCode = p.product_code.toUpperCase()
-      const baseUpper = baseCode.toUpperCase()
+      const freePriceCode = extractAllDigits(p.product_code)
+      const freeBaseCode = extractBaseCode(p.product_code)
 
-      // Check if this free product matches our price code
+      // Must match EXACTLY:
+      // 1. Same base code (e.g., LIP = LIP)
+      // 2. Same price code (e.g., 6900 = 6900, not 6900 in 16900)
+      // 3. Must be a FREE product
       return (
-        pCode.includes(priceCode) &&
-        (pCode.includes(baseUpper) || pCode.includes('FREE'))
+        freeBaseCode === baseCode.toUpperCase() &&
+        freePriceCode === priceCode &&
+        pCode.includes('FREE')
       )
     })
 
@@ -195,7 +212,7 @@ export default function NewOrderPage() {
     }
 
     // No matching free product found - suggest creating one
-    const suggestedCode = `${baseCode}FREE${priceCode}`
+    const suggestedCode = `${baseCode}${priceCode}FREE`
     return { found: null, suggestedCode }
   }
 
