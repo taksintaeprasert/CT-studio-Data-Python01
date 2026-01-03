@@ -351,7 +351,7 @@ export default function NewOrderPage() {
           deposit: parseFloat(deposit) || 0,
           payment_method: paymentMethod,
           note: note || null,
-          created_at: `${createdAt}T${new Date().toTimeString().slice(0, 8)}`, // ใช้วันที่ที่เลือก + เวลาปัจจุบัน
+          created_at: `${createdAt}T${new Date().toTimeString().slice(0, 8)}+07:00`, // ใช้วันที่ที่เลือก + เวลาปัจจุบัน (Thailand timezone)
         })
         .select()
         .single()
