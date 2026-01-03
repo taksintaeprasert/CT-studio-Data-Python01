@@ -89,6 +89,29 @@ export default function OrdersPage() {
     setLoading(false)
   }
 
+  const fetchAllOrders = async () => {
+    setLoading(true)
+    setStartDate('')
+    setEndDate('')
+    const { data } = await supabase
+      .from('orders')
+      .select(`
+        id,
+        order_date,
+        created_at,
+        order_status,
+        total_income,
+        deposit,
+        customers (full_name),
+        sales:staff!orders_sales_id_fkey (id, staff_name),
+        order_items (is_upsell, products (product_code))
+      `)
+      .order('created_at', { ascending: false })
+
+    setOrders(data || [])
+    setLoading(false)
+  }
+
   const deleteOrder = async (orderId: number) => {
     setDeleting(true)
     try {
@@ -181,7 +204,7 @@ export default function OrdersPage() {
 
       {/* Date Range Filter */}
       <div className="card">
-        <DateRangeFilter onDateChange={handleDateChange} />
+        <DateRangeFilter onDateChange={handleDateChange} onShowAll={fetchAllOrders} />
       </div>
 
       {/* Stats */}
