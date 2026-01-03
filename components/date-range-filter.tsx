@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react'
 
 interface DateRangeFilterProps {
   onDateChange: (startDate: string, endDate: string) => void
+  onShowAll?: () => void
   showQuickOptions?: boolean
   className?: string
 }
 
 export default function DateRangeFilter({
   onDateChange,
+  onShowAll,
   showQuickOptions = true,
   className = ''
 }: DateRangeFilterProps) {
@@ -41,6 +43,9 @@ export default function DateRangeFilter({
       case 'month':
         start.setDate(1)
         break
+      case 'all':
+        // Will be handled separately via onShowAll
+        return
       case 'custom':
         return
       default:
@@ -57,7 +62,9 @@ export default function DateRangeFilter({
 
   const handleQuickRangeChange = (range: string) => {
     setQuickRange(range)
-    if (range !== 'custom') {
+    if (range === 'all') {
+      onShowAll?.()
+    } else if (range !== 'custom') {
       calculateDates(range)
     }
   }
@@ -138,6 +145,18 @@ export default function DateRangeFilter({
           >
             Custom
           </button>
+          {onShowAll && (
+            <button
+              onClick={() => handleQuickRangeChange('all')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                quickRange === 'all'
+                  ? 'bg-purple-500 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              All
+            </button>
+          )}
         </div>
       )}
 
