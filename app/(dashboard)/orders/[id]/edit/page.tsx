@@ -40,6 +40,7 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
   const [orderStatus, setOrderStatus] = useState('booking')
   const [note, setNote] = useState('')
   const [customerName, setCustomerName] = useState('')
+  const [createdAt, setCreatedAt] = useState('')
 
   // Product selection
   const [productSearch, setProductSearch] = useState('')
@@ -81,6 +82,11 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
       setOrderStatus(orderRes.data.order_status || 'booking')
       setNote(orderRes.data.note || '')
       setCustomerName(orderRes.data.customers?.full_name || '')
+      // Set created_at date (format: YYYY-MM-DD)
+      if (orderRes.data.created_at) {
+        const date = new Date(orderRes.data.created_at)
+        setCreatedAt(date.toISOString().split('T')[0])
+      }
     }
 
     setOrderItems(itemsRes.data || [])
@@ -183,6 +189,7 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
         sales_id: salesId ? parseInt(salesId) : null,
         order_status: orderStatus,
         note: note || null,
+        created_at: createdAt ? `${createdAt}T12:00:00` : undefined,
       })
       .eq('id', params.id)
 
@@ -235,7 +242,7 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
         <div className="card space-y-4">
           <h2 className="font-bold text-gray-800 dark:text-white border-b pb-2">ข้อมูลออเดอร์</h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">สถานะ</label>
               <select
@@ -261,6 +268,15 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
                   <option key={s.id} value={s.id}>{s.staff_name}</option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">วันที่สร้าง</label>
+              <input
+                type="date"
+                value={createdAt}
+                onChange={(e) => setCreatedAt(e.target.value)}
+                className="input"
+              />
             </div>
           </div>
 
