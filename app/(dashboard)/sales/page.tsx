@@ -215,9 +215,17 @@ export default function SalesPerformancePage() {
     ],
   }
 
+  // Helper to format local date (Thailand time)
+  const formatLocalDate = (d: Date) => {
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
   // Open chat count modal
   const openChatModal = () => {
-    const today = new Date().toISOString().split('T')[0]
+    const today = formatLocalDate(new Date())
     setChatDate(today)
     setChatInputs({})
     setShowChatModal(true)
@@ -276,7 +284,7 @@ export default function SalesPerformancePage() {
 
   // Open daily report modal
   const openReportModal = () => {
-    const today = new Date().toISOString().split('T')[0]
+    const today = formatLocalDate(new Date())
     setReportDate(today)
     setShowReportModal(true)
   }

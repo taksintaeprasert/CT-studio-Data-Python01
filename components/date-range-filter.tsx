@@ -52,8 +52,16 @@ export default function DateRangeFilter({
         start.setDate(end.getDate() - 7)
     }
 
-    const startStr = start.toISOString().split('T')[0]
-    const endStr = end.toISOString().split('T')[0]
+    // Use local date (Thailand time) instead of UTC
+    const formatLocalDate = (d: Date) => {
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+
+    const startStr = formatLocalDate(start)
+    const endStr = formatLocalDate(end)
 
     setStartDate(startStr)
     setEndDate(endStr)
