@@ -16,7 +16,7 @@ interface Order {
   deposit: number
   customers: { full_name: string } | null
   sales: { id: number; staff_name: string } | null
-  order_items: { products: { product_code: string } | null }[]
+  order_items: { is_upsell: boolean; products: { product_code: string } | null }[]
 }
 
 interface Staff {
@@ -32,6 +32,7 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [salesFilter, setSalesFilter] = useState('')
   const [productCodeFilter, setProductCodeFilter] = useState('')
+  const [upsellFilter, setUpsellFilter] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
@@ -78,10 +79,10 @@ export default function OrdersPage() {
         deposit,
         customers (full_name),
         sales:staff!orders_sales_id_fkey (id, staff_name),
-        order_items (products (product_code))
+        order_items (is_upsell, products (product_code))
       `)
-      .gte('created_at', `${startDate}T00:00:00`)
-      .lte('created_at', `${endDate}T23:59:59`)
+      .gte('created_at', `${startDate}T00:00:00+07:00`)
+      .lte('created_at', `${endDate}T23:59:59+07:00`)
       .order('created_at', { ascending: false })
 
     setOrders(data || [])
@@ -112,6 +113,9 @@ export default function OrdersPage() {
     }
   }
 
+  // Helper function to check if order has upsell items
+  const hasUpsell = (order: Order) => order.order_items?.some(item => item.is_upsell) || false
+
   const filteredOrders = orders.filter((order) => {
     const matchSearch = order.customers?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
       order.id.toString().includes(search)
@@ -121,7 +125,10 @@ export default function OrdersPage() {
       order.order_items?.some(item =>
         item.products?.product_code?.toLowerCase().includes(productCodeFilter.toLowerCase())
       )
-    return matchSearch && matchStatus && matchSales && matchProductCode
+    const matchUpsell = !upsellFilter ||
+      (upsellFilter === 'yes' && hasUpsell(order)) ||
+      (upsellFilter === 'no' && !hasUpsell(order))
+    return matchSearch && matchStatus && matchSales && matchProductCode && matchUpsell
   })
 
   const formatCurrency = (amount: number) => {
@@ -234,6 +241,15 @@ export default function OrdersPage() {
           <option value="done">Completed</option>
           <option value="cancelled">Cancelled</option>
         </select>
+        <select
+          value={upsellFilter}
+          onChange={(e) => setUpsellFilter(e.target.value)}
+          className="select w-full sm:w-40"
+        >
+          <option value="">Upsell ทั้งหมด</option>
+          <option value="yes">มี Upsell</option>
+          <option value="no">ไม่มี Upsell</option>
+        </select>
       </div>
 
       {/* Content */}
@@ -261,6 +277,11 @@ export default function OrdersPage() {
                           <span className={`${badge.bg} ${badge.text} px-2 py-0.5 rounded-full text-xs font-medium`}>
                             {badge.label}
                           </span>
+                          {hasUpsell(order) && (
+                            <span className="bg-purple-500 text-white px-2 py-0.5 rounded-full text-xs font-medium">
+                              Upsell
+                            </span>
+                          )}
                         </div>
                         <p className="text-gray-800 dark:text-white font-medium">
                           {order.customers?.full_name || '-'}
@@ -314,6 +335,7 @@ export default function OrdersPage() {
                     <th>Created</th>
                     <th>Amount</th>
                     <th>Status</th>
+                    <th>Upsell</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -329,6 +351,13 @@ export default function OrdersPage() {
                         <td className="text-gray-800 dark:text-white font-medium">{formatCurrency(order.total_income)}</td>
                         <td>
                           <span className={`${badge.bg} ${badge.text} px-2 py-1 rounded-full text-xs font-medium`}>{badge.label}</span>
+                        </td>
+                        <td>
+                          {hasUpsell(order) ? (
+                            <span className="bg-purple-500 text-white px-2 py-1 rounded-full text-xs font-medium">Upsell</span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
                         </td>
                         <td>
                           <div className="flex items-center gap-2">
@@ -357,7 +386,7 @@ export default function OrdersPage() {
                   })}
                   {filteredOrders.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="text-center text-gray-500 dark:text-gray-400 py-8">
+                      <td colSpan={8} className="text-center text-gray-500 dark:text-gray-400 py-8">
                         No orders found
                       </td>
                     </tr>
