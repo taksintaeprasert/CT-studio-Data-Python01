@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 
+const LINE_REPLY_API = 'https://api.line.me/v2/bot/message/reply'
+
 // Verify LINE signature for security
 function verifySignature(body: string, signature: string): boolean {
   const channelSecret = process.env.LINE_CHANNEL_SECRET
@@ -15,6 +17,24 @@ function verifySignature(body: string, signature: string): boolean {
     .digest('base64')
 
   return hash === signature
+}
+
+// Reply to LINE message
+async function replyMessage(replyToken: string, text: string) {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN
+  if (!token) return
+
+  await fetch(LINE_REPLY_API, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages: [{ type: 'text', text }],
+    }),
+  })
 }
 
 export async function POST(request: NextRequest) {
@@ -37,31 +57,41 @@ export async function POST(request: NextRequest) {
     for (const event of data.events || []) {
       const eventType = event.type
       const source = event.source
+      const replyToken = event.replyToken
 
       console.log(`Event Type: ${eventType}`)
       console.log(`Source Type: ${source?.type}`)
 
-      // Log IDs based on source type
-      if (source?.type === 'group') {
-        console.log('========================================')
-        console.log('🎉 GROUP ID FOUND!')
-        console.log(`GROUP ID: ${source.groupId}`)
-        console.log('========================================')
-        console.log('ใช้ Group ID นี้ใน LINE_NOTIFY_USER_ID เพื่อส่ง Report ไปกลุ่ม')
-      } else if (source?.type === 'room') {
-        console.log('========================================')
-        console.log('🎉 ROOM ID FOUND!')
-        console.log(`ROOM ID: ${source.roomId}`)
-        console.log('========================================')
-      } else if (source?.type === 'user') {
-        console.log(`User ID: ${source.userId}`)
+      // Reply with Group ID when message received in group
+      if (source?.type === 'group' && eventType === 'message') {
+        const messageText = event.message?.text || ''
+
+        // If user types "groupid" or "group id", reply with the group ID
+        if (messageText.toLowerCase().includes('groupid') || messageText.toLowerCase().includes('group id')) {
+          const groupId = source.groupId
+          console.log(`GROUP ID: ${groupId}`)
+
+          await replyMessage(replyToken,
+            `🎉 Group ID ของกลุ่มนี้คือ:\n\n${groupId}\n\n📋 นำไปใส่ใน Vercel Environment Variables:\nLINE_NOTIFY_USER_ID = ${groupId}`
+          )
+        }
       }
 
-      // Handle specific events
-      if (eventType === 'join') {
-        console.log('✅ BOT joined a group/room!')
-      } else if (eventType === 'message') {
-        console.log(`Message: ${event.message?.text || '(non-text)'}`)
+      // Auto reply with Group ID when bot joins
+      if (source?.type === 'group' && eventType === 'join') {
+        const groupId = source.groupId
+        console.log(`BOT JOINED GROUP: ${groupId}`)
+
+        await replyMessage(replyToken,
+          `👋 สวัสดี! Bot เข้ากลุ่มแล้ว\n\n🎉 Group ID:\n${groupId}\n\n📋 นำไปใส่ใน Vercel:\nLINE_NOTIFY_USER_ID = ${groupId}`
+        )
+      }
+
+      // Log IDs
+      if (source?.type === 'group') {
+        console.log(`GROUP ID: ${source.groupId}`)
+      } else if (source?.type === 'user') {
+        console.log(`User ID: ${source.userId}`)
       }
     }
 
