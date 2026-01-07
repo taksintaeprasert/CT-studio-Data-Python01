@@ -59,9 +59,8 @@ export default function AppointmentPage() {
   const [endDate, setEndDate] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Filter for unscheduled services
-  const [showUnscheduledOnly, setShowUnscheduledOnly] = useState(false)
-  const [showFreeOnlyUnscheduled, setShowFreeOnlyUnscheduled] = useState(false)
+  // Filter for today's appointments
+  const [showTodayOnly, setShowTodayOnly] = useState(false)
 
   // Selected order for detail view
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
@@ -74,12 +73,14 @@ export default function AppointmentPage() {
   // Confirmation modal
   const [confirmAction, setConfirmAction] = useState<{type: string; message: string} | null>(null)
 
-  // Item edit modal
+  // Item edit modal (for scheduling)
   const [editingItem, setEditingItem] = useState<OrderItem | null>(null)
   const [editDate, setEditDate] = useState('')
   const [editTime, setEditTime] = useState('')
-  const [editStatus, setEditStatus] = useState<OrderItem['item_status']>('pending')
   const [editArtistId, setEditArtistId] = useState<string>('')
+
+  // Status change modal
+  const [statusChangeItem, setStatusChangeItem] = useState<OrderItem | null>(null)
 
   // Order edit modal (for corrections)
   const [showEditOrderModal, setShowEditOrderModal] = useState(false)
@@ -282,24 +283,42 @@ export default function AppointmentPage() {
     setEditingItem(item)
     setEditDate(item.appointment_date || '')
     setEditTime(item.appointment_time || '')
-    setEditStatus(item.item_status)
     setEditArtistId(item.artist_id ? String(item.artist_id) : '')
   }
 
   const saveItemEdit = async () => {
     if (!editingItem) return
 
+    // Auto-set status to 'scheduled' when saving appointment
     await supabase
       .from('order_items')
       .update({
         appointment_date: editDate || null,
         appointment_time: editTime || null,
-        item_status: editStatus,
+        item_status: 'scheduled',
         artist_id: editArtistId ? parseInt(editArtistId) : null,
       })
       .eq('id', editingItem.id)
 
     setEditingItem(null)
+    await refreshOrders()
+  }
+
+  // Open status change modal
+  const openStatusChange = (item: OrderItem) => {
+    setStatusChangeItem(item)
+  }
+
+  // Save status change
+  const saveStatusChange = async (newStatus: OrderItem['item_status']) => {
+    if (!statusChangeItem) return
+
+    await supabase
+      .from('order_items')
+      .update({ item_status: newStatus })
+      .eq('id', statusChangeItem.id)
+
+    setStatusChangeItem(null)
     await refreshOrders()
   }
 
@@ -356,24 +375,25 @@ export default function AppointmentPage() {
     )
   }
 
-  // Check if order has unscheduled free services
-  const hasUnscheduledFreeService = (order: Order) => {
-    return order.order_items.some(
-      item => !item.appointment_date && item.product?.is_free
-    )
+  // Get today's date in YYYY-MM-DD format
+  const getTodayDate = () => {
+    const today = new Date()
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const day = String(today.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
   }
 
-  // Filter orders based on unscheduled filter
-  const filteredOrders = orders.filter(order => {
-    if (!showUnscheduledOnly) return true
+  // Check if order has appointment today
+  const hasAppointmentToday = (order: Order) => {
+    const today = getTodayDate()
+    return order.order_items.some(item => item.appointment_date === today)
+  }
 
-    if (showFreeOnlyUnscheduled) {
-      // Show only orders with unscheduled FREE services
-      return hasUnscheduledFreeService(order)
-    } else {
-      // Show orders with ANY unscheduled services
-      return order.order_items.some(item => !item.appointment_date)
-    }
+  // Filter orders based on today filter
+  const filteredOrders = orders.filter(order => {
+    if (!showTodayOnly) return true
+    return hasAppointmentToday(order)
   })
 
   return (
@@ -408,40 +428,22 @@ export default function AppointmentPage() {
           </button>
         </div>
 
-        {/* Unscheduled Filter */}
-        <div className="flex flex-wrap items-center gap-4 p-3 bg-gradient-to-r from-orange-500 to-pink-500 rounded-xl">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showUnscheduledOnly}
-              onChange={(e) => {
-                setShowUnscheduledOnly(e.target.checked)
-                if (!e.target.checked) setShowFreeOnlyUnscheduled(false)
-              }}
-              className="w-5 h-5 rounded accent-white"
-            />
-            <span className="font-bold text-white">
-              Show Unscheduled Only
-            </span>
-          </label>
+        {/* Today's Appointments Filter */}
+        <div className="flex flex-wrap items-center gap-4">
+          <button
+            onClick={() => setShowTodayOnly(!showTodayOnly)}
+            className={`px-6 py-3 rounded-xl font-bold text-lg transition-all ${
+              showTodayOnly
+                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            📅 นัดหมายวันนี้
+          </button>
 
-          {showUnscheduledOnly && (
-            <label className="flex items-center gap-2 cursor-pointer ml-4 px-3 py-1 bg-white/20 rounded-lg">
-              <input
-                type="checkbox"
-                checked={showFreeOnlyUnscheduled}
-                onChange={(e) => setShowFreeOnlyUnscheduled(e.target.checked)}
-                className="w-4 h-4 rounded accent-green-400"
-              />
-              <span className="text-white text-sm font-medium">
-                Free Services Only
-              </span>
-            </label>
-          )}
-
-          {showUnscheduledOnly && (
-            <span className="ml-auto text-white/80 text-sm">
-              Found: {filteredOrders.length} orders
+          {showTodayOnly && (
+            <span className="text-green-600 dark:text-green-400 font-medium">
+              พบ {filteredOrders.length} ออเดอร์ที่มีนัดวันนี้
             </span>
           )}
         </div>
@@ -653,12 +655,29 @@ export default function AppointmentPage() {
                                 </div>
                               )}
                             </div>
-                            <button
-                              onClick={() => openItemEdit(item)}
-                              className="px-4 py-2 bg-pink-500 text-white rounded-lg text-sm font-medium hover:bg-pink-600 transition-colors"
-                            >
-                              {t('appointments.manage')}
-                            </button>
+                            <div className="flex items-center gap-2">
+                              {/* Status Button */}
+                              <button
+                                onClick={() => openStatusChange(item)}
+                                className={`px-3 py-2 rounded-lg text-sm font-bold ${
+                                  item.item_status === 'pending' ? 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300' :
+                                  item.item_status === 'scheduled' ? 'bg-blue-500 text-white' :
+                                  item.item_status === 'completed' ? 'bg-green-500 text-white' :
+                                  'bg-red-500 text-white'
+                                }`}
+                              >
+                                {item.item_status === 'pending' ? 'รอนัด' :
+                                 item.item_status === 'scheduled' ? 'นัดแล้ว' :
+                                 item.item_status === 'completed' ? 'เสร็จ' : 'ยกเลิก'}
+                              </button>
+                              {/* Schedule Button */}
+                              <button
+                                onClick={() => openItemEdit(item)}
+                                className="px-4 py-2 bg-pink-500 text-white rounded-lg text-sm font-medium hover:bg-pink-600 transition-colors"
+                              >
+                                ลงคิวช่าง
+                              </button>
+                            </div>
                           </div>
                         </div>
                       )
@@ -790,12 +809,27 @@ export default function AppointmentPage() {
                               )}
                             </div>
                           </div>
-                          <button
-                            onClick={() => openItemEdit(item)}
-                            className="px-3 py-1.5 bg-pink-500 text-white rounded-lg text-xs font-medium shrink-0"
-                          >
-                            {t('appointments.manage')}
-                          </button>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => openStatusChange(item)}
+                              className={`px-2 py-1.5 rounded-lg text-xs font-bold ${
+                                item.item_status === 'pending' ? 'bg-gray-200 text-gray-600' :
+                                item.item_status === 'scheduled' ? 'bg-blue-500 text-white' :
+                                item.item_status === 'completed' ? 'bg-green-500 text-white' :
+                                'bg-red-500 text-white'
+                              }`}
+                            >
+                              {item.item_status === 'pending' ? 'รอ' :
+                               item.item_status === 'scheduled' ? 'นัด' :
+                               item.item_status === 'completed' ? 'เสร็จ' : 'ยกเลิก'}
+                            </button>
+                            <button
+                              onClick={() => openItemEdit(item)}
+                              className="px-2 py-1.5 bg-pink-500 text-white rounded-lg text-xs font-medium"
+                            >
+                              ลงคิว
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )
@@ -977,29 +1011,13 @@ export default function AppointmentPage() {
         </div>
       )}
 
-      {/* Item Edit Modal with Artist Selection */}
+      {/* Item Edit Modal - Schedule Appointment (ลงคิวช่าง) */}
       {editingItem && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6 space-y-4">
             <h3 className="text-lg font-bold text-gray-800 dark:text-white">
-              {t('appointments.manage')}: {editingItem.product?.product_name}
+              ลงคิวช่าง: {editingItem.product?.product_name}
             </h3>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t('appointments.serviceStatus')}
-              </label>
-              <select
-                value={editStatus}
-                onChange={(e) => setEditStatus(e.target.value as OrderItem['item_status'])}
-                className="select w-full"
-              >
-                <option value="pending">{t('appointments.pending')}</option>
-                <option value="scheduled">{t('appointments.scheduled')}</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
 
             {/* Artist Selection */}
             <div>
@@ -1045,6 +1063,10 @@ export default function AppointmentPage() {
               </div>
             </div>
 
+            <p className="text-sm text-blue-600 dark:text-blue-400">
+              * สถานะจะเปลี่ยนเป็น "นัดหมายแล้ว" อัตโนมัติเมื่อบันทึก
+            </p>
+
             <div className="flex gap-2 pt-2">
               <button
                 onClick={() => setEditingItem(null)}
@@ -1059,6 +1081,70 @@ export default function AppointmentPage() {
                 {t('common.save')}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Change Modal */}
+      {statusChangeItem && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-white text-center">
+              เปลี่ยนสถานะบริการ
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+              {statusChangeItem.product?.product_name}
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => saveStatusChange('pending')}
+                className={`p-4 rounded-xl font-bold transition-all ${
+                  statusChangeItem.item_status === 'pending'
+                    ? 'bg-gray-300 text-gray-700 ring-2 ring-gray-500'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
+                }`}
+              >
+                รอนัด
+              </button>
+              <button
+                onClick={() => saveStatusChange('scheduled')}
+                className={`p-4 rounded-xl font-bold transition-all ${
+                  statusChangeItem.item_status === 'scheduled'
+                    ? 'bg-blue-600 text-white ring-2 ring-blue-300'
+                    : 'bg-blue-500 text-white hover:bg-blue-600'
+                }`}
+              >
+                นัดแล้ว
+              </button>
+              <button
+                onClick={() => saveStatusChange('completed')}
+                className={`p-4 rounded-xl font-bold transition-all ${
+                  statusChangeItem.item_status === 'completed'
+                    ? 'bg-green-600 text-white ring-2 ring-green-300'
+                    : 'bg-green-500 text-white hover:bg-green-600'
+                }`}
+              >
+                เสร็จแล้ว
+              </button>
+              <button
+                onClick={() => saveStatusChange('cancelled')}
+                className={`p-4 rounded-xl font-bold transition-all ${
+                  statusChangeItem.item_status === 'cancelled'
+                    ? 'bg-red-600 text-white ring-2 ring-red-300'
+                    : 'bg-red-500 text-white hover:bg-red-600'
+                }`}
+              >
+                ยกเลิก
+              </button>
+            </div>
+
+            <button
+              onClick={() => setStatusChangeItem(null)}
+              className="w-full btn btn-secondary mt-4"
+            >
+              ปิด
+            </button>
           </div>
         </div>
       )}

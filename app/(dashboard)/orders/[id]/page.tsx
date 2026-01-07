@@ -24,7 +24,11 @@ interface OrderDetail {
 interface OrderItem {
   id: number
   is_upsell: boolean
-  products: { product_name: string; list_price: number; is_free: boolean } | null
+  item_status: string
+  appointment_date: string | null
+  appointment_time: string | null
+  artist_id: number | null
+  products: { product_name: string; list_price: number; is_free: boolean; product_code: string } | null
 }
 
 interface Payment {
@@ -35,18 +39,44 @@ interface Payment {
   note: string | null
 }
 
+interface Staff {
+  id: number
+  staff_name: string
+}
+
 export default function OrderDetailPage({ params }: { params: { id: string } }) {
   const [order, setOrder] = useState<OrderDetail | null>(null)
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
+  const [artists, setArtists] = useState<Staff[]>([])
+
+  // Schedule modal state
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [selectedItemForSchedule, setSelectedItemForSchedule] = useState<OrderItem | null>(null)
+  const [scheduleDate, setScheduleDate] = useState('')
+  const [scheduleTime, setScheduleTime] = useState('')
+  const [scheduleArtistId, setScheduleArtistId] = useState('')
+  const [savingSchedule, setSavingSchedule] = useState(false)
 
   const router = useRouter()
   const supabase = createClient()
 
   useEffect(() => {
     fetchOrder()
+    fetchArtists()
   }, [params.id])
+
+  const fetchArtists = async () => {
+    const { data } = await supabase
+      .from('staff')
+      .select('id, staff_name')
+      .eq('role', 'artist')
+      .eq('is_active', true)
+      .order('staff_name')
+
+    setArtists(data || [])
+  }
 
   const fetchOrder = async () => {
     const [orderRes, itemsRes, paymentsRes] = await Promise.all([
@@ -65,7 +95,11 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         .select(`
           id,
           is_upsell,
-          products (product_name, list_price, is_free)
+          item_status,
+          appointment_date,
+          appointment_time,
+          artist_id,
+          products (product_name, list_price, is_free, product_code)
         `)
         .eq('order_id', params.id),
       supabase
@@ -79,6 +113,42 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
     setOrderItems(itemsRes.data || [])
     setPayments(paymentsRes.data || [])
     setLoading(false)
+  }
+
+  // Open schedule modal
+  const openScheduleModal = (item: OrderItem) => {
+    setSelectedItemForSchedule(item)
+    setScheduleDate(item.appointment_date || '')
+    setScheduleTime(item.appointment_time || '')
+    setScheduleArtistId(item.artist_id ? String(item.artist_id) : '')
+    setShowScheduleModal(true)
+  }
+
+  // Save schedule
+  const saveSchedule = async () => {
+    if (!selectedItemForSchedule) return
+
+    setSavingSchedule(true)
+
+    const { error } = await supabase
+      .from('order_items')
+      .update({
+        appointment_date: scheduleDate || null,
+        appointment_time: scheduleTime || null,
+        artist_id: scheduleArtistId ? parseInt(scheduleArtistId) : null,
+        item_status: 'scheduled', // Auto set to scheduled
+      })
+      .eq('id', selectedItemForSchedule.id)
+
+    if (error) {
+      alert('เกิดข้อผิดพลาดในการบันทึก')
+      console.error(error)
+    } else {
+      setShowScheduleModal(false)
+      fetchOrder() // Refresh data
+    }
+
+    setSavingSchedule(false)
   }
 
   const formatCurrency = (amount: number) => {
@@ -240,12 +310,131 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         </div>
       </div>
 
+      {/* Schedule Services Section */}
+      <div className="card space-y-4">
+        <h2 className="font-bold text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2">นัดหมายบริการ</h2>
+        <div className="space-y-3">
+          {orderItems.map(item => {
+            const statusColor = item.item_status === 'scheduled' ? 'text-blue-500' :
+                               item.item_status === 'completed' ? 'text-green-500' :
+                               item.item_status === 'cancelled' ? 'text-red-500' : 'text-gray-500'
+            const statusLabel = item.item_status === 'scheduled' ? 'นัดแล้ว' :
+                               item.item_status === 'completed' ? 'เสร็จแล้ว' :
+                               item.item_status === 'cancelled' ? 'ยกเลิก' : 'รอนัด'
+
+            return (
+              <div key={item.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs text-pink-500 font-mono">[{item.products?.product_code}]</span>
+                    <span className="font-medium text-gray-800 dark:text-white">{item.products?.product_name}</span>
+                    {item.products?.is_free && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">ฟรี</span>
+                    )}
+                  </div>
+                  <div className="text-sm">
+                    <span className={`font-medium ${statusColor}`}>{statusLabel}</span>
+                    {item.appointment_date && (
+                      <span className="text-gray-500 dark:text-gray-400 ml-2">
+                        {new Date(item.appointment_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {item.appointment_time && ` ${item.appointment_time}`}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => openScheduleModal(item)}
+                  className="px-4 py-2 bg-pink-500 text-white rounded-lg font-medium hover:bg-pink-600 transition-colors"
+                >
+                  ลงคิวช่าง
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
       {/* Info Note */}
       <div className="card bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
         <p className="text-blue-800 dark:text-blue-200 text-sm">
           To receive payment or change status, please go to <Link href="/service" className="font-bold underline hover:text-blue-600">Appointments</Link> page.
         </p>
       </div>
+
+      {/* Schedule Modal */}
+      {showScheduleModal && selectedItemForSchedule && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+              ลงคิวช่าง: {selectedItemForSchedule.products?.product_name}
+            </h3>
+
+            {/* Artist Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                ช่าง
+              </label>
+              <select
+                value={scheduleArtistId}
+                onChange={(e) => setScheduleArtistId(e.target.value)}
+                className="select w-full"
+              >
+                <option value="">-- เลือกช่าง --</option>
+                {artists.map(artist => (
+                  <option key={artist.id} value={artist.id}>
+                    {artist.staff_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  วันที่นัด
+                </label>
+                <input
+                  type="date"
+                  value={scheduleDate}
+                  onChange={(e) => setScheduleDate(e.target.value)}
+                  className="input w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  เวลา
+                </label>
+                <input
+                  type="time"
+                  value={scheduleTime}
+                  onChange={(e) => setScheduleTime(e.target.value)}
+                  className="input w-full"
+                />
+              </div>
+            </div>
+
+            <p className="text-sm text-blue-600 dark:text-blue-400">
+              * สถานะจะเปลี่ยนเป็น "นัดหมายแล้ว" อัตโนมัติเมื่อบันทึก
+            </p>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setShowScheduleModal(false)}
+                className="btn btn-secondary flex-1"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={saveSchedule}
+                disabled={savingSchedule}
+                className="btn btn-primary flex-1"
+              >
+                {savingSchedule ? 'กำลังบันทึก...' : 'บันทึก'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
