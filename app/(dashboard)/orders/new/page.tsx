@@ -46,23 +46,20 @@ export default function NewOrderPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Customer type: new or existing
-  const [isNewCustomer, setIsNewCustomer] = useState(false)
-  const [customerId, setCustomerId] = useState('')
-
-  // New customer fields
-  const [newFirstName, setNewFirstName] = useState('')
-  const [newLastName, setNewLastName] = useState('')
-  const [newPhone, setNewPhone] = useState('')
-  const [newContactChannel, setNewContactChannel] = useState('line')
-  const [newNickname, setNewNickname] = useState('')
-  const [newAge, setNewAge] = useState('')
+  // Customer fields (unified - start with phone)
+  const [customerId, setCustomerId] = useState<number | null>(null)
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [customerFirstName, setCustomerFirstName] = useState('')
+  const [customerLastName, setCustomerLastName] = useState('')
+  const [customerContactChannel, setCustomerContactChannel] = useState('line')
+  const [customerNickname, setCustomerNickname] = useState('')
+  const [customerAge, setCustomerAge] = useState('')
+  const [isExistingCustomer, setIsExistingCustomer] = useState(false)
 
   const [salesId, setSalesId] = useState('')
   const [deposit, setDeposit] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('โอนเงิน')
   const [note, setNote] = useState('')
-  const [orderType, setOrderType] = useState<'booking' | 'paid'>('booking') // จอง / ชำระแล้ว
   const [createdAt, setCreatedAt] = useState(new Date().toISOString().split('T')[0]) // วันที่สร้างออเดอร์
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([])
   const [selectedProductId, setSelectedProductId] = useState('')
@@ -100,56 +97,55 @@ export default function NewOrderPage() {
     setLoading(false)
   }
 
-  // Search phone number for existing customers (for new customer form)
+  // Search by phone and auto-fill customer data
   const searchByPhone = (phone: string) => {
-    setNewPhone(phone)
-    setExistingCustomerWarning(null)
+    setCustomerPhone(phone)
 
     if (phone.length >= 3) {
       const matches = customers.filter(c =>
         c.phone && c.phone.includes(phone)
       )
       setPhoneSuggestions(matches)
-
-      // Exact match warning
-      const exactMatch = customers.find(c => c.phone === phone)
-      if (exactMatch) {
-        setExistingCustomerWarning(exactMatch)
-      }
     } else {
       setPhoneSuggestions([])
     }
+
+    // Reset customer selection if phone changes
+    if (customerId) {
+      const existingCustomer = customers.find(c => c.id === customerId)
+      if (existingCustomer?.phone !== phone) {
+        setCustomerId(null)
+        setIsExistingCustomer(false)
+      }
+    }
   }
 
-  // Select existing customer from phone suggestion
-  const selectFromPhoneSuggestion = (customer: Customer) => {
-    // Switch to existing customer mode and select this customer
-    setIsNewCustomer(false)
-    setCustomerId(String(customer.id))
-    setCustomerSearch(customer.full_name + (customer.phone ? ` (${customer.phone})` : ''))
-    setPhoneSuggestions([])
-    setExistingCustomerWarning(null)
-    // Clear new customer fields
-    setNewFirstName('')
-    setNewLastName('')
-    setNewPhone('')
-  }
-
-  // Filter customers for search
-  const filteredCustomers = customers.filter(c => {
-    if (!customerSearch.trim()) return true
-    const search = customerSearch.toLowerCase()
-    return (
-      c.full_name.toLowerCase().includes(search) ||
-      (c.phone && c.phone.includes(search))
-    )
-  })
-
-  // Select customer from dropdown
+  // Select existing customer and auto-fill all fields
   const selectCustomer = (customer: Customer) => {
-    setCustomerId(String(customer.id))
-    setCustomerSearch(customer.full_name + (customer.phone ? ` (${customer.phone})` : ''))
-    setShowCustomerDropdown(false)
+    setCustomerId(customer.id)
+    setCustomerPhone(customer.phone || '')
+    setIsExistingCustomer(true)
+    setPhoneSuggestions([])
+
+    // Auto-fill customer data
+    const nameParts = customer.full_name.split(' ')
+    setCustomerFirstName(nameParts[0] || '')
+    setCustomerLastName(nameParts.slice(1).join(' ') || '')
+    setCustomerContactChannel(customer.contact_channel || 'line')
+    // Note: nickname and age might not be in the customer object from the query
+  }
+
+  // Clear customer selection
+  const clearCustomer = () => {
+    setCustomerId(null)
+    setCustomerPhone('')
+    setCustomerFirstName('')
+    setCustomerLastName('')
+    setCustomerContactChannel('line')
+    setCustomerNickname('')
+    setCustomerAge('')
+    setIsExistingCustomer(false)
+    setPhoneSuggestions([])
   }
 
   // Extract price code from product code (e.g., "10900" from "LIP10900" or "BROW5900")
@@ -289,12 +285,12 @@ export default function NewOrderPage() {
     e.preventDefault()
 
     // Validation
-    if (!isNewCustomer && !customerId) {
-      alert('กรุณาเลือกลูกค้า')
+    if (!customerFirstName.trim() || !customerLastName.trim()) {
+      alert('กรุณากรอกชื่อและนามสกุลลูกค้า')
       return
     }
-    if (isNewCustomer && (!newFirstName.trim() || !newLastName.trim())) {
-      alert('กรุณากรอกชื่อและนามสกุลลูกค้า')
+    if (!customerPhone.trim()) {
+      alert('กรุณากรอกเบอร์โทรลูกค้า')
       return
     }
     if (selectedProducts.length === 0) {
@@ -307,16 +303,31 @@ export default function NewOrderPage() {
     try {
       let finalCustomerId: number | null = null
 
-      // Create new customer if needed
-      if (isNewCustomer) {
+      if (isExistingCustomer && customerId) {
+        // Use existing customer but update their info if changed
+        finalCustomerId = customerId
+
+        // Update customer info
+        await supabase
+          .from('customers')
+          .update({
+            full_name: `${customerFirstName.trim()} ${customerLastName.trim()}`,
+            phone: customerPhone || null,
+            contact_channel: customerContactChannel,
+            nickname: customerNickname.trim() || null,
+            age: customerAge ? parseInt(customerAge) : null,
+          })
+          .eq('id', customerId)
+      } else {
+        // Create new customer
         const { data: newCustomer, error: customerError } = await supabase
           .from('customers')
           .insert({
-            full_name: `${newFirstName.trim()} ${newLastName.trim()}`,
-            phone: newPhone || null,
-            contact_channel: newContactChannel,
-            nickname: newNickname.trim() || null,
-            age: newAge ? parseInt(newAge) : null,
+            full_name: `${customerFirstName.trim()} ${customerLastName.trim()}`,
+            phone: customerPhone || null,
+            contact_channel: customerContactChannel,
+            nickname: customerNickname.trim() || null,
+            age: customerAge ? parseInt(customerAge) : null,
           })
           .select('id')
           .single()
@@ -328,13 +339,6 @@ export default function NewOrderPage() {
         }
         console.log('New customer created:', newCustomer)
         finalCustomerId = newCustomer.id
-      } else {
-        // Existing customer - parse ID from string
-        finalCustomerId = parseInt(customerId)
-        if (isNaN(finalCustomerId)) {
-          alert('กรุณาเลือกลูกค้า')
-          return
-        }
       }
 
       console.log('Creating order with customer_id:', finalCustomerId)
@@ -346,7 +350,7 @@ export default function NewOrderPage() {
         .insert({
           customer_id: finalCustomerId,
           sales_id: salesId ? parseInt(salesId) : null,
-          order_status: orderType,
+          order_status: 'booking', // Always booking status for new orders
           total_income: totalIncome,
           deposit: parseFloat(deposit) || 0,
           payment_method: paymentMethod,
@@ -391,9 +395,7 @@ export default function NewOrderPage() {
 
       // Send LINE notification (non-blocking)
       try {
-        const customerName = isNewCustomer
-          ? `${newFirstName.trim()} ${newLastName.trim()}`
-          : customers.find(c => c.id === parseInt(customerId))?.full_name || 'Unknown'
+        const customerName = `${customerFirstName.trim()} ${customerLastName.trim()}`
 
         const salesName = salesId
           ? staff.find(s => s.id === parseInt(salesId))?.staff_name || '-'
@@ -411,7 +413,7 @@ export default function NewOrderPage() {
               products: selectedProducts.map(p => `[${p.product_code}] ${p.product_name}`),
               totalAmount: totalIncome,
               deposit: parseFloat(deposit) || 0,
-              status: orderType,
+              status: 'booking',
             },
           }),
         })
@@ -466,240 +468,153 @@ export default function NewOrderPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Customer Section */}
+        {/* Customer Section - Unified (Phone First) */}
         <div className="card space-y-4">
           <div className="flex items-center justify-between border-b pb-2">
             <h2 className="font-bold text-gray-800 dark:text-white">ข้อมูลลูกค้า</h2>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setIsNewCustomer(false)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  !isNewCustomer
-                    ? 'bg-pink-500 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
-                }`}
-              >
+            {isExistingCustomer && (
+              <span className="px-3 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded-full text-sm font-medium">
                 ลูกค้าเก่า
-              </button>
+              </span>
+            )}
+            {customerId && (
               <button
                 type="button"
-                onClick={() => setIsNewCustomer(true)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  isNewCustomer
-                    ? 'bg-pink-500 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
-                }`}
+                onClick={clearCustomer}
+                className="text-sm text-gray-500 hover:text-red-500"
               >
-                ลูกค้าใหม่
+                ล้างข้อมูล
               </button>
-            </div>
+            )}
           </div>
 
-          {!isNewCustomer ? (
-            // Existing Customer - Searchable
-            <div className="relative">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Phone Number - First Field */}
+            <div className="md:col-span-2 relative">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                ค้นหาลูกค้า (ชื่อ หรือ เบอร์โทร) <span className="text-red-500">*</span>
+                เบอร์โทร <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="tel"
+                value={customerPhone}
+                onChange={(e) => searchByPhone(e.target.value)}
+                className={`input w-full text-lg ${isExistingCustomer ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : ''}`}
+                placeholder="กรอกเบอร์โทร เพื่อค้นหาลูกค้า..."
+              />
+
+              {/* Phone suggestions dropdown */}
+              {phoneSuggestions.length > 0 && !isExistingCustomer && (
+                <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  <div className="p-2 text-xs text-gray-500 border-b dark:border-gray-700 bg-yellow-50 dark:bg-yellow-900/20">
+                    🔍 พบลูกค้าในระบบ - กดเพื่อเลือก:
+                  </div>
+                  {phoneSuggestions.map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => selectCustomer(c)}
+                      className="w-full px-4 py-3 text-left hover:bg-pink-50 dark:hover:bg-gray-700 border-b dark:border-gray-700 last:border-b-0"
+                    >
+                      <span className="font-medium dark:text-white">{c.full_name}</span>
+                      <span className="text-gray-500 dark:text-gray-400 ml-2">({c.phone})</span>
+                      {c.contact_channel && (
+                        <span className="text-xs text-gray-400 ml-2">[{c.contact_channel}]</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {isExistingCustomer && (
+                <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                  ✓ ลูกค้าเก่า - สามารถแก้ไขข้อมูลได้
+                </p>
+              )}
+            </div>
+
+            {/* First Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                ชื่อ <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
-                value={customerSearch}
-                onChange={(e) => {
-                  setCustomerSearch(e.target.value)
-                  setCustomerId('')
-                  setShowCustomerDropdown(true)
-                }}
-                onFocus={() => setShowCustomerDropdown(true)}
-                placeholder="พิมพ์ชื่อ หรือ เบอร์โทร..."
-                className="input w-full"
+                value={customerFirstName}
+                onChange={(e) => setCustomerFirstName(e.target.value)}
+                className="input"
+                placeholder="ชื่อ"
               />
-
-              {/* Customer Dropdown */}
-              {showCustomerDropdown && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowCustomerDropdown(false)} />
-                  <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                    {filteredCustomers.slice(0, 50).map(c => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => selectCustomer(c)}
-                        className="w-full px-4 py-3 text-left hover:bg-pink-50 dark:hover:bg-gray-700 flex justify-between items-center border-b dark:border-gray-700 last:border-b-0"
-                      >
-                        <div>
-                          <span className="font-medium dark:text-white">{c.full_name}</span>
-                          {c.phone && <span className="text-gray-500 dark:text-gray-400 ml-2">({c.phone})</span>}
-                        </div>
-                        {c.contact_channel && (
-                          <span className="text-xs text-gray-400">{c.contact_channel}</span>
-                        )}
-                      </button>
-                    ))}
-                    {filteredCustomers.length === 0 && (
-                      <div className="p-4 text-center text-gray-500">ไม่พบลูกค้า</div>
-                    )}
-                    {filteredCustomers.length > 50 && (
-                      <div className="p-2 text-center text-gray-400 text-sm">แสดง 50 จาก {filteredCustomers.length} รายการ - พิมพ์เพิ่มเพื่อกรอง</div>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {/* Selected customer indicator */}
-              {customerId && (
-                <div className="mt-2 flex items-center gap-2 text-green-600 dark:text-green-400 text-sm">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  เลือกแล้ว: {customers.find(c => c.id === parseInt(customerId))?.full_name}
-                </div>
-              )}
             </div>
-          ) : (
-            // New Customer Form
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  ชื่อ <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={newFirstName}
-                  onChange={(e) => setNewFirstName(e.target.value)}
-                  className="input"
-                  placeholder="ชื่อ"
-                  required={isNewCustomer}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  นามสกุล <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={newLastName}
-                  onChange={(e) => setNewLastName(e.target.value)}
-                  className="input"
-                  placeholder="นามสกุล"
-                  required={isNewCustomer}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  ช่องทางการติดต่อ <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={newContactChannel}
-                  onChange={(e) => setNewContactChannel(e.target.value)}
-                  className="select"
-                >
-                  <option value="line">line</option>
-                  <option value="facebook">facebook</option>
-                  <option value="instagram">instagram</option>
-                  <option value="tiktok">tiktok</option>
-                  <option value="call">call</option>
-                  <option value="walk-in">walk-in</option>
-                </select>
-              </div>
-              <div className="relative">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  เบอร์โทร <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="tel"
-                  value={newPhone}
-                  onChange={(e) => searchByPhone(e.target.value)}
-                  className={`input ${existingCustomerWarning ? 'border-yellow-500 focus:ring-yellow-500' : ''}`}
-                  placeholder="0xx-xxx-xxxx"
-                  required={isNewCustomer}
-                />
 
-                {/* Phone suggestions dropdown */}
-                {phoneSuggestions.length > 0 && !existingCustomerWarning && (
-                  <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg max-h-40 overflow-y-auto">
-                    <div className="p-2 text-xs text-gray-500 border-b dark:border-gray-700">พบเบอร์ที่คล้ายกัน:</div>
-                    {phoneSuggestions.map(c => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => selectFromPhoneSuggestion(c)}
-                        className="w-full px-4 py-2 text-left hover:bg-yellow-50 dark:hover:bg-gray-700 text-sm"
-                      >
-                        <span className="font-medium dark:text-white">{c.full_name}</span>
-                        <span className="text-gray-500 dark:text-gray-400 ml-2">({c.phone})</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Nickname (optional) */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  ชื่อเล่น
-                </label>
-                <input
-                  type="text"
-                  value={newNickname}
-                  onChange={(e) => setNewNickname(e.target.value)}
-                  className="input"
-                  placeholder="ชื่อเล่น (ไม่บังคับ)"
-                />
-              </div>
-
-              {/* Age (optional) */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  อายุ
-                </label>
-                <input
-                  type="number"
-                  value={newAge}
-                  onChange={(e) => setNewAge(e.target.value)}
-                  className="input"
-                  placeholder="อายุ (ไม่บังคับ)"
-                  min="1"
-                  max="120"
-                />
-              </div>
-
-              {/* Existing customer warning */}
-              {existingCustomerWarning && (
-                <div className="md:col-span-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">⚠️</span>
-                    <div className="flex-1">
-                      <p className="font-medium text-yellow-800 dark:text-yellow-200">ลูกค้ามีข้อมูลในระบบแล้ว!</p>
-                      <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                        ชื่อ: {existingCustomerWarning.full_name}<br />
-                        เบอร์โทร: {existingCustomerWarning.phone}<br />
-                        {existingCustomerWarning.contact_channel && <>ช่องทาง: {existingCustomerWarning.contact_channel}</>}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => selectFromPhoneSuggestion(existingCustomerWarning)}
-                        className="mt-3 px-4 py-2 bg-yellow-500 text-white rounded-lg text-sm font-medium hover:bg-yellow-600"
-                      >
-                        ใช้ข้อมูลลูกค้าเดิม
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+            {/* Last Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                นามสกุล <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={customerLastName}
+                onChange={(e) => setCustomerLastName(e.target.value)}
+                className="input"
+                placeholder="นามสกุล"
+              />
             </div>
-          )}
+
+            {/* Contact Channel */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                ช่องทางการติดต่อ
+              </label>
+              <select
+                value={customerContactChannel}
+                onChange={(e) => setCustomerContactChannel(e.target.value)}
+                className="select"
+              >
+                <option value="line">line</option>
+                <option value="facebook">facebook</option>
+                <option value="instagram">instagram</option>
+                <option value="tiktok">tiktok</option>
+                <option value="call">call</option>
+                <option value="walk-in">walk-in</option>
+              </select>
+            </div>
+
+            {/* Nickname (optional) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                ชื่อเล่น
+              </label>
+              <input
+                type="text"
+                value={customerNickname}
+                onChange={(e) => setCustomerNickname(e.target.value)}
+                className="input"
+                placeholder="ชื่อเล่น (ไม่บังคับ)"
+              />
+            </div>
+
+            {/* Age (optional) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                อายุ
+              </label>
+              <input
+                type="number"
+                value={customerAge}
+                onChange={(e) => setCustomerAge(e.target.value)}
+                className="input"
+                placeholder="อายุ (ไม่บังคับ)"
+                min="1"
+                max="120"
+              />
+            </div>
+          </div>
         </div>
 
-        {/* Order Type & Date */}
+        {/* Order Date */}
         <div className="card space-y-4">
-          <h2 className="font-bold text-gray-800 dark:text-white border-b pb-2">ประเภทออเดอร์</h2>
-
-          {/* Order Date */}
+          <h2 className="font-bold text-gray-800 dark:text-white border-b pb-2">วันที่สร้างออเดอร์</h2>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              วันที่สร้างออเดอร์
-            </label>
             <input
               type="date"
               value={createdAt}
@@ -707,51 +622,6 @@ export default function NewOrderPage() {
               className="input w-full sm:w-auto"
             />
             <p className="text-xs text-gray-400 mt-1">* ปรับได้กรณีลืมสร้างออเดอร์ย้อนหลัง</p>
-          </div>
-
-          <div className="flex gap-4">
-            <label className={`flex-1 cursor-pointer rounded-lg border-2 p-4 transition-all ${
-              orderType === 'booking'
-                ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/20'
-                : 'border-gray-200 dark:border-gray-700 hover:border-pink-300'
-            }`}>
-              <input
-                type="radio"
-                name="orderType"
-                value="booking"
-                checked={orderType === 'booking'}
-                onChange={() => setOrderType('booking')}
-                className="sr-only"
-              />
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">📅</span>
-                <div>
-                  <p className="font-bold text-gray-800 dark:text-white">จอง</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">ลูกค้าจองผ่านออนไลน์</p>
-                </div>
-              </div>
-            </label>
-            <label className={`flex-1 cursor-pointer rounded-lg border-2 p-4 transition-all ${
-              orderType === 'paid'
-                ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                : 'border-gray-200 dark:border-gray-700 hover:border-green-300'
-            }`}>
-              <input
-                type="radio"
-                name="orderType"
-                value="paid"
-                checked={orderType === 'paid'}
-                onChange={() => setOrderType('paid')}
-                className="sr-only"
-              />
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">✅</span>
-                <div>
-                  <p className="font-bold text-gray-800 dark:text-white">ชำระแล้ว</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">ลูกค้าชำระเงินครบแล้ว</p>
-                </div>
-              </div>
-            </label>
           </div>
         </div>
 
