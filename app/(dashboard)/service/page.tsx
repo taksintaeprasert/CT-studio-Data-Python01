@@ -62,6 +62,9 @@ export default function AppointmentPage() {
   // Filter for today's appointments
   const [showTodayOnly, setShowTodayOnly] = useState(false)
 
+  // Custom appointment date filter
+  const [customAppointmentDate, setCustomAppointmentDate] = useState('')
+
   // Selected order for detail view
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
@@ -97,6 +100,8 @@ export default function AppointmentPage() {
 
   useEffect(() => {
     fetchArtists()
+    // Auto-complete past appointments on page load
+    autoCompletePastAppointments()
   }, [])
 
   useEffect(() => {
@@ -104,6 +109,48 @@ export default function AppointmentPage() {
       fetchOrders()
     }
   }, [startDate, endDate])
+
+  // Auto-complete scheduled services when appointment time has passed
+  const autoCompletePastAppointments = async () => {
+    const now = new Date()
+    const todayDate = getTodayDate()
+    const currentTime = now.toTimeString().slice(0, 5) // HH:MM format
+
+    // Fetch scheduled services that are in the past
+    const { data: pastServices } = await supabase
+      .from('order_items')
+      .select('id, appointment_date, appointment_time')
+      .eq('item_status', 'scheduled')
+      .not('appointment_date', 'is', null)
+
+    if (!pastServices || pastServices.length === 0) return
+
+    const toComplete: number[] = []
+
+    pastServices.forEach((service: any) => {
+      const appointmentDate = service.appointment_date
+      const appointmentTime = service.appointment_time || '23:59'
+
+      // Check if appointment is in the past
+      if (appointmentDate < todayDate) {
+        // Past day - should be completed
+        toComplete.push(service.id)
+      } else if (appointmentDate === todayDate && appointmentTime < currentTime) {
+        // Same day but time has passed - should be completed
+        toComplete.push(service.id)
+      }
+    })
+
+    // Update all past services to completed
+    if (toComplete.length > 0) {
+      await supabase
+        .from('order_items')
+        .update({ item_status: 'completed' })
+        .in('id', toComplete)
+
+      console.log(`Auto-completed ${toComplete.length} past services`)
+    }
+  }
 
   const fetchArtists = async () => {
     const { data } = await supabase
@@ -390,10 +437,22 @@ export default function AppointmentPage() {
     return order.order_items.some(item => item.appointment_date === today)
   }
 
-  // Filter orders based on today filter
+  // Check if order has appointment on a specific date
+  const hasAppointmentOnDate = (order: Order, date: string) => {
+    return order.order_items.some(item => item.appointment_date === date)
+  }
+
+  // Filter orders based on appointment date filters
   const filteredOrders = orders.filter(order => {
-    if (!showTodayOnly) return true
-    return hasAppointmentToday(order)
+    // If showing today only
+    if (showTodayOnly) {
+      return hasAppointmentToday(order)
+    }
+    // If custom date is selected
+    if (customAppointmentDate) {
+      return hasAppointmentOnDate(order, customAppointmentDate)
+    }
+    return true
   })
 
   return (
@@ -406,8 +465,14 @@ export default function AppointmentPage() {
 
       {/* Filters */}
       <div className="card space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <DateRangeFilter onDateChange={handleDateChange} />
+        {/* Order Created Date Filter */}
+        <div>
+          <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+            วันที่ที่สร้าง Order
+          </label>
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <DateRangeFilter onDateChange={handleDateChange} />
+          </div>
         </div>
 
         {/* Search */}
@@ -428,24 +493,55 @@ export default function AppointmentPage() {
           </button>
         </div>
 
-        {/* Today's Appointments Filter */}
-        <div className="flex flex-wrap items-center gap-4">
-          <button
-            onClick={() => setShowTodayOnly(!showTodayOnly)}
-            className={`px-6 py-3 rounded-xl font-bold text-lg transition-all ${
-              showTodayOnly
-                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-            }`}
-          >
-            📅 นัดหมายวันนี้
-          </button>
+        {/* Appointment Date Filter */}
+        <div>
+          <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+            วันที่นัดหมาย
+          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => {
+                setShowTodayOnly(!showTodayOnly)
+                setCustomAppointmentDate('')
+              }}
+              className={`px-5 py-2.5 rounded-xl font-bold transition-all ${
+                showTodayOnly
+                  ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              📅 วันนี้
+            </button>
 
-          {showTodayOnly && (
-            <span className="text-green-600 dark:text-green-400 font-medium">
-              พบ {filteredOrders.length} ออเดอร์ที่มีนัดวันนี้
-            </span>
-          )}
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={customAppointmentDate}
+                onChange={(e) => {
+                  setCustomAppointmentDate(e.target.value)
+                  setShowTodayOnly(false)
+                }}
+                className="input px-3 py-2"
+              />
+              {customAppointmentDate && (
+                <button
+                  onClick={() => setCustomAppointmentDate('')}
+                  className="px-3 py-2 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Active filter indicator */}
+            {(showTodayOnly || customAppointmentDate) && (
+              <span className="text-green-600 dark:text-green-400 font-medium text-sm">
+                พบ {filteredOrders.length} ออเดอร์
+                {showTodayOnly && ' (นัดวันนี้)'}
+                {customAppointmentDate && ` (${new Date(customAppointmentDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })})`}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

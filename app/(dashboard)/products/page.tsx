@@ -12,6 +12,7 @@ interface Product {
   category: string | null
   list_price: number
   is_free: boolean
+  validity_months: number
 }
 
 export default function ProductsPage() {
@@ -27,6 +28,7 @@ export default function ProductsPage() {
   const [category, setCategory] = useState('')
   const [listPrice, setListPrice] = useState('')
   const [isFree, setIsFree] = useState(false)
+  const [validityMonths, setValidityMonths] = useState('0')
 
   const supabase = createClient()
 
@@ -56,6 +58,7 @@ export default function ProductsPage() {
       setCategory(product.category || '')
       setListPrice(product.list_price.toString())
       setIsFree(product.is_free)
+      setValidityMonths((product.validity_months || 0).toString())
     } else {
       setEditingProduct(null)
       setProductCode('')
@@ -63,6 +66,7 @@ export default function ProductsPage() {
       setCategory('')
       setListPrice('')
       setIsFree(false)
+      setValidityMonths('0')
     }
     setShowModal(true)
   }
@@ -82,6 +86,7 @@ export default function ProductsPage() {
       category: category || null,
       list_price: parseFloat(listPrice) || 0,
       is_free: isFree,
+      validity_months: parseInt(validityMonths) || 0,
     }
 
     if (editingProduct) {
@@ -301,6 +306,22 @@ export default function ProductsPage() {
                   className="rounded"
                 />
                 <label htmlFor="is_free" className="text-sm text-gray-700 dark:text-gray-300">บริการฟรี</label>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  ระยะเวลาสิทธิ์ (เดือน)
+                </label>
+                <input
+                  type="number"
+                  value={validityMonths}
+                  onChange={(e) => setValidityMonths(e.target.value)}
+                  className="input"
+                  placeholder="0 = ไม่จำกัด"
+                  min="0"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  0 = ไม่จำกัด, 3 = FREE, 12 = 50% (1 ปี)
+                </p>
               </div>
               <div className="flex gap-2 pt-2">
                 <button type="button" onClick={closeModal} className="btn btn-secondary flex-1">
