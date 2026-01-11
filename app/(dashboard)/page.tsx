@@ -95,6 +95,12 @@ export default function DashboardPage() {
   const [editingAlert, setEditingAlert] = useState<AlertItem | null>(null)
   const [newExpiryMonths, setNewExpiryMonths] = useState('')
 
+  // Inline scheduling state
+  const [scheduleDate, setScheduleDate] = useState('')
+  const [scheduleTime, setScheduleTime] = useState('')
+  const [scheduleArtist, setScheduleArtist] = useState('')
+  const [artists, setArtists] = useState<{id: number, staff_name: string}[]>([])
+
   // Marketing Data
   const [marketingData, setMarketingData] = useState<MarketingData[]>([])
   const [adsSpending, setAdsSpending] = useState<AdsSpending[]>([])
@@ -111,9 +117,49 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    // Fetch alerts on initial load
+    // Fetch alerts and artists on initial load
     fetchAlerts()
+    fetchArtists()
   }, [])
+
+  const fetchArtists = async () => {
+    const { data } = await supabase
+      .from('staff')
+      .select('id, staff_name')
+      .eq('role', 'artist')
+      .eq('is_active', true)
+      .order('staff_name')
+    setArtists(data || [])
+  }
+
+  // Schedule a service from alert
+  const scheduleFromAlert = async (alert: AlertItem) => {
+    if (!scheduleDate) {
+      window.alert('กรุณาเลือกวันที่นัดหมาย')
+      return
+    }
+
+    const { error } = await supabase
+      .from('order_items')
+      .update({
+        appointment_date: scheduleDate,
+        appointment_time: scheduleTime || null,
+        artist_id: scheduleArtist ? parseInt(scheduleArtist) : null,
+        item_status: 'scheduled'
+      })
+      .eq('id', alert.orderItemId)
+
+    if (!error) {
+      window.alert('นัดหมายเรียบร้อย')
+      setScheduleDate('')
+      setScheduleTime('')
+      setScheduleArtist('')
+      setExpandedAlert(null)
+      fetchAlerts()
+    } else {
+      window.alert('เกิดข้อผิดพลาด: ' + error.message)
+    }
+  }
 
   useEffect(() => {
     if (startDate && endDate) {
@@ -541,7 +587,7 @@ export default function DashboardPage() {
       </div>
 
       {activeTab === 'alerts' ? (
-        /* Alerts Tab - Collapsible List */
+        /* Alerts Tab - Problem-focused Collapsible List */
         <div className="space-y-4">
           {/* Header with Refresh */}
           <div className="flex items-center justify-between">
@@ -550,15 +596,15 @@ export default function DashboardPage() {
                 แจ้งเตือน ({alerts.length})
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                กดที่รายการเพื่อดูรายละเอียดและแก้ไข
+                กดที่รายการเพื่อแก้ไข
               </p>
             </div>
             <button
               onClick={fetchAlerts}
               disabled={alertsLoading}
-              className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              className="px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-sm"
             >
-              {alertsLoading ? '...' : '🔄'}
+              {alertsLoading ? '...' : 'รีเฟรช'}
             </button>
           </div>
 
@@ -578,7 +624,7 @@ export default function DashboardPage() {
             </div>
           ) : alerts.length === 0 ? (
             <div className="card text-center py-8">
-              <p className="text-xl font-bold text-green-600 dark:text-green-400">✅ ไม่มีงานค้าง</p>
+              <p className="text-lg font-bold text-green-600 dark:text-green-400">ไม่มีงานค้าง</p>
             </div>
           ) : (
             <div className="card p-0 divide-y dark:divide-gray-700">
@@ -588,36 +634,40 @@ export default function DashboardPage() {
 
                 return (
                   <div key={alertKey}>
-                    {/* Collapsed Header - Click to expand */}
+                    {/* Collapsed Header - Problem as main text */}
                     <button
-                      onClick={() => setExpandedAlert(isExpanded ? null : alertKey)}
+                      onClick={() => {
+                        setExpandedAlert(isExpanded ? null : alertKey)
+                        // Reset form when expanding
+                        if (!isExpanded) {
+                          setScheduleDate('')
+                          setScheduleTime('')
+                          setScheduleArtist('')
+                          setNewExpiryMonths('')
+                        }
+                      }}
                       className={`w-full p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
                         isExpanded ? 'bg-gray-50 dark:bg-gray-700/30' : ''
                       }`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          {/* Type Icon */}
-                          <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 ${
-                            alert.type === 'unscheduled'
-                              ? 'bg-red-100 dark:bg-red-900/30'
-                              : 'bg-orange-100 dark:bg-orange-900/30'
-                          }`}>
-                            {alert.type === 'unscheduled' ? '📅' : '⏳'}
-                          </span>
+                          {/* Status indicator */}
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${
+                            alert.severity === 'danger' ? 'bg-red-500' : 'bg-orange-500'
+                          }`} />
 
-                          {/* Summary */}
+                          {/* Problem as main text, customer secondary */}
                           <div className="min-w-0">
-                            <p className="font-medium text-gray-800 dark:text-white truncate">
-                              {alert.customerName}
-                              <span className="text-gray-400 font-normal ml-2">#{alert.orderId}</span>
-                            </p>
-                            <p className={`text-sm truncate ${
+                            <p className={`font-medium truncate ${
                               alert.severity === 'danger'
                                 ? 'text-red-600 dark:text-red-400'
                                 : 'text-orange-600 dark:text-orange-400'
                             }`}>
                               {alert.message}
+                            </p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                              {alert.customerName} - #{alert.orderId}
                             </p>
                           </div>
                         </div>
@@ -629,57 +679,97 @@ export default function DashboardPage() {
                       </div>
                     </button>
 
-                    {/* Expanded Details */}
+                    {/* Expanded - Inline Edit Form */}
                     {isExpanded && (
-                      <div className="px-4 pb-4 pt-2 bg-gray-50 dark:bg-gray-800/50 space-y-3">
-                        {/* Service Details */}
+                      <div className="px-4 pb-4 pt-2 bg-gray-50 dark:bg-gray-800/50 space-y-4">
+                        {/* Service Info */}
                         <div className="p-3 bg-white dark:bg-gray-700 rounded-lg">
-                          <p className="text-sm text-gray-500 dark:text-gray-400">บริการ</p>
-                          <p className="font-bold text-gray-800 dark:text-white">
-                            <span className="text-pink-500 font-mono">[{alert.productCode}]</span>{' '}
+                          <p className="font-medium text-gray-800 dark:text-white">
+                            <span className="text-pink-500 font-mono text-sm">[{alert.productCode}]</span>{' '}
                             {alert.productName}
                           </p>
-                          {alert.phone && (
-                            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                              📞 {alert.phone}
-                            </p>
-                          )}
-                          <p className="text-xs text-gray-400 mt-1">
-                            สร้างเมื่อ: {new Date(alert.createdAt).toLocaleDateString('th-TH', {
-                              day: 'numeric', month: 'short', year: 'numeric'
-                            })}
-                          </p>
-                          {alert.expiryDate && (
-                            <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                              หมดอายุ: {new Date(alert.expiryDate).toLocaleDateString('th-TH', {
-                                day: 'numeric', month: 'short', year: 'numeric'
-                              })}
-                            </p>
-                          )}
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            {alert.phone && <span>Tel: {alert.phone}</span>}
+                            <span>สร้าง: {new Date(alert.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</span>
+                            {alert.expiryDate && (
+                              <span className="text-orange-600 dark:text-orange-400">
+                                หมดอายุ: {new Date(alert.expiryDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex gap-2 flex-wrap">
-                          <Link
-                            href="/service"
-                            className="px-4 py-2 bg-pink-500 text-white rounded-lg text-sm font-medium hover:bg-pink-600"
-                          >
-                            ไปหน้านัดหมาย
-                          </Link>
-
-                          {alert.type === 'expiring_soon' && (
+                        {/* Inline Edit Form based on alert type */}
+                        {alert.type === 'unscheduled' ? (
+                          /* Schedule Form */
+                          <div className="p-3 bg-white dark:bg-gray-700 rounded-lg space-y-3">
+                            <p className="font-medium text-gray-800 dark:text-white text-sm">นัดหมายบริการ</p>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-1">วันที่</label>
+                                <input
+                                  type="date"
+                                  value={scheduleDate}
+                                  onChange={(e) => setScheduleDate(e.target.value)}
+                                  className="input w-full text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-1">เวลา</label>
+                                <input
+                                  type="time"
+                                  value={scheduleTime}
+                                  onChange={(e) => setScheduleTime(e.target.value)}
+                                  className="input w-full text-sm"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-1">ช่าง</label>
+                              <select
+                                value={scheduleArtist}
+                                onChange={(e) => setScheduleArtist(e.target.value)}
+                                className="select w-full text-sm"
+                              >
+                                <option value="">-- เลือกช่าง --</option>
+                                {artists.map(a => (
+                                  <option key={a.id} value={a.id}>{a.staff_name}</option>
+                                ))}
+                              </select>
+                            </div>
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setEditingAlert(alert)
-                                setNewExpiryMonths('')
-                              }}
-                              className="px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600"
+                              onClick={() => scheduleFromAlert(alert)}
+                              className="w-full py-2 bg-pink-500 text-white rounded-lg font-medium hover:bg-pink-600 transition-colors"
                             >
-                              ต่ออายุ
+                              บันทึกนัดหมาย
                             </button>
-                          )}
-                        </div>
+                          </div>
+                        ) : (
+                          /* Extend Validity Form */
+                          <div className="p-3 bg-white dark:bg-gray-700 rounded-lg space-y-3">
+                            <p className="font-medium text-gray-800 dark:text-white text-sm">ต่ออายุบริการ</p>
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-1">เพิ่มอายุ (เดือน)</label>
+                              <input
+                                type="number"
+                                value={newExpiryMonths}
+                                onChange={(e) => setNewExpiryMonths(e.target.value)}
+                                className="input w-full text-sm"
+                                placeholder="เช่น 3, 6, 12"
+                                min="1"
+                              />
+                            </div>
+                            <button
+                              onClick={() => {
+                                setEditingAlert(alert)
+                                extendValidity()
+                              }}
+                              className="w-full py-2 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
+                            >
+                              บันทึกต่ออายุ
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

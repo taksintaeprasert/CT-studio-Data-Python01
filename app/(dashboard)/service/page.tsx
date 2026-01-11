@@ -686,22 +686,6 @@ export default function AppointmentPage() {
                       {t('appointments.receivePayment')}
                     </button>
                   )}
-
-                  {selectedOrder.order_status !== 'cancelled' && selectedOrder.order_status !== 'done' && (
-                    <button
-                      onClick={handleCancelOrder}
-                      className="px-6 py-3 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl font-medium hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
-                    >
-                      {t('appointments.cancel')}
-                    </button>
-                  )}
-
-                  <button
-                    onClick={openEditOrderModal}
-                    className="px-6 py-3 bg-blue-500 text-white rounded-xl font-bold hover:bg-blue-600 transition-colors"
-                  >
-                    {t('appointments.edit')}
-                  </button>
                 </div>
 
                 {/* Services List */}
@@ -766,12 +750,16 @@ export default function AppointmentPage() {
                                  item.item_status === 'scheduled' ? 'นัดแล้ว' :
                                  item.item_status === 'completed' ? 'เสร็จ' : 'ยกเลิก'}
                               </button>
-                              {/* Schedule Button */}
+                              {/* Schedule/Edit Button - changes based on status */}
                               <button
                                 onClick={() => openItemEdit(item)}
-                                className="px-4 py-2 bg-pink-500 text-white rounded-lg text-sm font-medium hover:bg-pink-600 transition-colors"
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                  item.item_status === 'pending' || !item.appointment_date
+                                    ? 'bg-pink-500 text-white hover:bg-pink-600'
+                                    : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500'
+                                }`}
                               >
-                                ลงคิวช่าง
+                                {item.item_status === 'pending' || !item.appointment_date ? 'ลงคิวช่าง' : 'แก้ไขคิวช่าง'}
                               </button>
                             </div>
                           </div>
@@ -860,12 +848,6 @@ export default function AppointmentPage() {
                     {t('appointments.receivePayment')}
                   </button>
                 )}
-                <button
-                  onClick={openEditOrderModal}
-                  className="px-4 py-3 bg-blue-500 text-white rounded-xl font-bold"
-                >
-                  {t('appointments.edit')}
-                </button>
               </div>
 
               {/* Services List */}
@@ -921,9 +903,13 @@ export default function AppointmentPage() {
                             </button>
                             <button
                               onClick={() => openItemEdit(item)}
-                              className="px-2 py-1.5 bg-pink-500 text-white rounded-lg text-xs font-medium"
+                              className={`px-2 py-1.5 rounded-lg text-xs font-medium ${
+                                item.item_status === 'pending' || !item.appointment_date
+                                  ? 'bg-pink-500 text-white'
+                                  : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                              }`}
                             >
-                              ลงคิว
+                              {item.item_status === 'pending' || !item.appointment_date ? 'ลงคิว' : 'แก้ไข'}
                             </button>
                           </div>
                         </div>
@@ -939,16 +925,6 @@ export default function AppointmentPage() {
                     {t('common.note')}: {selectedOrder.note}
                   </p>
                 </div>
-              )}
-
-              {/* Cancel Order Button (at bottom) */}
-              {selectedOrder.order_status !== 'cancelled' && selectedOrder.order_status !== 'done' && (
-                <button
-                  onClick={handleCancelOrder}
-                  className="w-full px-4 py-3 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl font-medium"
-                >
-                  {t('appointments.cancel')}
-                </button>
               )}
             </div>
           </div>
