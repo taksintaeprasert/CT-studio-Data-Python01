@@ -20,6 +20,21 @@ import { Pie, Bar } from 'react-chartjs-2'
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title)
 
+interface OrderItem {
+  id: number
+  order_id: number
+  is_upsell: boolean
+  item_status: 'pending' | 'scheduled' | 'completed' | 'cancelled'
+  appointment_date: string | null
+  products: {
+    product_code: string
+    product_name: string
+    list_price: number
+    is_free: boolean
+    validity_months: number
+  } | null
+}
+
 interface Order {
   id: number
   order_date: string
@@ -28,8 +43,8 @@ interface Order {
   total_income: number
   deposit: number
   contact_channel: string | null
-  customers: { full_name: string; contact_channel: string | null } | null
-  order_items: { id: number; is_upsell: boolean; products: { list_price: number } | null }[]
+  customers: { full_name: string; phone: string | null; contact_channel: string | null } | null
+  order_items: OrderItem[]
 }
 
 interface MarketingData {
@@ -46,12 +61,31 @@ interface AdsSpending {
   note: string | null
 }
 
+// Interface for alert items
+interface AlertItem {
+  type: 'unscheduled' | 'payment_mismatch' | 'expiring_soon'
+  orderId: number
+  orderItemId?: number
+  customerName: string
+  phone: string | null
+  productName: string
+  productCode: string
+  message: string
+  severity: 'warning' | 'danger' | 'info'
+  createdAt: string
+  expiryDate?: string
+}
+
 export default function DashboardPage() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'marketing'>('overview')
+  const [activeTab, setActiveTab] = useState<'alerts' | 'overview' | 'marketing'>('alerts')
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+
+  // Alerts Data
+  const [alerts, setAlerts] = useState<AlertItem[]>([])
+  const [alertsLoading, setAlertsLoading] = useState(true)
 
   // Marketing Data
   const [marketingData, setMarketingData] = useState<MarketingData[]>([])
@@ -69,6 +103,11 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
+    // Fetch alerts on initial load
+    fetchAlerts()
+  }, [])
+
+  useEffect(() => {
     if (startDate && endDate) {
       fetchData()
     }
@@ -79,6 +118,138 @@ export default function DashboardPage() {
       fetchMarketingData()
     }
   }, [activeTab])
+
+  // Fetch alerts - unscheduled services, payment mismatches, expiring services
+  const fetchAlerts = async () => {
+    setAlertsLoading(true)
+    const alertsList: AlertItem[] = []
+
+    // 1. Fetch orders with unscheduled paid services
+    const { data: ordersWithItems } = await supabase
+      .from('orders')
+      .select(`
+        id,
+        created_at,
+        order_status,
+        total_income,
+        deposit,
+        customers (full_name, phone),
+        order_items (
+          id,
+          item_status,
+          appointment_date,
+          products (product_code, product_name, is_free, validity_months, list_price)
+        )
+      `)
+      .neq('order_status', 'cancelled')
+      .order('created_at', { ascending: false })
+
+    if (ordersWithItems) {
+      ordersWithItems.forEach((order: any) => {
+        const customer = order.customers as { full_name: string; phone: string | null } | null
+
+        // Check each order item
+        order.order_items?.forEach((item: any) => {
+          const product = item.products
+
+          // Alert 1: Unscheduled non-free services
+          if (
+            item.item_status === 'pending' &&
+            !item.appointment_date &&
+            product &&
+            !product.is_free
+          ) {
+            alertsList.push({
+              type: 'unscheduled',
+              orderId: order.id,
+              orderItemId: item.id,
+              customerName: customer?.full_name || '-',
+              phone: customer?.phone || null,
+              productName: product.product_name,
+              productCode: product.product_code,
+              message: 'บริการยังไม่ได้นัดหมาย',
+              severity: 'danger',
+              createdAt: order.created_at,
+            })
+          }
+
+          // Alert 2: Completed services but payment not complete
+          if (
+            item.item_status === 'completed' &&
+            order.order_status === 'booking' &&
+            order.deposit < order.total_income
+          ) {
+            alertsList.push({
+              type: 'payment_mismatch',
+              orderId: order.id,
+              orderItemId: item.id,
+              customerName: customer?.full_name || '-',
+              phone: customer?.phone || null,
+              productName: product?.product_name || '-',
+              productCode: product?.product_code || '-',
+              message: `บริการเสร็จแล้ว แต่ยังค้างชำระ ฿${(order.total_income - order.deposit).toLocaleString()}`,
+              severity: 'warning',
+              createdAt: order.created_at,
+            })
+          }
+
+          // Alert 3: Services expiring soon (within 30 days)
+          if (
+            product?.validity_months &&
+            product.validity_months > 0 &&
+            item.item_status !== 'completed' &&
+            item.item_status !== 'cancelled'
+          ) {
+            const purchaseDate = new Date(order.created_at)
+            const expiryDate = new Date(purchaseDate)
+            expiryDate.setMonth(expiryDate.getMonth() + product.validity_months)
+
+            const today = new Date()
+            const daysUntilExpiry = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+            if (daysUntilExpiry <= 30 && daysUntilExpiry > 0) {
+              alertsList.push({
+                type: 'expiring_soon',
+                orderId: order.id,
+                orderItemId: item.id,
+                customerName: customer?.full_name || '-',
+                phone: customer?.phone || null,
+                productName: product.product_name,
+                productCode: product.product_code,
+                message: `บริการจะหมดอายุใน ${daysUntilExpiry} วัน`,
+                severity: 'info',
+                createdAt: order.created_at,
+                expiryDate: expiryDate.toISOString(),
+              })
+            } else if (daysUntilExpiry <= 0) {
+              alertsList.push({
+                type: 'expiring_soon',
+                orderId: order.id,
+                orderItemId: item.id,
+                customerName: customer?.full_name || '-',
+                phone: customer?.phone || null,
+                productName: product.product_name,
+                productCode: product.product_code,
+                message: `บริการหมดอายุแล้ว ${Math.abs(daysUntilExpiry)} วัน`,
+                severity: 'danger',
+                createdAt: order.created_at,
+                expiryDate: expiryDate.toISOString(),
+              })
+            }
+          }
+        })
+      })
+    }
+
+    // Sort alerts: danger first, then warning, then info
+    alertsList.sort((a, b) => {
+      const severityOrder = { danger: 0, warning: 1, info: 2 }
+      return severityOrder[a.severity] - severityOrder[b.severity]
+    })
+
+    setAlerts(alertsList)
+    setAlertsLoading(false)
+  }
 
   const fetchData = async () => {
     if (!startDate || !endDate) return
@@ -296,7 +467,22 @@ export default function DashboardPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setActiveTab('alerts')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors relative ${
+              activeTab === 'alerts'
+                ? 'bg-red-500 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+            }`}
+          >
+            แจ้งเตือน
+            {alerts.filter(a => a.severity === 'danger').length > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center animate-pulse">
+                {alerts.filter(a => a.severity === 'danger').length}
+              </span>
+            )}
+          </button>
           <button
             onClick={() => setActiveTab('overview')}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
@@ -320,7 +506,149 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {activeTab === 'overview' ? (
+      {activeTab === 'alerts' ? (
+        /* Alerts Tab */
+        <div className="space-y-6">
+          {/* Refresh Button */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-gray-800 dark:text-white">
+                รายการที่ต้องดำเนินการ ({alerts.length})
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                งานที่ sales ยังไม่ได้ทำจะแสดงที่นี่
+              </p>
+            </div>
+            <button
+              onClick={fetchAlerts}
+              disabled={alertsLoading}
+              className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            >
+              {alertsLoading ? 'กำลังโหลด...' : 'รีเฟรช'}
+            </button>
+          </div>
+
+          {/* Alert Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="card border-l-4 border-red-500">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-xl flex items-center justify-center">
+                  <span className="text-2xl">⚠️</span>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">ยังไม่ได้นัด</p>
+                  <p className="text-2xl font-bold text-red-600">
+                    {alerts.filter(a => a.type === 'unscheduled').length}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="card border-l-4 border-yellow-500">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-xl flex items-center justify-center">
+                  <span className="text-2xl">💰</span>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">ค้างชำระ</p>
+                  <p className="text-2xl font-bold text-yellow-600">
+                    {alerts.filter(a => a.type === 'payment_mismatch').length}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="card border-l-4 border-blue-500">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+                  <span className="text-2xl">⏳</span>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">ใกล้หมดอายุ</p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {alerts.filter(a => a.type === 'expiring_soon').length}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {alertsLoading ? (
+            <div className="card text-center py-12">
+              <p className="text-gray-500 dark:text-gray-400">กำลังโหลดแจ้งเตือน...</p>
+            </div>
+          ) : alerts.length === 0 ? (
+            <div className="card text-center py-12">
+              <div className="text-6xl mb-4">✅</div>
+              <p className="text-xl font-bold text-green-600 dark:text-green-400">ไม่มีงานค้าง</p>
+              <p className="text-gray-500 dark:text-gray-400 mt-2">ทุกอย่างเรียบร้อยดี!</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {alerts.map((alert, index) => (
+                <Link
+                  key={`${alert.orderId}-${alert.orderItemId}-${index}`}
+                  href="/service"
+                  className={`block card p-4 hover:shadow-lg transition-all border-l-4 ${
+                    alert.severity === 'danger'
+                      ? 'border-red-500 bg-red-50 dark:bg-red-900/10'
+                      : alert.severity === 'warning'
+                      ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/10'
+                      : 'border-blue-500 bg-blue-50 dark:bg-blue-900/10'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                          alert.type === 'unscheduled'
+                            ? 'bg-red-500 text-white'
+                            : alert.type === 'payment_mismatch'
+                            ? 'bg-yellow-500 text-white'
+                            : 'bg-blue-500 text-white'
+                        }`}>
+                          {alert.type === 'unscheduled' ? 'ยังไม่นัด' :
+                           alert.type === 'payment_mismatch' ? 'ค้างชำระ' : 'ใกล้หมดอายุ'}
+                        </span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                          Order #{alert.orderId}
+                        </span>
+                      </div>
+                      <p className="font-bold text-gray-800 dark:text-white truncate">
+                        {alert.customerName}
+                        {alert.phone && (
+                          <span className="font-normal text-gray-500 ml-2">{alert.phone}</span>
+                        )}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                        <span className="font-mono text-pink-500">[{alert.productCode}]</span>{' '}
+                        {alert.productName}
+                      </p>
+                      <p className={`text-sm font-medium mt-2 ${
+                        alert.severity === 'danger'
+                          ? 'text-red-600 dark:text-red-400'
+                          : alert.severity === 'warning'
+                          ? 'text-yellow-600 dark:text-yellow-400'
+                          : 'text-blue-600 dark:text-blue-400'
+                      }`}>
+                        {alert.message}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs text-gray-400">
+                        {new Date(alert.createdAt).toLocaleDateString('th-TH', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </p>
+                      <span className="text-pink-500 text-sm font-medium">ดูรายละเอียด →</span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : activeTab === 'overview' ? (
         <>
           {/* Date Range Filter */}
           <div className="card">
