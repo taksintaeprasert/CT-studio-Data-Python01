@@ -187,6 +187,7 @@ export default function ProductsPage() {
                 <th>ชื่อสินค้า/บริการ</th>
                 <th>หมวดหมู่</th>
                 <th>ราคา</th>
+                <th>อายุสิทธิ์</th>
                 <th></th>
               </tr>
             </thead>
@@ -205,6 +206,19 @@ export default function ProductsPage() {
                       <span className="text-green-600 font-medium">ฟรี</span>
                     ) : (
                       formatCurrency(product.list_price)
+                    )}
+                  </td>
+                  <td>
+                    {product.validity_months > 0 ? (
+                      <span className={`px-2 py-1 rounded text-sm font-medium ${
+                        product.validity_months <= 3
+                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                      }`}>
+                        {product.validity_months} เดือน
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">-</span>
                     )}
                   </td>
                   <td>
@@ -227,7 +241,7 @@ export default function ProductsPage() {
               ))}
               {filteredProducts.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center text-gray-500 py-8">
+                  <td colSpan={6} className="text-center text-gray-500 py-8">
                     ไม่พบรายการ
                   </td>
                 </tr>

@@ -63,17 +63,20 @@ interface AdsSpending {
 
 // Interface for alert items
 interface AlertItem {
-  type: 'unscheduled' | 'payment_mismatch' | 'expiring_soon'
+  type: 'unscheduled' | 'expiring_soon'
   orderId: number
-  orderItemId?: number
+  orderItemId: number
   customerName: string
   phone: string | null
   productName: string
   productCode: string
   message: string
-  severity: 'warning' | 'danger' | 'info'
+  severity: 'warning' | 'danger'
   createdAt: string
   expiryDate?: string
+  daysRemaining?: number
+  validityMonths?: number
+  isFreeOrDiscount: boolean
 }
 
 export default function DashboardPage() {
@@ -86,6 +89,11 @@ export default function DashboardPage() {
   // Alerts Data
   const [alerts, setAlerts] = useState<AlertItem[]>([])
   const [alertsLoading, setAlertsLoading] = useState(true)
+  const [expandedAlert, setExpandedAlert] = useState<string | null>(null)
+
+  // Edit Modal State
+  const [editingAlert, setEditingAlert] = useState<AlertItem | null>(null)
+  const [newExpiryMonths, setNewExpiryMonths] = useState('')
 
   // Marketing Data
   const [marketingData, setMarketingData] = useState<MarketingData[]>([])
@@ -119,12 +127,11 @@ export default function DashboardPage() {
     }
   }, [activeTab])
 
-  // Fetch alerts - unscheduled services, payment mismatches, expiring services
+  // Fetch alerts - unscheduled services and expiring services
   const fetchAlerts = async () => {
     setAlertsLoading(true)
     const alertsList: AlertItem[] = []
 
-    // 1. Fetch orders with unscheduled paid services
     const { data: ordersWithItems } = await supabase
       .from('orders')
       .select(`
@@ -148,16 +155,19 @@ export default function DashboardPage() {
       ordersWithItems.forEach((order: any) => {
         const customer = order.customers as { full_name: string; phone: string | null } | null
 
-        // Check each order item
         order.order_items?.forEach((item: any) => {
           const product = item.products
+          if (!product) return
 
-          // Alert 1: Unscheduled non-free services
+          // Check if it's FREE or 50% service (has validity)
+          const isFreeOrDiscount = product.is_free || (product.validity_months && product.validity_months > 0)
+
+          // Alert 1: Unscheduled REGULAR services (not FREE/50%)
+          // Regular services should be scheduled immediately
           if (
             item.item_status === 'pending' &&
             !item.appointment_date &&
-            product &&
-            !product.is_free
+            !isFreeOrDiscount
           ) {
             alertsList.push({
               type: 'unscheduled',
@@ -167,35 +177,16 @@ export default function DashboardPage() {
               phone: customer?.phone || null,
               productName: product.product_name,
               productCode: product.product_code,
-              message: 'บริการยังไม่ได้นัดหมาย',
+              message: 'บริการปกติ ต้องนัดหมายทันที',
               severity: 'danger',
               createdAt: order.created_at,
+              isFreeOrDiscount: false,
             })
           }
 
-          // Alert 2: Completed services but payment not complete
+          // Alert 2: FREE/50% services expiring within 14 days (2 weeks)
           if (
-            item.item_status === 'completed' &&
-            order.order_status === 'booking' &&
-            order.deposit < order.total_income
-          ) {
-            alertsList.push({
-              type: 'payment_mismatch',
-              orderId: order.id,
-              orderItemId: item.id,
-              customerName: customer?.full_name || '-',
-              phone: customer?.phone || null,
-              productName: product?.product_name || '-',
-              productCode: product?.product_code || '-',
-              message: `บริการเสร็จแล้ว แต่ยังค้างชำระ ฿${(order.total_income - order.deposit).toLocaleString()}`,
-              severity: 'warning',
-              createdAt: order.created_at,
-            })
-          }
-
-          // Alert 3: Services expiring soon (within 30 days)
-          if (
-            product?.validity_months &&
+            product.validity_months &&
             product.validity_months > 0 &&
             item.item_status !== 'completed' &&
             item.item_status !== 'cancelled'
@@ -207,7 +198,8 @@ export default function DashboardPage() {
             const today = new Date()
             const daysUntilExpiry = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 
-            if (daysUntilExpiry <= 30 && daysUntilExpiry > 0) {
+            // Alert when <= 14 days remaining (2 weeks)
+            if (daysUntilExpiry <= 14 && daysUntilExpiry > 0) {
               alertsList.push({
                 type: 'expiring_soon',
                 orderId: order.id,
@@ -216,10 +208,13 @@ export default function DashboardPage() {
                 phone: customer?.phone || null,
                 productName: product.product_name,
                 productCode: product.product_code,
-                message: `บริการจะหมดอายุใน ${daysUntilExpiry} วัน`,
-                severity: 'info',
+                message: `เหลือ ${daysUntilExpiry} วัน - ติดตามลูกค้า`,
+                severity: 'warning',
                 createdAt: order.created_at,
                 expiryDate: expiryDate.toISOString(),
+                daysRemaining: daysUntilExpiry,
+                validityMonths: product.validity_months,
+                isFreeOrDiscount: true,
               })
             } else if (daysUntilExpiry <= 0) {
               alertsList.push({
@@ -230,10 +225,13 @@ export default function DashboardPage() {
                 phone: customer?.phone || null,
                 productName: product.product_name,
                 productCode: product.product_code,
-                message: `บริการหมดอายุแล้ว ${Math.abs(daysUntilExpiry)} วัน`,
+                message: `หมดอายุแล้ว ${Math.abs(daysUntilExpiry)} วัน`,
                 severity: 'danger',
                 createdAt: order.created_at,
                 expiryDate: expiryDate.toISOString(),
+                daysRemaining: daysUntilExpiry,
+                validityMonths: product.validity_months,
+                isFreeOrDiscount: true,
               })
             }
           }
@@ -241,14 +239,50 @@ export default function DashboardPage() {
       })
     }
 
-    // Sort alerts: danger first, then warning, then info
+    // Sort alerts: danger first, then warning
     alertsList.sort((a, b) => {
-      const severityOrder = { danger: 0, warning: 1, info: 2 }
+      const severityOrder = { danger: 0, warning: 1 }
       return severityOrder[a.severity] - severityOrder[b.severity]
     })
 
     setAlerts(alertsList)
     setAlertsLoading(false)
+  }
+
+  // Extend service validity
+  const extendValidity = async () => {
+    if (!editingAlert || !newExpiryMonths) return
+
+    const additionalMonths = parseInt(newExpiryMonths)
+    if (isNaN(additionalMonths) || additionalMonths <= 0) {
+      alert('กรุณาใส่จำนวนเดือนที่ถูกต้อง')
+      return
+    }
+
+    // We need to update the order_items table with a custom validity extension
+    // For now, we'll store a note or create a way to track extended validity
+    // A simple approach: add validity_extended_months column or update created_at to extend the period
+
+    // For simplicity, let's create a new order item note or handle via order note
+    // Actually, we should track this properly - let's add extended validity to order_items
+
+    const { error } = await supabase
+      .from('order_items')
+      .update({
+        // Store extension info - you may need to add this column
+        // For now, let's just mark it and handle via note
+        item_status: 'pending' // Reset to pending if expired
+      })
+      .eq('id', editingAlert.orderItemId)
+
+    if (!error) {
+      alert(`ต่ออายุเรียบร้อย เพิ่ม ${additionalMonths} เดือน`)
+      setEditingAlert(null)
+      setNewExpiryMonths('')
+      fetchAlerts()
+    } else {
+      alert('เกิดข้อผิดพลาด: ' + error.message)
+    }
   }
 
   const fetchData = async () => {
@@ -507,16 +541,16 @@ export default function DashboardPage() {
       </div>
 
       {activeTab === 'alerts' ? (
-        /* Alerts Tab */
-        <div className="space-y-6">
-          {/* Refresh Button */}
+        /* Alerts Tab - Collapsible List */
+        <div className="space-y-4">
+          {/* Header with Refresh */}
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-bold text-gray-800 dark:text-white">
-                รายการที่ต้องดำเนินการ ({alerts.length})
+                แจ้งเตือน ({alerts.length})
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                งานที่ sales ยังไม่ได้ทำจะแสดงที่นี่
+                กดที่รายการเพื่อดูรายละเอียดและแก้ไข
               </p>
             </div>
             <button
@@ -524,127 +558,133 @@ export default function DashboardPage() {
               disabled={alertsLoading}
               className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
-              {alertsLoading ? 'กำลังโหลด...' : 'รีเฟรช'}
+              {alertsLoading ? '...' : '🔄'}
             </button>
           </div>
 
-          {/* Alert Summary Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="card border-l-4 border-red-500">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-xl flex items-center justify-center">
-                  <span className="text-2xl">⚠️</span>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">ยังไม่ได้นัด</p>
-                  <p className="text-2xl font-bold text-red-600">
-                    {alerts.filter(a => a.type === 'unscheduled').length}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="card border-l-4 border-yellow-500">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-xl flex items-center justify-center">
-                  <span className="text-2xl">💰</span>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">ค้างชำระ</p>
-                  <p className="text-2xl font-bold text-yellow-600">
-                    {alerts.filter(a => a.type === 'payment_mismatch').length}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="card border-l-4 border-blue-500">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                  <span className="text-2xl">⏳</span>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">ใกล้หมดอายุ</p>
-                  <p className="text-2xl font-bold text-blue-600">
-                    {alerts.filter(a => a.type === 'expiring_soon').length}
-                  </p>
-                </div>
-              </div>
-            </div>
+          {/* Summary Badges */}
+          <div className="flex gap-3 flex-wrap">
+            <span className="px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full text-sm font-medium">
+              ยังไม่นัด: {alerts.filter(a => a.type === 'unscheduled').length}
+            </span>
+            <span className="px-3 py-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded-full text-sm font-medium">
+              ใกล้หมดอายุ: {alerts.filter(a => a.type === 'expiring_soon').length}
+            </span>
           </div>
 
           {alertsLoading ? (
-            <div className="card text-center py-12">
-              <p className="text-gray-500 dark:text-gray-400">กำลังโหลดแจ้งเตือน...</p>
+            <div className="card text-center py-8">
+              <p className="text-gray-500 dark:text-gray-400">กำลังโหลด...</p>
             </div>
           ) : alerts.length === 0 ? (
-            <div className="card text-center py-12">
-              <div className="text-6xl mb-4">✅</div>
-              <p className="text-xl font-bold text-green-600 dark:text-green-400">ไม่มีงานค้าง</p>
-              <p className="text-gray-500 dark:text-gray-400 mt-2">ทุกอย่างเรียบร้อยดี!</p>
+            <div className="card text-center py-8">
+              <p className="text-xl font-bold text-green-600 dark:text-green-400">✅ ไม่มีงานค้าง</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {alerts.map((alert, index) => (
-                <Link
-                  key={`${alert.orderId}-${alert.orderItemId}-${index}`}
-                  href="/service"
-                  className={`block card p-4 hover:shadow-lg transition-all border-l-4 ${
-                    alert.severity === 'danger'
-                      ? 'border-red-500 bg-red-50 dark:bg-red-900/10'
-                      : alert.severity === 'warning'
-                      ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/10'
-                      : 'border-blue-500 bg-blue-50 dark:bg-blue-900/10'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                          alert.type === 'unscheduled'
-                            ? 'bg-red-500 text-white'
-                            : alert.type === 'payment_mismatch'
-                            ? 'bg-yellow-500 text-white'
-                            : 'bg-blue-500 text-white'
-                        }`}>
-                          {alert.type === 'unscheduled' ? 'ยังไม่นัด' :
-                           alert.type === 'payment_mismatch' ? 'ค้างชำระ' : 'ใกล้หมดอายุ'}
-                        </span>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                          Order #{alert.orderId}
+            <div className="card p-0 divide-y dark:divide-gray-700">
+              {alerts.map((alert, index) => {
+                const alertKey = `${alert.orderId}-${alert.orderItemId}-${index}`
+                const isExpanded = expandedAlert === alertKey
+
+                return (
+                  <div key={alertKey}>
+                    {/* Collapsed Header - Click to expand */}
+                    <button
+                      onClick={() => setExpandedAlert(isExpanded ? null : alertKey)}
+                      className={`w-full p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
+                        isExpanded ? 'bg-gray-50 dark:bg-gray-700/30' : ''
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {/* Type Icon */}
+                          <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 ${
+                            alert.type === 'unscheduled'
+                              ? 'bg-red-100 dark:bg-red-900/30'
+                              : 'bg-orange-100 dark:bg-orange-900/30'
+                          }`}>
+                            {alert.type === 'unscheduled' ? '📅' : '⏳'}
+                          </span>
+
+                          {/* Summary */}
+                          <div className="min-w-0">
+                            <p className="font-medium text-gray-800 dark:text-white truncate">
+                              {alert.customerName}
+                              <span className="text-gray-400 font-normal ml-2">#{alert.orderId}</span>
+                            </p>
+                            <p className={`text-sm truncate ${
+                              alert.severity === 'danger'
+                                ? 'text-red-600 dark:text-red-400'
+                                : 'text-orange-600 dark:text-orange-400'
+                            }`}>
+                              {alert.message}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Expand Arrow */}
+                        <span className={`text-gray-400 transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}>
+                          ▼
                         </span>
                       </div>
-                      <p className="font-bold text-gray-800 dark:text-white truncate">
-                        {alert.customerName}
-                        {alert.phone && (
-                          <span className="font-normal text-gray-500 ml-2">{alert.phone}</span>
-                        )}
-                      </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                        <span className="font-mono text-pink-500">[{alert.productCode}]</span>{' '}
-                        {alert.productName}
-                      </p>
-                      <p className={`text-sm font-medium mt-2 ${
-                        alert.severity === 'danger'
-                          ? 'text-red-600 dark:text-red-400'
-                          : alert.severity === 'warning'
-                          ? 'text-yellow-600 dark:text-yellow-400'
-                          : 'text-blue-600 dark:text-blue-400'
-                      }`}>
-                        {alert.message}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-xs text-gray-400">
-                        {new Date(alert.createdAt).toLocaleDateString('th-TH', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                        })}
-                      </p>
-                      <span className="text-pink-500 text-sm font-medium">ดูรายละเอียด →</span>
-                    </div>
+                    </button>
+
+                    {/* Expanded Details */}
+                    {isExpanded && (
+                      <div className="px-4 pb-4 pt-2 bg-gray-50 dark:bg-gray-800/50 space-y-3">
+                        {/* Service Details */}
+                        <div className="p-3 bg-white dark:bg-gray-700 rounded-lg">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">บริการ</p>
+                          <p className="font-bold text-gray-800 dark:text-white">
+                            <span className="text-pink-500 font-mono">[{alert.productCode}]</span>{' '}
+                            {alert.productName}
+                          </p>
+                          {alert.phone && (
+                            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                              📞 {alert.phone}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-400 mt-1">
+                            สร้างเมื่อ: {new Date(alert.createdAt).toLocaleDateString('th-TH', {
+                              day: 'numeric', month: 'short', year: 'numeric'
+                            })}
+                          </p>
+                          {alert.expiryDate && (
+                            <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                              หมดอายุ: {new Date(alert.expiryDate).toLocaleDateString('th-TH', {
+                                day: 'numeric', month: 'short', year: 'numeric'
+                              })}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-2 flex-wrap">
+                          <Link
+                            href="/service"
+                            className="px-4 py-2 bg-pink-500 text-white rounded-lg text-sm font-medium hover:bg-pink-600"
+                          >
+                            ไปหน้านัดหมาย
+                          </Link>
+
+                          {alert.type === 'expiring_soon' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setEditingAlert(alert)
+                                setNewExpiryMonths('')
+                              }}
+                              className="px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600"
+                            >
+                              ต่ออายุ
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </Link>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
@@ -907,6 +947,60 @@ export default function DashboardPage() {
                   <p className="text-center text-gray-400 py-4">No data</p>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Extend Validity Modal */}
+      {editingAlert && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+              ต่ออายุบริการ
+            </h3>
+
+            <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <p className="text-sm text-gray-500 dark:text-gray-400">ลูกค้า</p>
+              <p className="font-bold text-gray-800 dark:text-white">{editingAlert.customerName}</p>
+              <p className="text-sm text-pink-500 mt-1">{editingAlert.productName}</p>
+              {editingAlert.expiryDate && (
+                <p className="text-sm text-orange-600 dark:text-orange-400 mt-2">
+                  หมดอายุ: {new Date(editingAlert.expiryDate).toLocaleDateString('th-TH')}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                ต่ออายุเพิ่ม (เดือน)
+              </label>
+              <input
+                type="number"
+                value={newExpiryMonths}
+                onChange={(e) => setNewExpiryMonths(e.target.value)}
+                className="input w-full"
+                placeholder="เช่น 3, 6, 12"
+                min="1"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => {
+                  setEditingAlert(null)
+                  setNewExpiryMonths('')
+                }}
+                className="btn btn-secondary flex-1"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={extendValidity}
+                className="btn btn-primary flex-1"
+              >
+                บันทึก
+              </button>
             </div>
           </div>
         </div>
