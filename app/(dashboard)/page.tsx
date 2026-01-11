@@ -205,8 +205,16 @@ export default function DashboardPage() {
           const product = item.products
           if (!product) return
 
-          // Check if it's FREE or 50% service (has validity)
-          const isFreeOrDiscount = product.is_free || (product.validity_months && product.validity_months > 0)
+          // Check if it's FREE or 50% service by product_code OR validity_months
+          const productCode = product.product_code?.toUpperCase() || ''
+          const productName = product.product_name?.toUpperCase() || ''
+          const isFreeOrDiscount =
+            product.is_free ||
+            productCode.includes('FREE') ||
+            productCode.includes('50%') ||
+            productName.includes('FREE') ||
+            productName.includes('50%') ||
+            (product.validity_months && product.validity_months > 0)
 
           // Alert 1: Unscheduled REGULAR services (not FREE/50%)
           // Regular services should be scheduled immediately
@@ -231,54 +239,66 @@ export default function DashboardPage() {
           }
 
           // Alert 2: FREE/50% services expiring within 14 days (2 weeks)
+          // These need validity_months to calculate expiry
           if (
-            product.validity_months &&
-            product.validity_months > 0 &&
+            isFreeOrDiscount &&
             item.item_status !== 'completed' &&
             item.item_status !== 'cancelled'
           ) {
-            const purchaseDate = new Date(order.created_at)
-            const expiryDate = new Date(purchaseDate)
-            expiryDate.setMonth(expiryDate.getMonth() + product.validity_months)
+            // Default validity: FREE = 3 months, 50% = 12 months
+            let validityMonths = product.validity_months || 0
+            if (validityMonths === 0) {
+              if (productCode.includes('FREE') || productName.includes('FREE') || product.is_free) {
+                validityMonths = 3
+              } else if (productCode.includes('50%') || productName.includes('50%')) {
+                validityMonths = 12
+              }
+            }
 
-            const today = new Date()
-            const daysUntilExpiry = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+            if (validityMonths > 0) {
+              const purchaseDate = new Date(order.created_at)
+              const expiryDate = new Date(purchaseDate)
+              expiryDate.setMonth(expiryDate.getMonth() + validityMonths)
 
-            // Alert when <= 14 days remaining (2 weeks)
-            if (daysUntilExpiry <= 14 && daysUntilExpiry > 0) {
-              alertsList.push({
-                type: 'expiring_soon',
-                orderId: order.id,
-                orderItemId: item.id,
-                customerName: customer?.full_name || '-',
-                phone: customer?.phone || null,
-                productName: product.product_name,
-                productCode: product.product_code,
-                message: `เหลือ ${daysUntilExpiry} วัน - ติดตามลูกค้า`,
-                severity: 'warning',
-                createdAt: order.created_at,
-                expiryDate: expiryDate.toISOString(),
-                daysRemaining: daysUntilExpiry,
-                validityMonths: product.validity_months,
-                isFreeOrDiscount: true,
-              })
-            } else if (daysUntilExpiry <= 0) {
-              alertsList.push({
-                type: 'expiring_soon',
-                orderId: order.id,
-                orderItemId: item.id,
-                customerName: customer?.full_name || '-',
-                phone: customer?.phone || null,
-                productName: product.product_name,
-                productCode: product.product_code,
-                message: `หมดอายุแล้ว ${Math.abs(daysUntilExpiry)} วัน`,
-                severity: 'danger',
-                createdAt: order.created_at,
-                expiryDate: expiryDate.toISOString(),
-                daysRemaining: daysUntilExpiry,
-                validityMonths: product.validity_months,
-                isFreeOrDiscount: true,
-              })
+              const today = new Date()
+              const daysUntilExpiry = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+              // Alert when <= 14 days remaining (2 weeks)
+              if (daysUntilExpiry <= 14 && daysUntilExpiry > 0) {
+                alertsList.push({
+                  type: 'expiring_soon',
+                  orderId: order.id,
+                  orderItemId: item.id,
+                  customerName: customer?.full_name || '-',
+                  phone: customer?.phone || null,
+                  productName: product.product_name,
+                  productCode: product.product_code,
+                  message: `เหลือ ${daysUntilExpiry} วัน - ติดตามลูกค้า`,
+                  severity: 'warning',
+                  createdAt: order.created_at,
+                  expiryDate: expiryDate.toISOString(),
+                  daysRemaining: daysUntilExpiry,
+                  validityMonths: validityMonths,
+                  isFreeOrDiscount: true,
+                })
+              } else if (daysUntilExpiry <= 0) {
+                alertsList.push({
+                  type: 'expiring_soon',
+                  orderId: order.id,
+                  orderItemId: item.id,
+                  customerName: customer?.full_name || '-',
+                  phone: customer?.phone || null,
+                  productName: product.product_name,
+                  productCode: product.product_code,
+                  message: `หมดอายุแล้ว ${Math.abs(daysUntilExpiry)} วัน`,
+                  severity: 'danger',
+                  createdAt: order.created_at,
+                  expiryDate: expiryDate.toISOString(),
+                  daysRemaining: daysUntilExpiry,
+                  validityMonths: validityMonths,
+                  isFreeOrDiscount: true,
+                })
+              }
             }
           }
         })
@@ -659,14 +679,14 @@ export default function DashboardPage() {
 
                           {/* Problem as main text, customer secondary */}
                           <div className="min-w-0">
-                            <p className={`font-medium truncate ${
+                            <p className={`font-bold truncate ${
                               alert.severity === 'danger'
-                                ? 'text-red-600 dark:text-red-400'
-                                : 'text-orange-600 dark:text-orange-400'
+                                ? 'text-red-700 dark:text-red-400'
+                                : 'text-orange-700 dark:text-orange-400'
                             }`}>
                               {alert.message}
                             </p>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                            <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
                               {alert.customerName} - #{alert.orderId}
                             </p>
                           </div>
