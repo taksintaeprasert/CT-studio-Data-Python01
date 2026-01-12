@@ -79,8 +79,17 @@ interface AlertItem {
   isFreeOrDiscount: boolean
 }
 
+// Interface for price range breakdown
+interface PriceBreakdown {
+  id: string
+  label: string
+  minPrice: number
+  maxPrice: number
+  count: number
+}
+
 export default function DashboardPage() {
-  const [activeTab, setActiveTab] = useState<'alerts' | 'overview' | 'marketing'>('alerts')
+  const [activeTab, setActiveTab] = useState<'alerts' | 'overview' | 'marketing' | 'report'>('alerts')
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [startDate, setStartDate] = useState('')
@@ -108,6 +117,17 @@ export default function DashboardPage() {
   const [chatInquiries, setChatInquiries] = useState('')
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7))
   const [adsAmount, setAdsAmount] = useState('')
+
+  // Report Data
+  const [reportStartDate, setReportStartDate] = useState('')
+  const [reportEndDate, setReportEndDate] = useState('')
+  const [reportLoading, setReportLoading] = useState(false)
+  const [priceBreakdowns, setPriceBreakdowns] = useState<PriceBreakdown[]>([
+    { id: '1', label: '0 - 3,000', minPrice: 0, maxPrice: 3000, count: 0 },
+    { id: '2', label: '3,001 - 6,000', minPrice: 3001, maxPrice: 6000, count: 0 },
+    { id: '3', label: '6,001+', minPrice: 6001, maxPrice: 999999, count: 0 },
+  ])
+  const [reportOrders, setReportOrders] = useState<any[]>([])
 
   const supabase = createClient()
 
@@ -402,6 +422,117 @@ export default function DashboardPage() {
     setLoading(false)
   }
 
+  // Fetch report data
+  const fetchReportData = async () => {
+    if (!reportStartDate || !reportEndDate) return
+
+    setReportLoading(true)
+
+    const { data: ordersData } = await supabase
+      .from('orders')
+      .select(`
+        id,
+        created_at,
+        order_status,
+        total_income,
+        order_items (
+          id,
+          products (product_code, product_name, list_price, is_free, validity_months)
+        )
+      `)
+      .neq('order_status', 'cancelled')
+      .gte('created_at', `${reportStartDate}T00:00:00`)
+      .lte('created_at', `${reportEndDate}T23:59:59`)
+      .order('created_at', { ascending: false })
+
+    if (ordersData) {
+      // Filter orders that have at least one regular service (not FREE/50%)
+      const regularOrders = ordersData.filter((order: any) => {
+        return order.order_items?.some((item: any) => {
+          const product = item.products
+          if (!product) return false
+
+          const productCode = product.product_code?.toUpperCase() || ''
+          const productName = product.product_name?.toUpperCase() || ''
+          const isFreeOrDiscount =
+            product.is_free ||
+            productCode.includes('FREE') ||
+            productCode.includes('50%') ||
+            productName.includes('FREE') ||
+            productName.includes('50%') ||
+            (product.validity_months && product.validity_months > 0)
+
+          return !isFreeOrDiscount
+        })
+      })
+
+      setReportOrders(regularOrders)
+
+      // Calculate counts for each breakdown
+      const updatedBreakdowns = priceBreakdowns.map(breakdown => {
+        const count = regularOrders.filter((order: any) => {
+          // Calculate total of regular services in this order
+          const regularTotal = order.order_items?.reduce((sum: number, item: any) => {
+            const product = item.products
+            if (!product) return sum
+
+            const productCode = product.product_code?.toUpperCase() || ''
+            const productName = product.product_name?.toUpperCase() || ''
+            const isFreeOrDiscount =
+              product.is_free ||
+              productCode.includes('FREE') ||
+              productCode.includes('50%') ||
+              productName.includes('FREE') ||
+              productName.includes('50%') ||
+              (product.validity_months && product.validity_months > 0)
+
+            if (!isFreeOrDiscount) {
+              return sum + (product.list_price || 0)
+            }
+            return sum
+          }, 0) || 0
+
+          return regularTotal >= breakdown.minPrice && regularTotal <= breakdown.maxPrice
+        }).length
+
+        return { ...breakdown, count }
+      })
+
+      setPriceBreakdowns(updatedBreakdowns)
+    }
+
+    setReportLoading(false)
+  }
+
+  // Add a new breakdown
+  const addBreakdown = () => {
+    const newId = Date.now().toString()
+    setPriceBreakdowns([...priceBreakdowns, {
+      id: newId,
+      label: 'ใหม่',
+      minPrice: 0,
+      maxPrice: 10000,
+      count: 0
+    }])
+  }
+
+  // Remove a breakdown
+  const removeBreakdown = (id: string) => {
+    if (priceBreakdowns.length > 1) {
+      setPriceBreakdowns(priceBreakdowns.filter(b => b.id !== id))
+    }
+  }
+
+  // Update a breakdown
+  const updateBreakdown = (id: string, field: 'minPrice' | 'maxPrice' | 'label', value: string | number) => {
+    setPriceBreakdowns(priceBreakdowns.map(b => {
+      if (b.id === id) {
+        return { ...b, [field]: value }
+      }
+      return b
+    }))
+  }
+
   const fetchMarketingData = async () => {
     const { data: mkData } = await supabase
       .from('marketing_data')
@@ -602,6 +733,16 @@ export default function DashboardPage() {
             }`}
           >
             Marketing Data
+          </button>
+          <button
+            onClick={() => setActiveTab('report')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              activeTab === 'report'
+                ? 'bg-purple-500 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+            }`}
+          >
+            Report
           </button>
         </div>
       </div>
@@ -943,7 +1084,7 @@ export default function DashboardPage() {
             </>
           )}
         </>
-      ) : (
+      ) : activeTab === 'marketing' ? (
         /* Marketing Data Tab */
         <div className="space-y-6">
           {/* Input Forms */}
@@ -1058,6 +1199,206 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      ) : (
+        /* Report Tab */
+        <div className="space-y-6">
+          {/* Date Range */}
+          <div className="card">
+            <h3 className="font-bold text-gray-800 dark:text-white mb-4">ช่วงเวลา</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  วันเริ่มต้น
+                </label>
+                <input
+                  type="date"
+                  value={reportStartDate}
+                  onChange={(e) => setReportStartDate(e.target.value)}
+                  className="input w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  วันสิ้นสุด
+                </label>
+                <input
+                  type="date"
+                  value={reportEndDate}
+                  onChange={(e) => setReportEndDate(e.target.value)}
+                  className="input w-full"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={fetchReportData}
+                  disabled={!reportStartDate || !reportEndDate || reportLoading}
+                  className="btn btn-primary w-full"
+                >
+                  {reportLoading ? 'กำลังโหลด...' : 'ดูรายงาน'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Price Breakdowns */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-gray-800 dark:text-white">Price Range Breakdowns</h3>
+              <button
+                onClick={addBreakdown}
+                className="px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-800/40 transition-colors"
+              >
+                + เพิ่ม Breakdown
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {priceBreakdowns.map((breakdown, index) => (
+                <div key={breakdown.id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold text-purple-600 dark:text-purple-400 w-8">{index + 1}</span>
+                    </div>
+                    <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">ชื่อ</label>
+                        <input
+                          type="text"
+                          value={breakdown.label}
+                          onChange={(e) => updateBreakdown(breakdown.id, 'label', e.target.value)}
+                          className="input w-full text-sm"
+                          placeholder="เช่น 0-3000"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">ราคาต่ำสุด (฿)</label>
+                        <input
+                          type="number"
+                          value={breakdown.minPrice}
+                          onChange={(e) => updateBreakdown(breakdown.id, 'minPrice', parseInt(e.target.value) || 0)}
+                          className="input w-full text-sm"
+                          min="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">ราคาสูงสุด (฿)</label>
+                        <input
+                          type="number"
+                          value={breakdown.maxPrice}
+                          onChange={(e) => updateBreakdown(breakdown.id, 'maxPrice', parseInt(e.target.value) || 0)}
+                          className="input w-full text-sm"
+                          min="0"
+                        />
+                      </div>
+                      <div className="flex items-end gap-2">
+                        <div className="flex-1">
+                          <label className="block text-xs text-gray-500 mb-1">จำนวน Order</label>
+                          <div className="input w-full text-sm bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-bold text-center">
+                            {breakdown.count}
+                          </div>
+                        </div>
+                        {priceBreakdowns.length > 1 && (
+                          <button
+                            onClick={() => removeBreakdown(breakdown.id)}
+                            className="px-2 py-2 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                            title="ลบ"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Summary & Chart */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Summary Numbers */}
+            <div className="card">
+              <h3 className="font-bold text-gray-800 dark:text-white mb-4">สรุป</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                  <span className="text-gray-600 dark:text-gray-300">Order ทั้งหมด (ไม่รวม FREE/50%)</span>
+                  <span className="text-2xl font-bold text-purple-600 dark:text-purple-400">{reportOrders.length}</span>
+                </div>
+                {priceBreakdowns.map((breakdown, index) => (
+                  <div key={breakdown.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <span className="text-gray-600 dark:text-gray-300">
+                      <span className="font-mono text-sm text-gray-400 mr-2">{index + 1}.</span>
+                      {breakdown.label}
+                    </span>
+                    <span className="text-xl font-bold text-gray-800 dark:text-white">{breakdown.count}</span>
+                  </div>
+                ))}
+              </div>
+              {reportOrders.length === 0 && reportStartDate && reportEndDate && !reportLoading && (
+                <p className="text-center text-gray-400 py-4 mt-4">กดปุ่ม "ดูรายงาน" เพื่อดูข้อมูล</p>
+              )}
+            </div>
+
+            {/* Bar Chart */}
+            <div className="card">
+              <h3 className="font-bold text-gray-800 dark:text-white mb-4">กราฟแท่ง</h3>
+              <div className="h-64">
+                {priceBreakdowns.some(b => b.count > 0) ? (
+                  <Bar
+                    data={{
+                      labels: priceBreakdowns.map(b => b.label),
+                      datasets: [{
+                        label: 'จำนวน Order',
+                        data: priceBreakdowns.map(b => b.count),
+                        backgroundColor: priceBreakdowns.map((_, i) => {
+                          const colors = [
+                            'rgba(147, 51, 234, 0.7)',
+                            'rgba(59, 130, 246, 0.7)',
+                            'rgba(34, 197, 94, 0.7)',
+                            'rgba(249, 115, 22, 0.7)',
+                            'rgba(236, 72, 153, 0.7)',
+                            'rgba(139, 92, 246, 0.7)',
+                          ]
+                          return colors[i % colors.length]
+                        }),
+                        borderRadius: 8,
+                      }]
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          display: false
+                        }
+                      },
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          ticks: {
+                            stepSize: 1
+                          }
+                        }
+                      }
+                    }}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-gray-400">
+                    {reportLoading ? 'กำลังโหลด...' : 'เลือกช่วงเวลาและกด "ดูรายงาน"'}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Info Note */}
+          <div className="card bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+            <p className="text-sm text-purple-700 dark:text-purple-300">
+              <strong>หมายเหตุ:</strong> รายงานนี้แสดงจำนวน Order ที่มีบริการปกติ (ไม่รวม FREE และ 50%)
+              โดยคำนวณจากราคารวมของบริการปกติในแต่ละ Order
+            </p>
           </div>
         </div>
       )}
