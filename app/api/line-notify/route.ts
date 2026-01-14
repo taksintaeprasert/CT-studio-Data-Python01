@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { sendLineTextMessage, sendLineFlexMessage, createOrderNotificationFlex } from '@/lib/line/client'
+import { sendLineNotify, formatOrderNotifyMessage } from '@/lib/line/client'
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,27 +8,16 @@ export async function POST(request: NextRequest) {
 
     console.log('=== LINE NOTIFY DEBUG ===')
     console.log('Request type:', type)
-    console.log('Request data:', JSON.stringify(data, null, 2))
+    console.log('Using LINE Notify (free unlimited)')
 
-    // Get the notification recipient from environment
-    const recipientId = process.env.LINE_NOTIFY_USER_ID
-    const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN
+    // Check LINE Notify token
+    const notifyToken = process.env.LINE_NOTIFY_TOKEN
+    console.log('LINE_NOTIFY_TOKEN:', notifyToken ? 'SET' : 'NOT SET')
 
-    console.log('LINE_NOTIFY_USER_ID:', recipientId ? `${recipientId.substring(0, 10)}...` : 'NOT SET')
-    console.log('LINE_CHANNEL_ACCESS_TOKEN:', accessToken ? `${accessToken.substring(0, 20)}...` : 'NOT SET')
-
-    if (!recipientId) {
-      console.error('LINE_NOTIFY_USER_ID is not configured')
+    if (!notifyToken) {
+      console.error('LINE_NOTIFY_TOKEN is not configured')
       return NextResponse.json(
-        { success: false, error: 'Notification recipient not configured' },
-        { status: 500 }
-      )
-    }
-
-    if (!accessToken) {
-      console.error('LINE_CHANNEL_ACCESS_TOKEN is not configured')
-      return NextResponse.json(
-        { success: false, error: 'LINE access token not configured' },
+        { success: false, error: 'LINE Notify token not configured. Please add LINE_NOTIFY_TOKEN to environment variables.' },
         { status: 500 }
       )
     }
@@ -36,8 +25,8 @@ export async function POST(request: NextRequest) {
     if (type === 'new_order') {
       const { orderId, customerName, salesName, products, totalAmount, deposit, status } = data
 
-      // Send flex message for new order
-      const flexContents = createOrderNotificationFlex({
+      // Format message for LINE Notify
+      const message = formatOrderNotifyMessage({
         orderId,
         customerName,
         salesName,
@@ -47,34 +36,27 @@ export async function POST(request: NextRequest) {
         status,
       })
 
-      console.log('Sending LINE Flex Message...')
-      const result = await sendLineFlexMessage({
-        to: recipientId,
-        altText: `New Order #${orderId} - ${customerName} - ฿${totalAmount.toLocaleString()}`,
-        contents: flexContents,
-      })
+      console.log('Sending via LINE Notify...')
+      const result = await sendLineNotify(message)
 
-      console.log('LINE Flex Message Result:', JSON.stringify(result))
+      console.log('LINE Notify Result:', JSON.stringify(result))
 
       if (!result.success) {
-        console.error('LINE Flex Message Failed:', result.error)
+        console.error('LINE Notify Failed:', result.error)
         return NextResponse.json(
           { success: false, error: result.error },
           { status: 500 }
         )
       }
 
-      console.log('LINE Flex Message Sent Successfully!')
+      console.log('LINE Notify Sent Successfully!')
       return NextResponse.json({ success: true })
     }
 
     if (type === 'text') {
       const { message } = data
 
-      const result = await sendLineTextMessage({
-        to: recipientId,
-        message,
-      })
+      const result = await sendLineNotify(message)
 
       if (!result.success) {
         return NextResponse.json(

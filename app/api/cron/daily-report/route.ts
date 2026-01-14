@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { sendLineFlexMessage, createDailyReportFlex, DailyReportData } from '@/lib/line/client'
+import { sendLineNotify, formatDailyReportNotifyMessage, DailyReportData } from '@/lib/line/client'
 
 // Create a simple Supabase client for API routes
 function getSupabaseClient() {
@@ -154,32 +154,22 @@ export async function GET(request: NextRequest) {
       servicesSold,
     }
 
-    // Get the notification recipient
-    const recipientId = process.env.LINE_NOTIFY_USER_ID
+    // Check LINE Notify token
+    const notifyToken = process.env.LINE_NOTIFY_TOKEN
 
-    if (!recipientId) {
-      console.log('[Cron] LINE_NOTIFY_USER_ID not configured')
-      return NextResponse.json({ success: false, error: 'LINE_NOTIFY_USER_ID not configured' })
+    if (!notifyToken) {
+      console.log('[Cron] LINE_NOTIFY_TOKEN not configured')
+      return NextResponse.json({ success: false, error: 'LINE_NOTIFY_TOKEN not configured' })
     }
 
-    // Create and send the flex message
-    const flexContents = createDailyReportFlex(reportData)
+    // Format and send via LINE Notify (free unlimited)
+    const message = formatDailyReportNotifyMessage(reportData)
 
-    const dateObj = new Date(reportDate)
-    const dateStr = dateObj.toLocaleDateString('th-TH', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    })
-
-    const result = await sendLineFlexMessage({
-      to: recipientId,
-      altText: `Daily Report ${dateStr} - รายได้ ฿${totalRealIncome.toLocaleString()}`,
-      contents: flexContents,
-    })
+    console.log(`[Cron] Sending daily report via LINE Notify...`)
+    const result = await sendLineNotify(message)
 
     if (!result.success) {
-      console.log(`[Cron] Failed to send LINE message: ${result.error}`)
+      console.log(`[Cron] Failed to send LINE Notify: ${result.error}`)
       return NextResponse.json({ success: false, error: result.error })
     }
 
