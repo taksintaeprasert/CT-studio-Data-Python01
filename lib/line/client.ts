@@ -85,6 +85,11 @@ export async function sendLineFlexMessage({
 }: SendLineFlexMessageOptions): Promise<{ success: boolean; error?: string }> {
   const token = accessToken || process.env.LINE_CHANNEL_ACCESS_TOKEN
 
+  console.log('=== sendLineFlexMessage DEBUG ===')
+  console.log('to:', to)
+  console.log('altText:', altText)
+  console.log('token exists:', !!token)
+
   if (!token) {
     console.error('LINE_CHANNEL_ACCESS_TOKEN is not configured')
     return { success: false, error: 'LINE access token not configured' }
@@ -107,6 +112,7 @@ export async function sendLineFlexMessage({
       ],
     }
 
+    console.log('Calling LINE API:', LINE_API_URL)
     const response = await fetch(LINE_API_URL, {
       method: 'POST',
       headers: {
@@ -116,16 +122,19 @@ export async function sendLineFlexMessage({
       body: JSON.stringify(payload),
     })
 
+    console.log('LINE API Response Status:', response.status)
+
     if (!response.ok) {
       const errorData = await response.json()
-      console.error('LINE API Error:', errorData)
-      return { success: false, error: errorData.message || 'Failed to send message' }
+      console.error('LINE API Error Response:', JSON.stringify(errorData))
+      return { success: false, error: errorData.message || `Failed to send message (${response.status})` }
     }
 
+    console.log('LINE API call successful')
     return { success: true }
   } catch (error) {
     console.error('LINE send message error:', error)
-    return { success: false, error: 'Network error' }
+    return { success: false, error: 'Network error: ' + (error instanceof Error ? error.message : String(error)) }
   }
 }
 
