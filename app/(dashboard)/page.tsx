@@ -341,9 +341,34 @@ export default function DashboardPage() {
         console.log(`Auto-fixed ${ordersToMarkBooking.length} orders: paid → booking (not fully paid)`)
       }
 
+      // Auto-fix services: "completed" but appointment date is in the future → change to "scheduled"
+      const today = new Date()
+      today.setHours(23, 59, 59, 999) // End of today
+      const itemsToFixStatus: number[] = []
+
+      ordersWithItems.forEach((order: any) => {
+        order.order_items?.forEach((item: any) => {
+          if (item.item_status === 'completed' && item.appointment_date) {
+            const appointmentDate = new Date(item.appointment_date)
+            // If appointment is in the future, it can't be completed yet
+            if (appointmentDate > today) {
+              itemsToFixStatus.push(item.id)
+            }
+          }
+        })
+      })
+
+      if (itemsToFixStatus.length > 0) {
+        await supabase
+          .from('order_items')
+          .update({ item_status: 'scheduled' })
+          .in('id', itemsToFixStatus)
+        console.log(`Auto-fixed ${itemsToFixStatus.length} services: completed → scheduled (future appointment)`)
+      }
+
       // Track which orders already have unpaid_completed alert (to avoid duplicates)
       const ordersWithUnpaidAlert = new Set<number>()
-      const today = new Date()
+      // Reset today to start of day for alert comparison
       today.setHours(0, 0, 0, 0)
 
       ordersWithItems.forEach((order: any) => {
