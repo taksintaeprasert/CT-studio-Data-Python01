@@ -1,6 +1,112 @@
 // LINE Messaging API Client
 
 const LINE_API_URL = 'https://api.line.me/v2/bot/message/push'
+const LINE_NOTIFY_API_URL = 'https://notify-api.line.me/api/notify'
+
+// LINE Notify - Free unlimited messages
+export async function sendLineNotify(message: string): Promise<{ success: boolean; error?: string }> {
+  const token = process.env.LINE_NOTIFY_TOKEN
+
+  if (!token) {
+    console.error('LINE_NOTIFY_TOKEN is not configured')
+    return { success: false, error: 'LINE Notify token not configured' }
+  }
+
+  try {
+    console.log('=== sendLineNotify DEBUG ===')
+    console.log('Sending to LINE Notify...')
+
+    const response = await fetch(LINE_NOTIFY_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: `message=${encodeURIComponent(message)}`,
+    })
+
+    console.log('LINE Notify Response Status:', response.status)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('LINE Notify Error:', errorText)
+      return { success: false, error: `LINE Notify failed (${response.status})` }
+    }
+
+    console.log('LINE Notify sent successfully!')
+    return { success: true }
+  } catch (error) {
+    console.error('LINE Notify error:', error)
+    return { success: false, error: 'Network error: ' + (error instanceof Error ? error.message : String(error)) }
+  }
+}
+
+// Format order notification for LINE Notify (text-based)
+export function formatOrderNotifyMessage(order: {
+  orderId: number
+  customerName: string
+  salesName: string
+  products: string[]
+  totalAmount: number
+  deposit: number
+  status: string
+}): string {
+  const productList = order.products.map(p => `  • ${p}`).join('\n')
+
+  return `
+🛒 NEW ORDER #${order.orderId}
+
+👤 ลูกค้า: ${order.customerName}
+👩‍💼 Sales: ${order.salesName}
+
+📦 บริการ:
+${productList}
+
+💰 ยอดรวม: ฿${order.totalAmount.toLocaleString()}
+💵 มัดจำ: ฿${order.deposit.toLocaleString()}
+📋 สถานะ: ${order.status === 'booking' ? 'Booking' : order.status}
+`
+}
+
+// Format daily report for LINE Notify
+export function formatDailyReportNotifyMessage(report: DailyReportData): string {
+  const dateObj = new Date(report.date)
+  const dateStr = dateObj.toLocaleDateString('th-TH', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+
+  const salesLines = report.salesReports.map(s =>
+    `  ${s.staffName}: ${s.chatCount}แชท → ${s.orderCount}ออเดอร์ (${s.conversionRate.toFixed(0)}%) ฿${(s.bookingAmount/1000).toFixed(0)}k`
+  ).join('\n')
+
+  const serviceLines = report.servicesSold
+    .filter(s => s.count > 0)
+    .map(s => `  ${s.category}: ${s.count} pax (฿${s.amount.toLocaleString()})`)
+    .join('\n')
+
+  return `
+📊 DAILY REPORT
+${dateStr}
+
+📈 สรุปภาพรวม:
+  • New Chat: ${report.totalChats}
+  • Orders: ${report.totalOrders}
+  • CR%: ${report.totalConversionRate.toFixed(0)}%
+
+💰 ยอดขาย:
+  • Booking: ฿${report.totalBookingAmount.toLocaleString()}
+  • รายได้จริง: ฿${report.totalRealIncome.toLocaleString()}
+
+👥 ผลงาน Sales:
+${salesLines || '  ไม่มีข้อมูล'}
+
+💅 บริการที่ขายได้:
+${serviceLines || '  ไม่มีข้อมูล'}
+`
+}
 
 interface LineMessagePayload {
   to: string
@@ -85,6 +191,11 @@ export async function sendLineFlexMessage({
 }: SendLineFlexMessageOptions): Promise<{ success: boolean; error?: string }> {
   const token = accessToken || process.env.LINE_CHANNEL_ACCESS_TOKEN
 
+  console.log('=== sendLineFlexMessage DEBUG ===')
+  console.log('to:', to)
+  console.log('altText:', altText)
+  console.log('token exists:', !!token)
+
   if (!token) {
     console.error('LINE_CHANNEL_ACCESS_TOKEN is not configured')
     return { success: false, error: 'LINE access token not configured' }
@@ -107,6 +218,7 @@ export async function sendLineFlexMessage({
       ],
     }
 
+    console.log('Calling LINE API:', LINE_API_URL)
     const response = await fetch(LINE_API_URL, {
       method: 'POST',
       headers: {
@@ -116,16 +228,19 @@ export async function sendLineFlexMessage({
       body: JSON.stringify(payload),
     })
 
+    console.log('LINE API Response Status:', response.status)
+
     if (!response.ok) {
       const errorData = await response.json()
-      console.error('LINE API Error:', errorData)
-      return { success: false, error: errorData.message || 'Failed to send message' }
+      console.error('LINE API Error Response:', JSON.stringify(errorData))
+      return { success: false, error: errorData.message || `Failed to send message (${response.status})` }
     }
 
+    console.log('LINE API call successful')
     return { success: true }
   } catch (error) {
     console.error('LINE send message error:', error)
-    return { success: false, error: 'Network error' }
+    return { success: false, error: 'Network error: ' + (error instanceof Error ? error.message : String(error)) }
   }
 }
 
