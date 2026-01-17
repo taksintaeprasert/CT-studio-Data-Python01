@@ -78,6 +78,8 @@ interface AlertItem {
   validityMonths?: number
   isFreeOrDiscount: boolean
   appointmentDate?: string
+  remainingBalance?: number
+  totalIncome?: number
 }
 
 // Interface for price range breakdown
@@ -278,7 +280,8 @@ export default function DashboardPage() {
           item_status,
           appointment_date,
           products (product_code, product_name, is_free, validity_months, list_price)
-        )
+        ),
+        payments (amount)
       `)
       .neq('order_status', 'cancelled')
       .order('created_at', { ascending: false })
@@ -338,6 +341,12 @@ export default function DashboardPage() {
             // If appointment date is in the past or today
             if (appointmentDate <= today) {
               const daysSince = Math.floor((today.getTime() - appointmentDate.getTime()) / (1000 * 60 * 60 * 24))
+
+              // Calculate remaining balance
+              const totalIncome = order.total_income || 0
+              const totalPaid = order.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
+              const remainingBalance = totalIncome - totalPaid
+
               alertsList.push({
                 type: 'unpaid_completed',
                 orderId: order.id,
@@ -351,6 +360,8 @@ export default function DashboardPage() {
                 createdAt: order.created_at,
                 isFreeOrDiscount: false,
                 appointmentDate: item.appointment_date,
+                remainingBalance: remainingBalance,
+                totalIncome: totalIncome,
               })
             }
           }
@@ -905,7 +916,12 @@ export default function DashboardPage() {
                           setScheduleTime('')
                           setScheduleArtist('')
                           setNewExpiryMonths('')
-                          setPaymentAmount('')
+                          // Auto-fill remaining balance for unpaid_completed alerts
+                          if (alert.type === 'unpaid_completed' && alert.remainingBalance !== undefined) {
+                            setPaymentAmount(alert.remainingBalance > 0 ? alert.remainingBalance.toString() : '')
+                          } else {
+                            setPaymentAmount('')
+                          }
                           setPaymentMethod('cash')
                         }
                       }}
@@ -1011,10 +1027,25 @@ export default function DashboardPage() {
                           /* Unpaid Completed - Inline Payment Form */
                           <div className="p-3 bg-white dark:bg-gray-700 rounded-lg space-y-3">
                             <p className="font-medium text-gray-800 dark:text-white text-sm">รับชำระเงิน</p>
-                            {alert.appointmentDate && (
-                              <p className="text-sm text-gray-500">
-                                วันนัด: {new Date(alert.appointmentDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
-                              </p>
+                            {/* Order Info */}
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              {alert.appointmentDate && (
+                                <div className="text-gray-500">
+                                  วันนัด: {new Date(alert.appointmentDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </div>
+                              )}
+                              {alert.totalIncome !== undefined && (
+                                <div className="text-gray-500">
+                                  ยอดรวม: <span className="font-medium text-gray-700 dark:text-gray-300">฿{alert.totalIncome.toLocaleString()}</span>
+                                </div>
+                              )}
+                            </div>
+                            {alert.remainingBalance !== undefined && alert.remainingBalance > 0 && (
+                              <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                                <p className="text-sm text-green-700 dark:text-green-400 font-medium">
+                                  ยอดค้างชำระ: ฿{alert.remainingBalance.toLocaleString()}
+                                </p>
+                              </div>
                             )}
                             <div className="grid grid-cols-2 gap-3">
                               <div>
