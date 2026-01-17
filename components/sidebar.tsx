@@ -95,8 +95,9 @@ export default function Sidebar() {
   }
 
   // Filter menu items based on user role
+  // If no user data (not logged in or no staff record), show all items for backwards compatibility
   const filteredMenuItems = menuItems.filter(item => {
-    if (!user) return false
+    if (!user) return true // Show all items if no user context
     if (item.roles === 'all') return true
     return item.roles.includes(user.role)
   })
