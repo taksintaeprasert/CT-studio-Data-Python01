@@ -215,10 +215,17 @@ export default function DashboardPage() {
         return
       }
 
-      // Update order status to paid
+      // Calculate new remaining balance after this payment
+      const totalIncome = alert.totalIncome || 0
+      const previousRemaining = alert.remainingBalance || 0
+      const newRemaining = previousRemaining - amount
+
+      // Only update order status to 'paid' if fully paid (remaining <= 0)
+      // Otherwise keep/set it to 'booking'
+      const newStatus = newRemaining <= 0 ? 'paid' : 'booking'
       const { error: orderError } = await supabase
         .from('orders')
-        .update({ order_status: 'paid' })
+        .update({ order_status: newStatus })
         .eq('id', alert.orderId)
 
       if (orderError) {
@@ -236,7 +243,11 @@ export default function DashboardPage() {
         console.error('Item status update error:', itemError)
       }
 
-      window.alert('รับชำระเรียบร้อย!')
+      if (newRemaining <= 0) {
+        window.alert('รับชำระครบแล้ว! สถานะเปลี่ยนเป็น Paid')
+      } else {
+        window.alert(`รับชำระเรียบร้อย! ยังค้างชำระ ฿${newRemaining.toLocaleString()}`)
+      }
       setPaymentAmount('')
       setPaymentMethod('cash')
       setExpandedAlert(null)
@@ -349,12 +360,12 @@ export default function DashboardPage() {
             })
           }
 
-          // Alert 2: Unpaid completed services
-          // Regular services that have appointment in the past but order not paid
+          // Alert 2: Unpaid/partially paid services
+          // Regular services that have appointment in the past but still have remaining balance
+          // Show regardless of order_status (booking, paid, etc.) - only check if money still owed
           if (
             !isFreeOrDiscount &&
-            item.appointment_date &&
-            order.order_status === 'booking'
+            item.appointment_date
           ) {
             const appointmentDate = new Date(item.appointment_date)
             const today = new Date()
@@ -372,6 +383,8 @@ export default function DashboardPage() {
               // Only show alert if there's still money to collect (remainingBalance > 0)
               // Skip orders that are already fully paid or overpaid
               if (remainingBalance > 0) {
+                // Show warning if marked as "paid" but not fully paid
+                const incorrectStatus = order.order_status === 'paid'
                 alertsList.push({
                   type: 'unpaid_completed',
                   orderId: order.id,
@@ -380,7 +393,9 @@ export default function DashboardPage() {
                   phone: customer?.phone || null,
                   productName: product.product_name,
                   productCode: product.product_code,
-                  message: daysSince === 0 ? 'นัดวันนี้ - รอรับชำระ' : `นัดผ่านมา ${daysSince} วัน - ยังไม่รับชำระ`,
+                  message: incorrectStatus
+                    ? `ยังค้างชำระ ฿${remainingBalance.toLocaleString()} (สถานะผิดพลาด)`
+                    : (daysSince === 0 ? 'นัดวันนี้ - รอรับชำระ' : `นัดผ่านมา ${daysSince} วัน - ค้างชำระ ฿${remainingBalance.toLocaleString()}`),
                   severity: 'danger',
                   createdAt: order.created_at,
                   isFreeOrDiscount: false,
