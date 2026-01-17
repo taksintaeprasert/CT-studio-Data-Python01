@@ -298,26 +298,41 @@ export default function DashboardPage() {
       .order('created_at', { ascending: false })
 
     if (ordersWithItems) {
-      // Auto-fix orders that are fully paid but still have 'booking' status
-      const ordersToFix: number[] = []
+      // Auto-fix order statuses based on payment amounts
+      const ordersToMarkPaid: number[] = []
+      const ordersToMarkBooking: number[] = []
+
       ordersWithItems.forEach((order: any) => {
-        if (order.order_status === 'booking') {
-          const totalIncome = order.total_income || 0
-          const totalPaid = order.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
-          // If fully paid or overpaid, mark for status update
-          if (totalPaid >= totalIncome && totalIncome > 0) {
-            ordersToFix.push(order.id)
-          }
+        const totalIncome = order.total_income || 0
+        const totalPaid = order.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
+
+        // Fix 1: Orders marked as 'booking' but fully paid → change to 'paid'
+        if (order.order_status === 'booking' && totalPaid >= totalIncome && totalIncome > 0) {
+          ordersToMarkPaid.push(order.id)
+        }
+
+        // Fix 2: Orders marked as 'paid' but NOT fully paid → change to 'booking'
+        if (order.order_status === 'paid' && totalPaid < totalIncome && totalIncome > 0) {
+          ordersToMarkBooking.push(order.id)
         }
       })
 
-      // Update overpaid/fully-paid orders to 'paid' status
-      if (ordersToFix.length > 0) {
+      // Update fully-paid orders to 'paid' status
+      if (ordersToMarkPaid.length > 0) {
         await supabase
           .from('orders')
           .update({ order_status: 'paid' })
-          .in('id', ordersToFix)
-        console.log(`Auto-fixed ${ordersToFix.length} orders with booking status that were fully paid`)
+          .in('id', ordersToMarkPaid)
+        console.log(`Auto-fixed ${ordersToMarkPaid.length} orders: booking → paid (fully paid)`)
+      }
+
+      // Update not-fully-paid orders to 'booking' status
+      if (ordersToMarkBooking.length > 0) {
+        await supabase
+          .from('orders')
+          .update({ order_status: 'booking' })
+          .in('id', ordersToMarkBooking)
+        console.log(`Auto-fixed ${ordersToMarkBooking.length} orders: paid → booking (not fully paid)`)
       }
 
       ordersWithItems.forEach((order: any) => {
