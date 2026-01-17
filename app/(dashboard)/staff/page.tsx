@@ -33,9 +33,12 @@ export default function StaffPage() {
   const [activeTab, setActiveTab] = useState<TabType>('sales')
   const [showModal, setShowModal] = useState(false)
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
 
   const [staffName, setStaffName] = useState('')
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [role, setRole] = useState<StaffRole>('sales')
 
   const supabase = createClient()
@@ -56,15 +59,18 @@ export default function StaffPage() {
   }
 
   const openModal = (staff?: Staff) => {
+    setErrorMessage('')
     if (staff) {
       setEditingStaff(staff)
       setStaffName(staff.staff_name)
       setEmail(staff.email)
       setRole(staff.role)
+      setPassword('')
     } else {
       setEditingStaff(null)
       setStaffName('')
       setEmail('')
+      setPassword('')
       setRole('sales')
     }
     setShowModal(true)
@@ -73,30 +79,83 @@ export default function StaffPage() {
   const closeModal = () => {
     setShowModal(false)
     setEditingStaff(null)
+    setErrorMessage('')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!staffName.trim() || !email.trim()) return
 
-    if (editingStaff) {
-      await supabase
-        .from('staff')
-        .update({
+    setSubmitting(true)
+    setErrorMessage('')
+
+    try {
+      if (editingStaff) {
+        // Update existing staff
+        const { error } = await supabase
+          .from('staff')
+          .update({
+            staff_name: staffName.trim(),
+            role,
+          })
+          .eq('id', editingStaff.id)
+
+        if (error) throw error
+      } else {
+        // Creating new staff
+        // If Super Admin and password provided, create auth account
+        if (isSuperAdmin && password.trim()) {
+          // Create auth account
+          const { data: authData, error: authError } = await supabase.auth.signUp({
+            email: email.trim(),
+            password: password.trim(),
+            options: {
+              data: {
+                staff_name: staffName.trim(),
+                role: role,
+              }
+            }
+          })
+
+          if (authError) {
+            // Handle common errors
+            if (authError.message.includes('already registered')) {
+              setErrorMessage('อีเมลนี้ถูกใช้งานแล้ว กรุณาใช้อีเมลอื่น')
+            } else if (authError.message.includes('password')) {
+              setErrorMessage('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร')
+            } else {
+              setErrorMessage(authError.message)
+            }
+            setSubmitting(false)
+            return
+          }
+        }
+
+        // Insert into staff table
+        const { error: staffError } = await supabase.from('staff').insert({
           staff_name: staffName.trim(),
+          email: email.trim(),
           role,
         })
-        .eq('id', editingStaff.id)
-    } else {
-      await supabase.from('staff').insert({
-        staff_name: staffName.trim(),
-        email: email.trim(),
-        role,
-      })
-    }
 
-    closeModal()
-    fetchStaff()
+        if (staffError) {
+          if (staffError.message.includes('duplicate')) {
+            setErrorMessage('อีเมลนี้มีในระบบแล้ว')
+          } else {
+            setErrorMessage(staffError.message)
+          }
+          setSubmitting(false)
+          return
+        }
+      }
+
+      closeModal()
+      fetchStaff()
+    } catch (err: any) {
+      setErrorMessage(err.message || 'เกิดข้อผิดพลาด')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const deleteStaff = async (id: number) => {
@@ -125,7 +184,10 @@ export default function StaffPage() {
   }
 
   // Check if current user can manage staff
-  const canManageStaff = user?.role === 'super_admin' || user?.role === 'admin'
+  const isSuperAdmin = user?.role === 'super_admin'
+  const canManageStaff = isSuperAdmin || user?.role === 'admin'
+  // Only Super Admin can create new accounts with password
+  const canCreateAccounts = isSuperAdmin
 
   if (loading) {
     return (
@@ -143,7 +205,7 @@ export default function StaffPage() {
           <h1 className="text-2xl font-bold text-gray-800 dark:text-white">พนักงาน</h1>
           <p className="text-gray-500 dark:text-gray-400">จัดการข้อมูลพนักงานทั้งหมด ({staffList.length} คน)</p>
         </div>
-        {canManageStaff && (
+        {canCreateAccounts && (
           <button onClick={() => openModal()} className="btn btn-primary">
             + เพิ่มพนักงาน
           </button>
@@ -271,6 +333,14 @@ export default function StaffPage() {
             <h3 className="text-lg font-bold text-gray-800 dark:text-white">
               {editingStaff ? 'แก้ไขพนักงาน' : 'เพิ่มพนักงานใหม่'}
             </h3>
+
+            {/* Error Message */}
+            {errorMessage && (
+              <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+                <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -282,6 +352,7 @@ export default function StaffPage() {
                   onChange={(e) => setStaffName(e.target.value)}
                   className="input"
                   required
+                  disabled={submitting}
                 />
               </div>
               <div>
@@ -293,13 +364,36 @@ export default function StaffPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="input"
-                  disabled={!!editingStaff}
+                  disabled={!!editingStaff || submitting}
                   required
                 />
                 {editingStaff && (
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">ไม่สามารถแก้ไขอีเมลได้</p>
                 )}
               </div>
+
+              {/* Password field - only for new staff and Super Admin */}
+              {!editingStaff && canCreateAccounts && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    รหัสผ่าน <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="input"
+                    placeholder="อย่างน้อย 6 ตัวอักษร"
+                    minLength={6}
+                    required
+                    disabled={submitting}
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    สร้าง account สำหรับเข้าสู่ระบบ
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   ตำแหน่ง <span className="text-red-500">*</span>
@@ -309,8 +403,9 @@ export default function StaffPage() {
                   onChange={(e) => setRole(e.target.value as StaffRole)}
                   className="select"
                   required
+                  disabled={submitting}
                 >
-                  {user?.role === 'super_admin' && (
+                  {isSuperAdmin && (
                     <option value="super_admin">Super Admin</option>
                   )}
                   <option value="admin">Admin</option>
@@ -320,11 +415,20 @@ export default function StaffPage() {
                 </select>
               </div>
               <div className="flex gap-2 pt-2">
-                <button type="button" onClick={closeModal} className="btn btn-secondary flex-1">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="btn btn-secondary flex-1"
+                  disabled={submitting}
+                >
                   ยกเลิก
                 </button>
-                <button type="submit" className="btn btn-primary flex-1">
-                  บันทึก
+                <button
+                  type="submit"
+                  className="btn btn-primary flex-1"
+                  disabled={submitting}
+                >
+                  {submitting ? 'กำลังบันทึก...' : 'บันทึก'}
                 </button>
               </div>
             </form>
