@@ -28,11 +28,14 @@ interface OrderItem {
   appointment_time: string | null
   item_status: 'pending' | 'scheduled' | 'completed' | 'cancelled'
   artist_id: number | null
+  item_price: number | null
   artist: { staff_name: string } | null
   product: {
     product_name: string
     product_code: string
     is_free: boolean
+    validity_months: number | null
+    list_price: number | null
   }
 }
 
@@ -62,6 +65,13 @@ export default function AppointmentPage() {
   // Appointment date range filter
   const [appointmentStartDate, setAppointmentStartDate] = useState('')
   const [appointmentEndDate, setAppointmentEndDate] = useState('')
+
+  // Checkbox filters
+  const [filterCompleted, setFilterCompleted] = useState(false)
+  const [filterUnpaid, setFilterUnpaid] = useState(false)
+  const [filterExpiringSoon, setFilterExpiringSoon] = useState(false)
+  const [filterHalfPrice, setFilterHalfPrice] = useState(false)
+  const [filterFree, setFilterFree] = useState(false)
 
   // Selected order for detail view
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
@@ -176,7 +186,7 @@ export default function AppointmentPage() {
         order_items(
           *,
           artist:staff!order_items_artist_id_fkey(staff_name),
-          product:products(product_name, product_code, is_free)
+          product:products(product_name, product_code, is_free, validity_months, list_price)
         )
       `)
       .gte('created_at', `${startDate}T00:00:00`)
@@ -202,7 +212,7 @@ export default function AppointmentPage() {
         order_items(
           *,
           artist:staff!order_items_artist_id_fkey(staff_name),
-          product:products(product_name, product_code, is_free)
+          product:products(product_name, product_code, is_free, validity_months, list_price)
         )
       `)
       .order('created_at', { ascending: false })
@@ -230,7 +240,7 @@ export default function AppointmentPage() {
         order_items(
           *,
           artist:staff!order_items_artist_id_fkey(staff_name),
-          product:products(product_name, product_code, is_free)
+          product:products(product_name, product_code, is_free, validity_months, list_price)
         )
       `)
       .or(`full_name.ilike.%${searchQuery.trim()}%,phone.ilike.%${searchQuery.trim()}%`, { foreignTable: 'customers' })
@@ -258,7 +268,7 @@ export default function AppointmentPage() {
           order_items(
             *,
             artist:staff!order_items_artist_id_fkey(staff_name),
-            product:products(product_name, product_code, is_free)
+            product:products(product_name, product_code, is_free, validity_months, list_price)
           )
         `)
         .eq('id', selectedOrder.id)
@@ -486,7 +496,7 @@ export default function AppointmentPage() {
         order_items(
           *,
           artist:staff!order_items_artist_id_fkey(staff_name),
-          product:products(product_name, product_code, is_free)
+          product:products(product_name, product_code, is_free, validity_months, list_price)
         )
       `)
       .eq('id', orderId)
@@ -505,12 +515,67 @@ export default function AppointmentPage() {
     })
   }
 
-  // Filter orders based on appointment date range
+  // Helper: Check if order has any completed service
+  const hasCompletedService = (order: Order) => {
+    return order.order_items.some(item =>
+      (item.item_status || '').toString().toLowerCase() === 'completed'
+    )
+  }
+
+  // Helper: Check if order has remaining balance (unpaid)
+  const hasRemainingBalance = (order: Order) => {
+    return order.total_income - order.deposit > 0
+  }
+
+  // Helper: Check if order has service expiring within 2 months
+  const hasExpiringSoon = (order: Order) => {
+    const twoMonthsFromNow = new Date()
+    twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2)
+
+    return order.order_items.some(item => {
+      if (!item.appointment_date || !item.product?.validity_months) return false
+      // Calculate expiry date from appointment date + validity months
+      const appointmentDate = new Date(item.appointment_date)
+      const expiryDate = new Date(appointmentDate)
+      expiryDate.setMonth(expiryDate.getMonth() + item.product.validity_months)
+      // Check if expiry is within 2 months
+      const now = new Date()
+      return expiryDate > now && expiryDate <= twoMonthsFromNow
+    })
+  }
+
+  // Helper: Check if order has 50% discount service
+  const hasHalfPriceService = (order: Order) => {
+    return order.order_items.some(item => {
+      if (!item.item_price || !item.product?.list_price) return false
+      // Check if item_price is roughly 50% of list_price (with 5% tolerance)
+      const expectedHalfPrice = item.product.list_price * 0.5
+      const tolerance = item.product.list_price * 0.05
+      return item.item_price >= expectedHalfPrice - tolerance && item.item_price <= expectedHalfPrice + tolerance
+    })
+  }
+
+  // Helper: Check if order has FREE service
+  const hasFreeService = (order: Order) => {
+    return order.order_items.some(item => item.product?.is_free)
+  }
+
+  // Filter orders based on all filters
   const filteredOrders = orders.filter(order => {
-    // If appointment date range is set
+    // Appointment date range filter
     if (appointmentStartDate && appointmentEndDate) {
-      return hasAppointmentInRange(order, appointmentStartDate, appointmentEndDate)
+      if (!hasAppointmentInRange(order, appointmentStartDate, appointmentEndDate)) {
+        return false
+      }
     }
+
+    // Checkbox filters (if checked, order must match)
+    if (filterCompleted && !hasCompletedService(order)) return false
+    if (filterUnpaid && !hasRemainingBalance(order)) return false
+    if (filterExpiringSoon && !hasExpiringSoon(order)) return false
+    if (filterHalfPrice && !hasHalfPriceService(order)) return false
+    if (filterFree && !hasFreeService(order)) return false
+
     return true
   })
 
@@ -608,6 +673,64 @@ export default function AppointmentPage() {
                 พบ {filteredOrders.length} ออเดอร์ (นัด {new Date(appointmentStartDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} - {new Date(appointmentEndDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })})
               </span>
             )}
+          </div>
+        </div>
+
+        {/* Checkbox Filters */}
+        <div>
+          <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+            ตัวกรองเพิ่มเติม
+          </label>
+          <div className="flex flex-wrap gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filterCompleted}
+                onChange={(e) => setFilterCompleted(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-green-500 focus:ring-green-500"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">บริการ Completed</span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filterUnpaid}
+                onChange={(e) => setFilterUnpaid(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">มีค้างชำระ</span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filterExpiringSoon}
+                onChange={(e) => setFilterExpiringSoon(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-red-500 focus:ring-red-500"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">ใกล้หมดอายุ (2 เดือน)</span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filterHalfPrice}
+                onChange={(e) => setFilterHalfPrice(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">บริการ 50%</span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filterFree}
+                onChange={(e) => setFilterFree(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-purple-500 focus:ring-purple-500"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">บริการ FREE</span>
+            </label>
           </div>
         </div>
       </div>
