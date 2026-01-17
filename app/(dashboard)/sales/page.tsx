@@ -14,10 +14,14 @@ import {
   Title,
   Tooltip,
   Legend,
+  ArcElement,
+  PointElement,
+  LineElement,
+  Filler,
 } from 'chart.js'
-import { Bar } from 'react-chartjs-2'
+import { Pie, Line } from 'react-chartjs-2'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement, PointElement, LineElement, Filler)
 
 interface Staff {
   id: number
@@ -40,6 +44,12 @@ interface ChatCount {
   chat_count: number
 }
 
+interface DailyData {
+  date: string
+  booking: number
+  income: number
+}
+
 export default function SalesPerformancePage() {
   const [allStaff, setAllStaff] = useState<Staff[]>([])
   const [salesData, setSalesData] = useState<SalesData[]>([])
@@ -59,6 +69,9 @@ export default function SalesPerformancePage() {
   const [showReportModal, setShowReportModal] = useState(false)
   const [reportDate, setReportDate] = useState('')
 
+  // Daily booking/income data for line charts
+  const [dailyData, setDailyData] = useState<DailyData[]>([])
+
   const { t } = useLanguage()
   const supabase = createClient()
 
@@ -74,6 +87,7 @@ export default function SalesPerformancePage() {
   useEffect(() => {
     if (startDate && endDate) {
       fetchSalesData()
+      fetchDailyData()
     }
   }, [startDate, endDate, selectedStaffId])
 
@@ -170,6 +184,67 @@ export default function SalesPerformancePage() {
     setLoading(false)
   }
 
+  // Fetch daily booking/income data for line charts
+  const fetchDailyData = async () => {
+    if (!startDate || !endDate) return
+
+    // Get all orders within date range with payments
+    const { data: orders } = await supabase
+      .from('orders')
+      .select('id, created_at, total_income, sales_id')
+      .gte('created_at', `${startDate}T00:00:00`)
+      .lte('created_at', `${endDate}T23:59:59`)
+
+    // Get payments within date range
+    const { data: payments } = await supabase
+      .from('payments')
+      .select('order_id, amount, created_at')
+      .gte('created_at', `${startDate}T00:00:00`)
+      .lte('created_at', `${endDate}T23:59:59`)
+
+    // Filter by staff if selected
+    const filteredOrders = selectedStaffId
+      ? orders?.filter(o => o.sales_id === parseInt(selectedStaffId))
+      : orders
+
+    // Group by date
+    const dailyMap: Record<string, { booking: number; income: number }> = {}
+
+    // Generate all dates in range
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0]
+      dailyMap[dateStr] = { booking: 0, income: 0 }
+    }
+
+    // Sum booking (total_income from orders) by date
+    filteredOrders?.forEach(order => {
+      const dateStr = order.created_at.split('T')[0]
+      if (dailyMap[dateStr]) {
+        dailyMap[dateStr].booking += order.total_income || 0
+      }
+    })
+
+    // Sum income (payments) by date - filter by order if staff selected
+    const orderIds = filteredOrders?.map(o => o.id) || []
+    payments?.forEach(payment => {
+      if (!selectedStaffId || orderIds.includes(payment.order_id)) {
+        const dateStr = payment.created_at.split('T')[0]
+        if (dailyMap[dateStr]) {
+          dailyMap[dateStr].income += payment.amount || 0
+        }
+      }
+    })
+
+    // Convert to array and sort by date
+    const daily = Object.entries(dailyMap)
+      .map(([date, data]) => ({ date, ...data }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+
+    setDailyData(daily)
+  }
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('th-TH', {
       style: 'currency',
@@ -178,39 +253,93 @@ export default function SalesPerformancePage() {
     }).format(amount)
   }
 
-  // Chart data
-  const chartData = {
+  // Pie chart colors
+  const pieColors = [
+    'rgba(236, 72, 153, 0.8)',  // pink
+    'rgba(59, 130, 246, 0.8)',   // blue
+    'rgba(34, 197, 94, 0.8)',    // green
+    'rgba(249, 115, 22, 0.8)',   // orange
+    'rgba(139, 92, 246, 0.8)',   // purple
+    'rgba(236, 201, 75, 0.8)',   // yellow
+    'rgba(20, 184, 166, 0.8)',   // teal
+    'rgba(239, 68, 68, 0.8)',    // red
+  ]
+
+  // Pie Chart - Booking by Staff
+  const bookingPieData = {
     labels: salesData.map(s => s.staff_name),
     datasets: [
       {
-        label: 'Total Sales (฿)',
         data: salesData.map(s => s.totalSales),
-        backgroundColor: 'rgba(236, 72, 153, 0.8)',
-        borderRadius: 8,
+        backgroundColor: pieColors.slice(0, salesData.length),
+        borderWidth: 2,
+        borderColor: '#fff',
       },
     ],
   }
 
-  const orderChartData = {
+  // Pie Chart - Orders by Staff
+  const ordersPieData = {
     labels: salesData.map(s => s.staff_name),
     datasets: [
       {
-        label: 'Total Orders',
         data: salesData.map(s => s.orderCount),
-        backgroundColor: 'rgba(59, 130, 246, 0.8)',
-        borderRadius: 8,
+        backgroundColor: pieColors.slice(0, salesData.length),
+        borderWidth: 2,
+        borderColor: '#fff',
       },
     ],
   }
 
-  const conversionChartData = {
+  // Line Chart - Booking over time
+  const bookingLineData = {
+    labels: dailyData.map(d => {
+      const date = new Date(d.date)
+      return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
+    }),
+    datasets: [
+      {
+        label: 'Booking (฿)',
+        data: dailyData.map(d => d.booking),
+        borderColor: 'rgba(236, 72, 153, 1)',
+        backgroundColor: 'rgba(236, 72, 153, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      },
+    ],
+  }
+
+  // Line Chart - Income over time
+  const incomeLineData = {
+    labels: dailyData.map(d => {
+      const date = new Date(d.date)
+      return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
+    }),
+    datasets: [
+      {
+        label: 'Income (฿)',
+        data: dailyData.map(d => d.income),
+        borderColor: 'rgba(34, 197, 94, 1)',
+        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      },
+    ],
+  }
+
+  // Pie Chart - Income by Staff (using payments)
+  const incomePieData = {
     labels: salesData.map(s => s.staff_name),
     datasets: [
       {
-        label: 'Conversion Rate (%)',
-        data: salesData.map(s => s.chatCount > 0 ? (s.orderCount / s.chatCount) * 100 : 0),
-        backgroundColor: 'rgba(34, 197, 94, 0.8)',
-        borderRadius: 8,
+        data: salesData.map(s => s.totalSales), // We'll improve this with actual income data
+        backgroundColor: pieColors.slice(0, salesData.length),
+        borderWidth: 2,
+        borderColor: '#fff',
       },
     ],
   }
@@ -346,17 +475,51 @@ export default function SalesPerformancePage() {
     }
   }
 
-  const chartOptions = {
+  const pieChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'right' as const,
+        labels: {
+          boxWidth: 12,
+          padding: 10,
+        },
+      },
+      tooltip: {
+        callbacks: {
+          label: (context: any) => {
+            const value = context.raw as number
+            const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
+            const percentage = ((value / total) * 100).toFixed(1)
+            return `${context.label}: ${formatCurrency(value)} (${percentage}%)`
+          },
+        },
+      },
+    },
+  }
+
+  const lineChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: {
         position: 'top' as const,
       },
+      tooltip: {
+        callbacks: {
+          label: (context: any) => {
+            return `${context.dataset.label}: ${formatCurrency(context.raw)}`
+          },
+        },
+      },
     },
     scales: {
       y: {
         beginAtZero: true,
+        ticks: {
+          callback: (value: any) => formatCurrency(value),
+        },
       },
     },
   }
@@ -449,47 +612,121 @@ export default function SalesPerformancePage() {
             </div>
           </div>
 
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Sales Chart */}
-            <div className="card">
-              <h3 className="font-bold text-gray-800 dark:text-white mb-4">{t('sales.salesByStaff')}</h3>
-              <div className="h-64">
-                {salesData.length > 0 ? (
-                  <Bar data={chartData} options={chartOptions} />
-                ) : (
-                  <div className="flex items-center justify-center h-full text-gray-400">
-                    {t('sales.noData')}
-                  </div>
-                )}
+          {/* Booking Section */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+              📊 Booking (ยอดขาย)
+            </h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Booking Pie Chart */}
+              <div className="card">
+                <h3 className="font-bold text-gray-800 dark:text-white mb-4">Booking ตาม Staff</h3>
+                <div className="h-64">
+                  {salesData.length > 0 ? (
+                    <Pie data={bookingPieData} options={pieChartOptions} />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-400">
+                      {t('sales.noData')}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Booking Line Chart */}
+              <div className="card">
+                <h3 className="font-bold text-gray-800 dark:text-white mb-4">Booking ตามเวลา</h3>
+                <div className="h-64">
+                  {dailyData.length > 0 ? (
+                    <Line data={bookingLineData} options={lineChartOptions} />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-400">
+                      {t('sales.noData')}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
+          </div>
 
-            {/* Orders Chart */}
-            <div className="card">
-              <h3 className="font-bold text-gray-800 dark:text-white mb-4">{t('sales.ordersByStaff')}</h3>
-              <div className="h-64">
-                {salesData.length > 0 ? (
-                  <Bar data={orderChartData} options={chartOptions} />
-                ) : (
-                  <div className="flex items-center justify-center h-full text-gray-400">
-                    {t('sales.noData')}
-                  </div>
-                )}
+          {/* Income Section */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+              💰 Income (รายได้จริง)
+            </h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Income Pie Chart */}
+              <div className="card">
+                <h3 className="font-bold text-gray-800 dark:text-white mb-4">Income ตาม Staff</h3>
+                <div className="h-64">
+                  {salesData.length > 0 ? (
+                    <Pie data={incomePieData} options={pieChartOptions} />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-400">
+                      {t('sales.noData')}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Income Line Chart */}
+              <div className="card">
+                <h3 className="font-bold text-gray-800 dark:text-white mb-4">Income ตามเวลา</h3>
+                <div className="h-64">
+                  {dailyData.length > 0 ? (
+                    <Line data={incomeLineData} options={lineChartOptions} />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-400">
+                      {t('sales.noData')}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
+          </div>
 
-            {/* Conversion Rate Chart */}
-            <div className="card lg:col-span-2">
-              <h3 className="font-bold text-gray-800 dark:text-white mb-4">Conversion Rate ตาม Staff</h3>
-              <div className="h-64">
-                {salesData.length > 0 ? (
-                  <Bar data={conversionChartData} options={chartOptions} />
-                ) : (
-                  <div className="flex items-center justify-center h-full text-gray-400">
-                    {t('sales.noData')}
+          {/* Orders Section */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+              📦 Orders (จำนวน Order)
+            </h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Orders Pie Chart */}
+              <div className="card">
+                <h3 className="font-bold text-gray-800 dark:text-white mb-4">Orders ตาม Staff</h3>
+                <div className="h-64">
+                  {salesData.length > 0 ? (
+                    <Pie data={ordersPieData} options={pieChartOptions} />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-400">
+                      {t('sales.noData')}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Summary Card */}
+              <div className="card">
+                <h3 className="font-bold text-gray-800 dark:text-white mb-4">สรุปยอดรวม</h3>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center p-3 bg-pink-50 dark:bg-pink-900/20 rounded-lg">
+                    <span className="text-gray-600 dark:text-gray-300">Total Booking</span>
+                    <span className="text-xl font-bold text-pink-600">
+                      {formatCurrency(dailyData.reduce((sum, d) => sum + d.booking, 0))}
+                    </span>
                   </div>
-                )}
+                  <div className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <span className="text-gray-600 dark:text-gray-300">Total Income</span>
+                    <span className="text-xl font-bold text-green-600">
+                      {formatCurrency(dailyData.reduce((sum, d) => sum + d.income, 0))}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <span className="text-gray-600 dark:text-gray-300">Total Orders</span>
+                    <span className="text-xl font-bold text-blue-600">
+                      {salesData.reduce((sum, s) => sum + s.orderCount, 0)}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
