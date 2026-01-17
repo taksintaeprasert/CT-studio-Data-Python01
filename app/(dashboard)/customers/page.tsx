@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import CustomerHistoryModal from '@/components/customer-history-modal'
 
 interface Customer {
   id: number
@@ -22,6 +23,7 @@ export default function CustomersPage() {
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
+  const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null)
 
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
@@ -214,6 +216,12 @@ export default function CustomersPage() {
                   <td>
                     <div className="flex gap-2">
                       <button
+                        onClick={() => setHistoryCustomer(customer)}
+                        className="text-green-500 hover:text-green-600 font-medium"
+                      >
+                        ประวัติ
+                      </button>
+                      <button
                         onClick={() => openModal(customer)}
                         className="text-blue-500 hover:text-blue-600 font-medium"
                       >
@@ -347,6 +355,15 @@ export default function CustomersPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Customer History Modal */}
+      {historyCustomer && (
+        <CustomerHistoryModal
+          customerId={historyCustomer.id}
+          customerName={historyCustomer.full_name}
+          onClose={() => setHistoryCustomer(null)}
+        />
       )}
     </div>
   )
