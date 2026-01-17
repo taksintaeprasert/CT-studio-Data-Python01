@@ -404,16 +404,25 @@ export default function AppointmentPage() {
     await refreshOrders()
   }
 
-  const getOrderStatusConfig = (status: Order['order_status']) => {
+  // Compute order status based on service completion
+  // Done = ALL services are completed, Ongoing = otherwise
+  const getComputedStatus = (order: Order): 'done' | 'ongoing' => {
+    const items = order.order_items || []
+    if (items.length === 0) return 'ongoing'
+
+    const allCompleted = items.every(item =>
+      (item.item_status || '').toString().toLowerCase() === 'completed'
+    )
+    return allCompleted ? 'done' : 'ongoing'
+  }
+
+  const getOrderStatusConfig = (order: Order) => {
+    const status = getComputedStatus(order)
     switch (status) {
-      case 'booking':
-        return { label: 'Booking', bg: 'bg-yellow-500', text: 'text-white' }
-      case 'paid':
-        return { label: 'Paid', bg: 'bg-green-500', text: 'text-white' }
+      case 'ongoing':
+        return { label: 'Ongoing', bg: 'bg-yellow-500', text: 'text-white' }
       case 'done':
-        return { label: 'Completed', bg: 'bg-blue-500', text: 'text-white' }
-      case 'cancelled':
-        return { label: 'Cancelled', bg: 'bg-red-500', text: 'text-white' }
+        return { label: 'Done', bg: 'bg-green-500', text: 'text-white' }
     }
   }
 
@@ -464,6 +473,28 @@ export default function AppointmentPage() {
     const month = String(today.getMonth() + 1).padStart(2, '0')
     const day = String(today.getDate()).padStart(2, '0')
     return `${year}-${month}-${day}`
+  }
+
+  // Select order and fetch fresh data from database
+  const selectOrder = async (orderId: number) => {
+    const { data: freshOrder } = await supabase
+      .from('orders')
+      .select(`
+        *,
+        customers (*),
+        sales:staff!orders_sales_id_fkey(staff_name),
+        order_items(
+          *,
+          artist:staff!order_items_artist_id_fkey(staff_name),
+          product:products(product_name, product_code, is_free)
+        )
+      `)
+      .eq('id', orderId)
+      .single()
+
+    if (freshOrder) {
+      setSelectedOrder(freshOrder)
+    }
   }
 
   // Check if order has appointment within date range
@@ -602,7 +633,7 @@ export default function AppointmentPage() {
             ) : (
               <div className="space-y-2 max-h-[calc(100vh-400px)] overflow-y-auto">
                 {filteredOrders.map(order => {
-                  const statusConfig = getOrderStatusConfig(order.order_status)
+                  const statusConfig = getOrderStatusConfig(order)
                   const isSelected = selectedOrder?.id === order.id
                   const remaining = order.total_income - order.deposit
                   const hasPaidUnscheduled = hasUnscheduledPaidService(order)
@@ -610,7 +641,7 @@ export default function AppointmentPage() {
                   return (
                     <button
                       key={order.id}
-                      onClick={() => setSelectedOrder(order)}
+                      onClick={() => selectOrder(order.id)}
                       className={`w-full text-left card p-4 transition-all relative ${
                         isSelected
                           ? 'ring-2 ring-pink-500 bg-pink-50 dark:bg-pink-900/20'
@@ -685,8 +716,8 @@ export default function AppointmentPage() {
                       )}
                     </p>
                   </div>
-                  <div className={`px-4 py-2 rounded-xl text-lg font-bold ${getOrderStatusConfig(selectedOrder.order_status).bg} ${getOrderStatusConfig(selectedOrder.order_status).text}`}>
-                    {getOrderStatusConfig(selectedOrder.order_status).label}
+                  <div className={`px-4 py-2 rounded-xl text-lg font-bold ${getOrderStatusConfig(selectedOrder)?.bg} ${getOrderStatusConfig(selectedOrder)?.text}`}>
+                    {getOrderStatusConfig(selectedOrder)?.label}
                   </div>
                 </div>
 
@@ -847,8 +878,8 @@ export default function AppointmentPage() {
                   )}
                   <p className="text-xs text-gray-400 mt-1">{formatDateTime(selectedOrder.created_at)}</p>
                 </div>
-                <div className={`px-3 py-1.5 rounded-xl text-sm font-bold ${getOrderStatusConfig(selectedOrder.order_status).bg} ${getOrderStatusConfig(selectedOrder.order_status).text}`}>
-                  {getOrderStatusConfig(selectedOrder.order_status).label}
+                <div className={`px-3 py-1.5 rounded-xl text-sm font-bold ${getOrderStatusConfig(selectedOrder)?.bg} ${getOrderStatusConfig(selectedOrder)?.text}`}>
+                  {getOrderStatusConfig(selectedOrder)?.label}
                 </div>
               </div>
 
