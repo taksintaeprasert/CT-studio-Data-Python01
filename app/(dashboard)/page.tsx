@@ -274,10 +274,11 @@ export default function DashboardPage() {
 
   // Fetch alerts - unscheduled services and expiring services
   const fetchAlerts = async () => {
+    console.log('=== fetchAlerts started ===')
     setAlertsLoading(true)
     const alertsList: AlertItem[] = []
 
-    const { data: ordersWithItems } = await supabase
+    const { data: ordersWithItems, error: fetchError } = await supabase
       .from('orders')
       .select(`
         id,
@@ -296,6 +297,11 @@ export default function DashboardPage() {
       `)
       .neq('order_status', 'cancelled')
       .order('created_at', { ascending: false })
+
+    console.log('=== Orders fetched ===', {
+      count: ordersWithItems?.length || 0,
+      error: fetchError?.message || null
+    })
 
     if (ordersWithItems) {
       // Auto-fix order statuses based on payment amounts
