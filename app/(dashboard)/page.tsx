@@ -335,9 +335,56 @@ export default function DashboardPage() {
         console.log(`Auto-fixed ${ordersToMarkBooking.length} orders: paid → booking (not fully paid)`)
       }
 
+      // Track which orders already have unpaid_completed alert (to avoid duplicates)
+      const ordersWithUnpaidAlert = new Set<number>()
+
       ordersWithItems.forEach((order: any) => {
         const customer = order.customers as { full_name: string; phone: string | null } | null
 
+        // Calculate remaining balance at ORDER level first
+        const totalIncome = order.total_income || 0
+        const totalPaid = order.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
+        const remainingBalance = totalIncome - totalPaid
+
+        // Alert 2: Order has remaining balance AND has at least one completed service
+        // Check this FIRST at order level to avoid duplicates
+        if (remainingBalance > 0 && !ordersWithUnpaidAlert.has(order.id)) {
+          // Check if ANY item in this order is completed
+          const hasCompletedService = order.order_items?.some((item: any) => {
+            const status = (item.item_status || '').toLowerCase()
+            return status === 'completed'
+          })
+
+          if (hasCompletedService) {
+            // Find the completed service to show in alert
+            const completedItem = order.order_items?.find((item: any) => {
+              const status = (item.item_status || '').toLowerCase()
+              return status === 'completed'
+            })
+            const product = completedItem?.products
+
+            alertsList.push({
+              type: 'unpaid_completed',
+              orderId: order.id,
+              orderItemId: completedItem?.id || 0,
+              customerName: customer?.full_name || '-',
+              phone: customer?.phone || null,
+              productName: product?.product_name || '-',
+              productCode: product?.product_code || '-',
+              message: `บริการเสร็จแล้ว - ค้างชำระ ฿${remainingBalance.toLocaleString()}`,
+              severity: 'danger',
+              createdAt: order.created_at,
+              isFreeOrDiscount: false,
+              appointmentDate: completedItem?.appointment_date,
+              remainingBalance: remainingBalance,
+              totalIncome: totalIncome,
+            })
+
+            ordersWithUnpaidAlert.add(order.id)
+          }
+        }
+
+        // Process each item for other alerts
         order.order_items?.forEach((item: any) => {
           const product = item.products
           if (!product) return
@@ -374,62 +421,6 @@ export default function DashboardPage() {
               createdAt: order.created_at,
               isFreeOrDiscount: false,
             })
-          }
-
-          // Alert 2: Unpaid/partially paid services
-          // Show alert for ANY service (including upsell, free products) where:
-          // - Service has appointment in the past OR item_status is 'completed'
-          // - Order still has remaining balance > 0
-          // Note: We check ALL services because remaining balance is at ORDER level
-          if (item.appointment_date || itemStatus === 'completed') {
-            const appointmentDate = item.appointment_date ? new Date(item.appointment_date) : null
-            const today = new Date()
-            today.setHours(0, 0, 0, 0)
-
-            // Check if appointment is in the past/today OR item is already completed
-            const isPastAppointment = appointmentDate ? appointmentDate <= today : false
-            const isCompleted = itemStatus === 'completed'
-
-            // Show alert if appointment passed OR service is completed
-            if (isPastAppointment || isCompleted) {
-              // Calculate remaining balance
-              const totalIncome = order.total_income || 0
-              const totalPaid = order.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
-              const remainingBalance = totalIncome - totalPaid
-
-              // Only show alert if there's still money to collect (remainingBalance > 0)
-              if (remainingBalance > 0) {
-                const incorrectStatus = order.order_status === 'paid'
-                let message = ''
-
-                if (isCompleted) {
-                  // Service is completed but not fully paid
-                  message = `บริการเสร็จแล้ว - ค้างชำระ ฿${remainingBalance.toLocaleString()}`
-                } else if (incorrectStatus) {
-                  message = `ยังค้างชำระ ฿${remainingBalance.toLocaleString()} (สถานะผิดพลาด)`
-                } else {
-                  const daysSince = Math.floor((today.getTime() - appointmentDate.getTime()) / (1000 * 60 * 60 * 24))
-                  message = daysSince === 0 ? 'นัดวันนี้ - รอรับชำระ' : `นัดผ่านมา ${daysSince} วัน - ค้างชำระ ฿${remainingBalance.toLocaleString()}`
-                }
-
-                alertsList.push({
-                  type: 'unpaid_completed',
-                  orderId: order.id,
-                  orderItemId: item.id,
-                  customerName: customer?.full_name || '-',
-                  phone: customer?.phone || null,
-                  productName: product.product_name,
-                  productCode: product.product_code,
-                  message: message,
-                  severity: 'danger',
-                  createdAt: order.created_at,
-                  isFreeOrDiscount: false,
-                  appointmentDate: item.appointment_date,
-                  remainingBalance: remainingBalance,
-                  totalIncome: totalIncome,
-                })
-              }
-            }
           }
 
           // Alert 3: FREE/50% services expiring within 14 days (2 weeks)
