@@ -343,6 +343,8 @@ export default function DashboardPage() {
 
       // Track which orders already have unpaid_completed alert (to avoid duplicates)
       const ordersWithUnpaidAlert = new Set<number>()
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
 
       ordersWithItems.forEach((order: any) => {
         const customer = order.customers as { full_name: string; phone: string | null } | null
@@ -352,34 +354,44 @@ export default function DashboardPage() {
         const totalPaid = order.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
         const remainingBalance = totalIncome - totalPaid
 
-        // Alert 2: ANY Order with remaining balance > 0
-        // Show alert for all unpaid orders regardless of service status
+        // Alert 2: Order with remaining balance AND at least one service that should be done
+        // (either item_status is 'completed' OR appointment_date has passed)
         if (remainingBalance > 0 && !ordersWithUnpaidAlert.has(order.id)) {
-          // Find any scheduled service first, fallback to first item
-          const serviceItem = order.order_items?.find((item: any) =>
-            item.item_status === 'scheduled'
-          ) || order.order_items?.[0]
-
-          const product = serviceItem?.products
-
-          alertsList.push({
-            type: 'unpaid_completed',
-            orderId: order.id,
-            orderItemId: serviceItem?.id || 0,
-            customerName: customer?.full_name || '-',
-            phone: customer?.phone || null,
-            productName: product?.product_name || '-',
-            productCode: product?.product_code || '-',
-            message: `ค้างชำระ ฿${remainingBalance.toLocaleString()}`,
-            severity: 'danger',
-            createdAt: order.created_at,
-            isFreeOrDiscount: false,
-            appointmentDate: serviceItem?.appointment_date,
-            remainingBalance: remainingBalance,
-            totalIncome: totalIncome,
+          // Find service that has been done (completed OR past appointment)
+          const doneService = order.order_items?.find((item: any) => {
+            const status = (item.item_status || '').toString().toLowerCase()
+            // Check if status is completed
+            if (status === 'completed') return true
+            // Check if appointment date has passed (service should be done)
+            if (item.appointment_date) {
+              const appointmentDate = new Date(item.appointment_date)
+              return appointmentDate <= today
+            }
+            return false
           })
 
-          ordersWithUnpaidAlert.add(order.id)
+          if (doneService) {
+            const product = doneService?.products
+
+            alertsList.push({
+              type: 'unpaid_completed',
+              orderId: order.id,
+              orderItemId: doneService?.id || 0,
+              customerName: customer?.full_name || '-',
+              phone: customer?.phone || null,
+              productName: product?.product_name || '-',
+              productCode: product?.product_code || '-',
+              message: `ค้างชำระ ฿${remainingBalance.toLocaleString()}`,
+              severity: 'danger',
+              createdAt: order.created_at,
+              isFreeOrDiscount: false,
+              appointmentDate: doneService?.appointment_date,
+              remainingBalance: remainingBalance,
+              totalIncome: totalIncome,
+            })
+
+            ordersWithUnpaidAlert.add(order.id)
+          }
         }
 
         // Process each item for other alerts
