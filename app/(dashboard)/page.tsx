@@ -376,22 +376,11 @@ export default function DashboardPage() {
           }
 
           // Alert 2: Unpaid/partially paid services
-          // Regular services that:
-          // - Have appointment in the past OR item_status is 'completed'
-          // - Still have remaining balance
-          // Note: For unpaid alerts, only exclude TRUE free services (is_free OR explicitly FREE/50%)
-          // Don't exclude regular services that have validity_months
-          const isTrulyFreeService =
-            product.is_free ||
-            productCode.includes('FREE') ||
-            productCode.includes('50%') ||
-            productName.includes('FREE') ||
-            productName.includes('50%')
-
-          if (
-            !isTrulyFreeService &&
-            (item.appointment_date || item.item_status === 'completed')
-          ) {
+          // Show alert for ANY service (including upsell, free products) where:
+          // - Service has appointment in the past OR item_status is 'completed'
+          // - Order still has remaining balance > 0
+          // Note: We check ALL services because remaining balance is at ORDER level
+          if (item.appointment_date || item.item_status === 'completed') {
             const appointmentDate = item.appointment_date ? new Date(item.appointment_date) : null
             const today = new Date()
             today.setHours(0, 0, 0, 0)
