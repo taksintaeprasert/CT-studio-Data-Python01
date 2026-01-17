@@ -63,7 +63,7 @@ interface AdsSpending {
 
 // Interface for alert items
 interface AlertItem {
-  type: 'unscheduled' | 'expiring_soon'
+  type: 'unscheduled' | 'expiring_soon' | 'unpaid_completed'
   orderId: number
   orderItemId: number
   customerName: string
@@ -77,6 +77,7 @@ interface AlertItem {
   daysRemaining?: number
   validityMonths?: number
   isFreeOrDiscount: boolean
+  appointmentDate?: string
 }
 
 // Interface for price range breakdown
@@ -258,7 +259,38 @@ export default function DashboardPage() {
             })
           }
 
-          // Alert 2: FREE/50% services expiring within 14 days (2 weeks)
+          // Alert 2: Unpaid completed services
+          // Regular services that have appointment in the past but order not paid
+          if (
+            !isFreeOrDiscount &&
+            item.appointment_date &&
+            order.order_status === 'booking'
+          ) {
+            const appointmentDate = new Date(item.appointment_date)
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+
+            // If appointment date is in the past or today
+            if (appointmentDate <= today) {
+              const daysSince = Math.floor((today.getTime() - appointmentDate.getTime()) / (1000 * 60 * 60 * 24))
+              alertsList.push({
+                type: 'unpaid_completed',
+                orderId: order.id,
+                orderItemId: item.id,
+                customerName: customer?.full_name || '-',
+                phone: customer?.phone || null,
+                productName: product.product_name,
+                productCode: product.product_code,
+                message: daysSince === 0 ? 'นัดวันนี้ - รอรับชำระ' : `นัดผ่านมา ${daysSince} วัน - ยังไม่รับชำระ`,
+                severity: 'danger',
+                createdAt: order.created_at,
+                isFreeOrDiscount: false,
+                appointmentDate: item.appointment_date,
+              })
+            }
+          }
+
+          // Alert 3: FREE/50% services expiring within 14 days (2 weeks)
           // These need validity_months to calculate expiry
           if (
             isFreeOrDiscount &&
@@ -771,6 +803,9 @@ export default function DashboardPage() {
 
           {/* Summary Badges */}
           <div className="flex gap-3 flex-wrap">
+            <span className="px-3 py-1.5 bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400 rounded-full text-sm font-medium">
+              รอรับชำระ: {alerts.filter(a => a.type === 'unpaid_completed').length}
+            </span>
             <span className="px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full text-sm font-medium">
               ยังไม่นัด: {alerts.filter(a => a.type === 'unscheduled').length}
             </span>
@@ -904,6 +939,22 @@ export default function DashboardPage() {
                             >
                               บันทึกนัดหมาย
                             </button>
+                          </div>
+                        ) : alert.type === 'unpaid_completed' ? (
+                          /* Unpaid Completed - Link to order */
+                          <div className="p-3 bg-white dark:bg-gray-700 rounded-lg space-y-3">
+                            <p className="font-medium text-gray-800 dark:text-white text-sm">รับชำระเงิน</p>
+                            {alert.appointmentDate && (
+                              <p className="text-sm text-gray-500">
+                                วันนัด: {new Date(alert.appointmentDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </p>
+                            )}
+                            <Link
+                              href={`/orders/${alert.orderId}`}
+                              className="block w-full py-2 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors text-center"
+                            >
+                              ไปหน้า Order เพื่อรับชำระ
+                            </Link>
                           </div>
                         ) : (
                           /* Extend Validity Form */
