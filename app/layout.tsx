@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { ThemeProvider } from '@/lib/theme-context'
 import { LanguageProvider } from '@/lib/language-context'
+import { UserProvider } from '@/lib/user-context'
 
 export const metadata: Metadata = {
   title: 'CT Studio ERP',
@@ -18,7 +19,9 @@ export default function RootLayout({
       <body className="font-sans bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
         <ThemeProvider>
           <LanguageProvider>
-            {children}
+            <UserProvider>
+              {children}
+            </UserProvider>
           </LanguageProvider>
         </ThemeProvider>
       </body>

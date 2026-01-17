@@ -35,7 +35,7 @@ export type Database = {
           id: number
           staff_name: string
           email: string
-          role: 'admin' | 'sales' | 'artist'
+          role: 'super_admin' | 'admin' | 'sales' | 'artist' | 'marketer'
           is_active: boolean
           created_at: string
         }
@@ -43,7 +43,7 @@ export type Database = {
           id?: number
           staff_name: string
           email: string
-          role: 'admin' | 'sales' | 'artist'
+          role: 'super_admin' | 'admin' | 'sales' | 'artist' | 'marketer'
           is_active?: boolean
           created_at?: string
         }
@@ -51,7 +51,7 @@ export type Database = {
           id?: number
           staff_name?: string
           email?: string
-          role?: 'admin' | 'sales' | 'artist'
+          role?: 'super_admin' | 'admin' | 'sales' | 'artist' | 'marketer'
           is_active?: boolean
           created_at?: string
         }
@@ -236,6 +236,35 @@ export type Database = {
           created_at?: string
         }
       }
+      service_photos: {
+        Row: {
+          id: number
+          order_item_id: number
+          photo_url: string
+          photo_path: string
+          uploaded_by: number | null
+          note: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          order_item_id: number
+          photo_url: string
+          photo_path: string
+          uploaded_by?: number | null
+          note?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          order_item_id?: number
+          photo_url?: string
+          photo_path?: string
+          uploaded_by?: number | null
+          note?: string | null
+          created_at?: string
+        }
+      }
     }
   }
 }
@@ -249,3 +278,16 @@ export type OrderItem = Database['public']['Tables']['order_items']['Row']
 export type Payment = Database['public']['Tables']['payments']['Row']
 export type Chat = Database['public']['Tables']['chats']['Row']
 export type AdsBudget = Database['public']['Tables']['ads_budget']['Row']
+export type ServicePhoto = Database['public']['Tables']['service_photos']['Row']
+
+// Staff role type
+export type StaffRole = 'super_admin' | 'admin' | 'sales' | 'artist' | 'marketer'
+
+// Role-based access configuration
+export const ROLE_ACCESS: Record<StaffRole, string[]> = {
+  super_admin: ['*'], // All pages
+  admin: ['/', '/orders', '/service', '/calendar', '/customers', '/products', '/sales', '/staff'],
+  marketer: ['/', '/orders', '/service', '/calendar', '/customers', '/products', '/sales', '/staff'],
+  sales: ['/', '/orders', '/service', '/calendar', '/customers', '/products'],
+  artist: ['/artist', '/calendar'],
+}
