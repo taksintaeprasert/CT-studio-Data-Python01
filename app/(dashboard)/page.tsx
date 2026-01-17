@@ -404,38 +404,30 @@ export default function DashboardPage() {
         const totalPaid = order.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
         const remainingBalance = totalIncome - totalPaid
 
-        // Alert 2: Order with remaining balance AND at least one service that should be done
-        // (either item_status is 'completed' OR appointment_date has passed)
+        // Alert: Order with remaining balance AND at least one service that is scheduled/completed
+        // This shows all unpaid orders that have services booked
         if (remainingBalance > 0 && !ordersWithUnpaidAlert.has(order.id)) {
           // Debug logging for orders with remaining balance
           console.log(`Order #${order.id} has remaining balance: ฿${remainingBalance}`)
 
-          // Find service that has been done (completed OR past appointment)
-          const doneService = order.order_items?.find((item: any) => {
+          // Find the first service that is scheduled or completed (has appointment or is done)
+          const scheduledService = order.order_items?.find((item: any) => {
             const status = (item.item_status || '').toString().toLowerCase()
-            const hasPassedAppointment = item.appointment_date ? new Date(item.appointment_date) <= today : false
-
-            console.log(`  Service #${item.id}: status="${status}", appointment="${item.appointment_date}", passed=${hasPassedAppointment}`)
-
-            // Check if status is completed
-            if (status === 'completed') return true
-            // Check if appointment date has passed (service should be done)
-            if (item.appointment_date) {
-              const appointmentDate = new Date(item.appointment_date)
-              return appointmentDate <= today
-            }
-            return false
+            // Show if service is completed OR has an appointment date (scheduled)
+            const isScheduledOrCompleted = status === 'completed' || status === 'scheduled' || item.appointment_date
+            console.log(`  Service #${item.id}: status="${status}", appointment="${item.appointment_date}", include=${isScheduledOrCompleted}`)
+            return isScheduledOrCompleted
           })
 
-          console.log(`  → doneService found: ${doneService ? 'YES' : 'NO'}`)
+          console.log(`  → scheduledService found: ${scheduledService ? 'YES' : 'NO'}`)
 
-          if (doneService) {
-            const product = doneService?.products
+          if (scheduledService) {
+            const product = scheduledService?.products
 
             alertsList.push({
               type: 'unpaid_completed',
               orderId: order.id,
-              orderItemId: doneService?.id || 0,
+              orderItemId: scheduledService?.id || 0,
               customerName: customer?.full_name || '-',
               phone: customer?.phone || null,
               productName: product?.product_name || '-',
@@ -444,7 +436,7 @@ export default function DashboardPage() {
               severity: 'danger',
               createdAt: order.created_at,
               isFreeOrDiscount: false,
-              appointmentDate: doneService?.appointment_date,
+              appointmentDate: scheduledService?.appointment_date,
               remainingBalance: remainingBalance,
               totalIncome: totalIncome,
             })

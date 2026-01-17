@@ -7,6 +7,12 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import DateRangeFilter from '@/components/date-range-filter'
 
+interface OrderItem {
+  is_upsell: boolean
+  item_status: string
+  products: { product_code: string } | null
+}
+
 interface Order {
   id: number
   order_date: string
@@ -16,7 +22,7 @@ interface Order {
   deposit: number
   customers: { full_name: string } | null
   sales: { id: number; staff_name: string } | null
-  order_items: { is_upsell: boolean; products: { product_code: string } | null }[]
+  order_items: OrderItem[]
 }
 
 interface Staff {
@@ -79,7 +85,7 @@ export default function OrdersPage() {
         deposit,
         customers (full_name),
         sales:staff!orders_sales_id_fkey (id, staff_name),
-        order_items (is_upsell, products (product_code))
+        order_items (is_upsell, item_status, products (product_code))
       `)
       .gte('created_at', `${startDate}T00:00:00+07:00`)
       .lte('created_at', `${endDate}T23:59:59+07:00`)
@@ -104,12 +110,24 @@ export default function OrdersPage() {
         deposit,
         customers (full_name),
         sales:staff!orders_sales_id_fkey (id, staff_name),
-        order_items (is_upsell, products (product_code))
+        order_items (is_upsell, item_status, products (product_code))
       `)
       .order('created_at', { ascending: false })
 
     setOrders(data || [])
     setLoading(false)
+  }
+
+  // Compute order status based on service completion
+  // Done = ALL services are completed, Ongoing = otherwise
+  const getComputedStatus = (order: Order): 'done' | 'ongoing' => {
+    const items = order.order_items || []
+    if (items.length === 0) return 'ongoing'
+
+    const allCompleted = items.every(item =>
+      (item.item_status || '').toString().toLowerCase() === 'completed'
+    )
+    return allCompleted ? 'done' : 'ongoing'
   }
 
   const deleteOrder = async (orderId: number) => {
@@ -142,7 +160,8 @@ export default function OrdersPage() {
   const filteredOrders = orders.filter((order) => {
     const matchSearch = order.customers?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
       order.id.toString().includes(search)
-    const matchStatus = !statusFilter || order.order_status === statusFilter
+    const computedStatus = getComputedStatus(order)
+    const matchStatus = !statusFilter || computedStatus === statusFilter
     const matchSales = !salesFilter || order.sales?.id === parseInt(salesFilter)
     const matchProductCode = !productCodeFilter ||
       order.order_items?.some(item =>
@@ -173,20 +192,17 @@ export default function OrdersPage() {
 
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { bg: string; text: string; label: string }> = {
-      booking: { bg: 'bg-yellow-500', text: 'text-white', label: 'Booking' },
-      paid: { bg: 'bg-green-500', text: 'text-white', label: 'Paid' },
-      done: { bg: 'bg-blue-500', text: 'text-white', label: 'Completed' },
-      cancelled: { bg: 'bg-red-500', text: 'text-white', label: 'Cancelled' },
+      ongoing: { bg: 'bg-yellow-500', text: 'text-white', label: 'Ongoing' },
+      done: { bg: 'bg-green-500', text: 'text-white', label: 'Done' },
     }
     return badges[status] || { bg: 'bg-gray-500', text: 'text-white', label: status }
   }
 
-  // Calculate stats
+  // Calculate stats based on computed status
   const stats = {
     total: filteredOrders.length,
-    booking: filteredOrders.filter(o => o.order_status === 'booking').length,
-    paid: filteredOrders.filter(o => o.order_status === 'paid').length,
-    done: filteredOrders.filter(o => o.order_status === 'done').length,
+    ongoing: filteredOrders.filter(o => getComputedStatus(o) === 'ongoing').length,
+    done: filteredOrders.filter(o => getComputedStatus(o) === 'done').length,
   }
 
   return (
@@ -208,22 +224,18 @@ export default function OrdersPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div className="card text-center">
           <p className="text-2xl font-bold text-gray-800 dark:text-white">{stats.total}</p>
           <p className="text-sm text-gray-500 dark:text-gray-400">Total</p>
         </div>
         <div className="card text-center">
-          <p className="text-2xl font-bold text-yellow-600">{stats.booking}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Booking</p>
+          <p className="text-2xl font-bold text-yellow-600">{stats.ongoing}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Ongoing</p>
         </div>
         <div className="card text-center">
-          <p className="text-2xl font-bold text-green-600">{stats.paid}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Paid</p>
-        </div>
-        <div className="card text-center">
-          <p className="text-2xl font-bold text-blue-600">{stats.done}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Completed</p>
+          <p className="text-2xl font-bold text-green-600">{stats.done}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Done</p>
         </div>
       </div>
 
@@ -259,10 +271,8 @@ export default function OrdersPage() {
           className="select w-full sm:w-40"
         >
           <option value="">สถานะทั้งหมด</option>
-          <option value="booking">Booking</option>
-          <option value="paid">Paid</option>
-          <option value="done">Completed</option>
-          <option value="cancelled">Cancelled</option>
+          <option value="ongoing">Ongoing</option>
+          <option value="done">Done</option>
         </select>
         <select
           value={upsellFilter}
@@ -290,7 +300,8 @@ export default function OrdersPage() {
               </div>
             ) : (
               filteredOrders.map((order) => {
-                const badge = getStatusBadge(order.order_status)
+                const computedStatus = getComputedStatus(order)
+                const badge = getStatusBadge(computedStatus)
                 return (
                   <div key={order.id} className="card p-4">
                     <div className="flex items-start justify-between gap-2 mb-3">
@@ -364,7 +375,8 @@ export default function OrdersPage() {
                 </thead>
                 <tbody>
                   {filteredOrders.map((order) => {
-                    const badge = getStatusBadge(order.order_status)
+                    const computedStatus = getComputedStatus(order)
+                    const badge = getStatusBadge(computedStatus)
                     return (
                       <tr key={order.id}>
                         <td className="font-medium text-gray-800 dark:text-white">#{order.id}</td>
