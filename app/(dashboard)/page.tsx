@@ -63,7 +63,7 @@ interface AdsSpending {
 
 // Interface for alert items
 interface AlertItem {
-  type: 'unscheduled' | 'expiring_soon' | 'unpaid_completed'
+  type: 'unscheduled' | 'expiring_soon'
   orderId: number
   orderItemId: number
   customerName: string
@@ -77,9 +77,6 @@ interface AlertItem {
   daysRemaining?: number
   validityMonths?: number
   isFreeOrDiscount: boolean
-  appointmentDate?: string
-  remainingBalance?: number
-  totalIncome?: number
 }
 
 // Interface for price range breakdown
@@ -114,9 +111,6 @@ export default function DashboardPage() {
   const [artists, setArtists] = useState<{id: number, staff_name: string}[]>([])
 
   // Inline payment state
-  const [paymentAmount, setPaymentAmount] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState('cash')
-  const [processingPayment, setProcessingPayment] = useState(false)
 
   // Marketing Data
   const [marketingData, setMarketingData] = useState<MarketingData[]>([])
@@ -190,76 +184,6 @@ export default function DashboardPage() {
   }
 
   // Receive payment from alert
-  const receivePaymentFromAlert = async (alert: AlertItem) => {
-    const amount = parseFloat(paymentAmount)
-    if (!paymentAmount || isNaN(amount) || amount <= 0) {
-      window.alert('กรุณาใส่จำนวนเงิน')
-      return
-    }
-
-    setProcessingPayment(true)
-
-    try {
-      // Insert payment record
-      const { error: paymentError } = await supabase
-        .from('payments')
-        .insert({
-          order_id: alert.orderId,
-          amount: amount,
-          payment_method: paymentMethod,
-          note: 'รับชำระจากหน้าแจ้งเตือน',
-        })
-
-      if (paymentError) {
-        window.alert('เกิดข้อผิดพลาดในการบันทึกการชำระ: ' + paymentError.message)
-        return
-      }
-
-      // Calculate new remaining balance after this payment
-      const totalIncome = alert.totalIncome || 0
-      const previousRemaining = alert.remainingBalance || 0
-      const newRemaining = previousRemaining - amount
-
-      // Only update order status to 'paid' if fully paid (remaining <= 0)
-      // Otherwise keep/set it to 'booking'
-      const newStatus = newRemaining <= 0 ? 'paid' : 'booking'
-      const { error: orderError } = await supabase
-        .from('orders')
-        .update({ order_status: newStatus })
-        .eq('id', alert.orderId)
-
-      if (orderError) {
-        window.alert('เกิดข้อผิดพลาดในการอัพเดทสถานะ: ' + orderError.message)
-        return
-      }
-
-      // Update order item status to completed
-      const { error: itemError } = await supabase
-        .from('order_items')
-        .update({ item_status: 'completed' })
-        .eq('id', alert.orderItemId)
-
-      if (itemError) {
-        console.error('Item status update error:', itemError)
-      }
-
-      if (newRemaining <= 0) {
-        window.alert('รับชำระครบแล้ว! สถานะเปลี่ยนเป็น Paid')
-      } else {
-        window.alert(`รับชำระเรียบร้อย! ยังค้างชำระ ฿${newRemaining.toLocaleString()}`)
-      }
-      setPaymentAmount('')
-      setPaymentMethod('cash')
-      setExpandedAlert(null)
-      fetchAlerts()
-    } catch (err) {
-      console.error('Payment error:', err)
-      window.alert('เกิดข้อผิดพลาด')
-    } finally {
-      setProcessingPayment(false)
-    }
-  }
-
   useEffect(() => {
     if (startDate && endDate) {
       fetchData()
@@ -359,55 +283,10 @@ export default function DashboardPage() {
           .in('id', itemsToFixStatus)
       }
 
-      // Track which orders already have unpaid_completed alert (to avoid duplicates)
-      const ordersWithUnpaidAlert = new Set<number>()
-      // Reset today to start of day for alert comparison
-      today.setHours(0, 0, 0, 0)
-
       ordersWithItems.forEach((order: any) => {
         const customer = order.customers as { full_name: string; phone: string | null } | null
 
-        // Calculate remaining balance at ORDER level first
-        const totalIncome = order.total_income || 0
-        const totalPaid = order.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
-        const remainingBalance = totalIncome - totalPaid
-
-        // Alert: Order with remaining balance AND at least one service that has appointment (scheduled)
-        // Show ALL orders with unpaid balance that have scheduled services
-        if (remainingBalance > 0 && !ordersWithUnpaidAlert.has(order.id)) {
-          // Find any service that is scheduled/completed (has appointment_date)
-          const scheduledService = order.order_items?.find((item: any) => {
-            const status = (item.item_status || '').toString().toLowerCase()
-            // Include if completed OR has appointment date (scheduled)
-            return status === 'completed' || !!item.appointment_date
-          })
-
-          // Show alert if there's a scheduled service
-          if (scheduledService) {
-            const product = scheduledService?.products
-
-            alertsList.push({
-              type: 'unpaid_completed',
-              orderId: order.id,
-              orderItemId: scheduledService?.id || 0,
-              customerName: customer?.full_name || '-',
-              phone: customer?.phone || null,
-              productName: product?.product_name || '-',
-              productCode: product?.product_code || '-',
-              message: `ค้างชำระ ฿${remainingBalance.toLocaleString()}`,
-              severity: 'danger',
-              createdAt: order.created_at,
-              isFreeOrDiscount: false,
-              appointmentDate: scheduledService?.appointment_date,
-              remainingBalance: remainingBalance,
-              totalIncome: totalIncome,
-            })
-
-            ordersWithUnpaidAlert.add(order.id)
-          }
-        }
-
-        // Process each item for other alerts
+        // Process each item for alerts
         order.order_items?.forEach((item: any) => {
           const product = item.products
           if (!product) return
@@ -959,9 +838,6 @@ export default function DashboardPage() {
 
           {/* Summary Badges */}
           <div className="flex gap-3 flex-wrap">
-            <span className="px-3 py-1.5 bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400 rounded-full text-sm font-medium">
-              รอรับชำระ: {alerts.filter(a => a.type === 'unpaid_completed').length}
-            </span>
             <span className="px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full text-sm font-medium">
               ยังไม่นัด: {alerts.filter(a => a.type === 'unscheduled').length}
             </span>
@@ -996,13 +872,6 @@ export default function DashboardPage() {
                           setScheduleTime('')
                           setScheduleArtist('')
                           setNewExpiryMonths('')
-                          // Auto-fill remaining balance for unpaid_completed alerts
-                          if (alert.type === 'unpaid_completed' && alert.remainingBalance !== undefined) {
-                            setPaymentAmount(alert.remainingBalance > 0 ? alert.remainingBalance.toString() : '')
-                          } else {
-                            setPaymentAmount('')
-                          }
-                          setPaymentMethod('cash')
                         }
                       }}
                       className={`w-full p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
@@ -1102,69 +971,6 @@ export default function DashboardPage() {
                             >
                               บันทึกนัดหมาย
                             </button>
-                          </div>
-                        ) : alert.type === 'unpaid_completed' ? (
-                          /* Unpaid Completed - Inline Payment Form */
-                          <div className="p-3 bg-white dark:bg-gray-700 rounded-lg space-y-3">
-                            <p className="font-medium text-gray-800 dark:text-white text-sm">รับชำระเงิน</p>
-                            {/* Order Info */}
-                            <div className="grid grid-cols-2 gap-2 text-sm">
-                              {alert.appointmentDate && (
-                                <div className="text-gray-500">
-                                  วันนัด: {new Date(alert.appointmentDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                </div>
-                              )}
-                              {alert.totalIncome !== undefined && (
-                                <div className="text-gray-500">
-                                  ยอดรวม: <span className="font-medium text-gray-700 dark:text-gray-300">฿{alert.totalIncome.toLocaleString()}</span>
-                                </div>
-                              )}
-                            </div>
-                            {alert.remainingBalance !== undefined && alert.remainingBalance > 0 && (
-                              <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                                <p className="text-sm text-green-700 dark:text-green-400 font-medium">
-                                  ยอดค้างชำระ: ฿{alert.remainingBalance.toLocaleString()}
-                                </p>
-                              </div>
-                            )}
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-xs text-gray-500 mb-1">จำนวนเงิน (฿)</label>
-                                <input
-                                  type="number"
-                                  value={paymentAmount}
-                                  onChange={(e) => setPaymentAmount(e.target.value)}
-                                  className="input w-full text-sm"
-                                  placeholder="0"
-                                  min="0"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-gray-500 mb-1">ช่องทาง</label>
-                                <select
-                                  value={paymentMethod}
-                                  onChange={(e) => setPaymentMethod(e.target.value)}
-                                  className="select w-full text-sm"
-                                >
-                                  <option value="cash">เงินสด</option>
-                                  <option value="transfer">โอน</option>
-                                  <option value="credit_card">บัตรเครดิต</option>
-                                </select>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => receivePaymentFromAlert(alert)}
-                              disabled={processingPayment}
-                              className="w-full py-2 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors disabled:opacity-50"
-                            >
-                              {processingPayment ? 'กำลังบันทึก...' : 'รับชำระ'}
-                            </button>
-                            <Link
-                              href={`/orders/${alert.orderId}`}
-                              className="block w-full py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors text-center text-sm"
-                            >
-                              ดูรายละเอียด Order
-                            </Link>
                           </div>
                         ) : (
                           /* Extend Validity Form */
