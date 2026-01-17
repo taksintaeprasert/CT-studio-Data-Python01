@@ -31,6 +31,10 @@ export default function DateRangeFilter({
       case 'today':
         // start and end are already today
         break
+      case 'yesterday':
+        start.setDate(end.getDate() - 1)
+        end.setDate(end.getDate() - 1)
+        break
       case '7':
         start.setDate(end.getDate() - 7)
         break
@@ -102,6 +106,16 @@ export default function DateRangeFilter({
             }`}
           >
             Today
+          </button>
+          <button
+            onClick={() => handleQuickRangeChange('yesterday')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              quickRange === 'yesterday'
+                ? 'bg-pink-500 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            Yesterday
           </button>
           <button
             onClick={() => handleQuickRangeChange('7')}

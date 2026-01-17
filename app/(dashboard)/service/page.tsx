@@ -59,11 +59,9 @@ export default function AppointmentPage() {
   const [endDate, setEndDate] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Filter for today's appointments
-  const [showTodayOnly, setShowTodayOnly] = useState(false)
-
-  // Custom appointment date filter
-  const [customAppointmentDate, setCustomAppointmentDate] = useState('')
+  // Appointment date range filter
+  const [appointmentStartDate, setAppointmentStartDate] = useState('')
+  const [appointmentEndDate, setAppointmentEndDate] = useState('')
 
   // Selected order for detail view
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
@@ -184,6 +182,31 @@ export default function AppointmentPage() {
       .gte('created_at', `${startDate}T00:00:00`)
       .lte('created_at', `${endDate}T23:59:59`)
       .order('created_at', { ascending: false })
+
+    setOrders(ordersData || [])
+    setLoading(false)
+  }
+
+  const fetchAllOrders = async () => {
+    setLoading(true)
+    setSelectedOrder(null)
+    setStartDate('')
+    setEndDate('')
+
+    const { data: ordersData } = await supabase
+      .from('orders')
+      .select(`
+        *,
+        customers (*),
+        sales:staff!orders_sales_id_fkey(staff_name),
+        order_items(
+          *,
+          artist:staff!order_items_artist_id_fkey(staff_name),
+          product:products(product_name, product_code, is_free)
+        )
+      `)
+      .order('created_at', { ascending: false })
+      .limit(200)
 
     setOrders(ordersData || [])
     setLoading(false)
@@ -431,26 +454,19 @@ export default function AppointmentPage() {
     return `${year}-${month}-${day}`
   }
 
-  // Check if order has appointment today
-  const hasAppointmentToday = (order: Order) => {
-    const today = getTodayDate()
-    return order.order_items.some(item => item.appointment_date === today)
+  // Check if order has appointment within date range
+  const hasAppointmentInRange = (order: Order, start: string, end: string) => {
+    return order.order_items.some(item => {
+      if (!item.appointment_date) return false
+      return item.appointment_date >= start && item.appointment_date <= end
+    })
   }
 
-  // Check if order has appointment on a specific date
-  const hasAppointmentOnDate = (order: Order, date: string) => {
-    return order.order_items.some(item => item.appointment_date === date)
-  }
-
-  // Filter orders based on appointment date filters
+  // Filter orders based on appointment date range
   const filteredOrders = orders.filter(order => {
-    // If showing today only
-    if (showTodayOnly) {
-      return hasAppointmentToday(order)
-    }
-    // If custom date is selected
-    if (customAppointmentDate) {
-      return hasAppointmentOnDate(order, customAppointmentDate)
+    // If appointment date range is set
+    if (appointmentStartDate && appointmentEndDate) {
+      return hasAppointmentInRange(order, appointmentStartDate, appointmentEndDate)
     }
     return true
   })
@@ -471,7 +487,7 @@ export default function AppointmentPage() {
             วันที่ที่สร้าง Order
           </label>
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <DateRangeFilter onDateChange={handleDateChange} />
+            <DateRangeFilter onDateChange={handleDateChange} onShowAll={fetchAllOrders} />
           </div>
         </div>
 
@@ -499,33 +515,43 @@ export default function AppointmentPage() {
             วันที่นัดหมาย
           </label>
           <div className="flex flex-wrap items-center gap-3">
+            {/* Quick buttons */}
             <button
               onClick={() => {
-                setShowTodayOnly(!showTodayOnly)
-                setCustomAppointmentDate('')
+                const today = getTodayDate()
+                setAppointmentStartDate(today)
+                setAppointmentEndDate(today)
               }}
-              className={`px-5 py-2.5 rounded-xl font-bold transition-all ${
-                showTodayOnly
-                  ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg'
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                appointmentStartDate === getTodayDate() && appointmentEndDate === getTodayDate()
+                  ? 'bg-green-500 text-white'
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
-              📅 วันนี้
+              วันนี้
             </button>
 
+            {/* Date range inputs */}
             <div className="flex items-center gap-2">
               <input
                 type="date"
-                value={customAppointmentDate}
-                onChange={(e) => {
-                  setCustomAppointmentDate(e.target.value)
-                  setShowTodayOnly(false)
-                }}
+                value={appointmentStartDate}
+                onChange={(e) => setAppointmentStartDate(e.target.value)}
                 className="input px-3 py-2"
               />
-              {customAppointmentDate && (
+              <span className="text-gray-500">-</span>
+              <input
+                type="date"
+                value={appointmentEndDate}
+                onChange={(e) => setAppointmentEndDate(e.target.value)}
+                className="input px-3 py-2"
+              />
+              {(appointmentStartDate || appointmentEndDate) && (
                 <button
-                  onClick={() => setCustomAppointmentDate('')}
+                  onClick={() => {
+                    setAppointmentStartDate('')
+                    setAppointmentEndDate('')
+                  }}
                   className="px-3 py-2 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500"
                 >
                   ✕
@@ -534,11 +560,9 @@ export default function AppointmentPage() {
             </div>
 
             {/* Active filter indicator */}
-            {(showTodayOnly || customAppointmentDate) && (
+            {appointmentStartDate && appointmentEndDate && (
               <span className="text-green-600 dark:text-green-400 font-medium text-sm">
-                พบ {filteredOrders.length} ออเดอร์
-                {showTodayOnly && ' (นัดวันนี้)'}
-                {customAppointmentDate && ` (${new Date(customAppointmentDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })})`}
+                พบ {filteredOrders.length} ออเดอร์ (นัด {new Date(appointmentStartDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} - {new Date(appointmentEndDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })})
               </span>
             )}
           </div>
