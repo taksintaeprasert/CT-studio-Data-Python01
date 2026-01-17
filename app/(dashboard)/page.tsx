@@ -346,14 +346,22 @@ export default function DashboardPage() {
         const totalPaid = order.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
         const remainingBalance = totalIncome - totalPaid
 
+        // Debug: Log orders with remaining balance
+        if (remainingBalance > 0) {
+          const itemStatuses = order.order_items?.map((item: any) => item.item_status) || []
+          console.log(`Order #${order.id}: remainingBalance=${remainingBalance}, itemStatuses=`, itemStatuses)
+        }
+
         // Alert 2: Order has remaining balance AND has at least one completed service
         // Check this FIRST at order level to avoid duplicates
         if (remainingBalance > 0 && !ordersWithUnpaidAlert.has(order.id)) {
-          // Check if ANY item in this order is completed
+          // Check if ANY item in this order is completed (case-insensitive)
           const hasCompletedService = order.order_items?.some((item: any) => {
-            const status = (item.item_status || '').toLowerCase()
+            const status = (item.item_status || '').toString().toLowerCase()
             return status === 'completed'
           })
+
+          console.log(`Order #${order.id}: hasCompletedService=${hasCompletedService}`)
 
           if (hasCompletedService) {
             // Find the completed service to show in alert
