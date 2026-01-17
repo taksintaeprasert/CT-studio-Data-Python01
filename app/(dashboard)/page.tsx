@@ -345,6 +345,7 @@ export default function DashboardPage() {
           // Check if it's FREE or 50% service by product_code OR validity_months
           const productCode = product.product_code?.toUpperCase() || ''
           const productName = product.product_name?.toUpperCase() || ''
+          const itemStatus = (item.item_status || '').toLowerCase()
           const isFreeOrDiscount =
             product.is_free ||
             productCode.includes('FREE') ||
@@ -356,7 +357,7 @@ export default function DashboardPage() {
           // Alert 1: Unscheduled REGULAR services (not FREE/50%)
           // Regular services should be scheduled immediately
           if (
-            item.item_status === 'pending' &&
+            itemStatus === 'pending' &&
             !item.appointment_date &&
             !isFreeOrDiscount
           ) {
@@ -380,14 +381,14 @@ export default function DashboardPage() {
           // - Service has appointment in the past OR item_status is 'completed'
           // - Order still has remaining balance > 0
           // Note: We check ALL services because remaining balance is at ORDER level
-          if (item.appointment_date || item.item_status === 'completed') {
+          if (item.appointment_date || itemStatus === 'completed') {
             const appointmentDate = item.appointment_date ? new Date(item.appointment_date) : null
             const today = new Date()
             today.setHours(0, 0, 0, 0)
 
             // Check if appointment is in the past/today OR item is already completed
             const isPastAppointment = appointmentDate ? appointmentDate <= today : false
-            const isCompleted = item.item_status === 'completed'
+            const isCompleted = itemStatus === 'completed'
 
             // Show alert if appointment passed OR service is completed
             if (isPastAppointment || isCompleted) {
@@ -435,8 +436,8 @@ export default function DashboardPage() {
           // These need validity_months to calculate expiry
           if (
             isFreeOrDiscount &&
-            item.item_status !== 'completed' &&
-            item.item_status !== 'cancelled'
+            itemStatus !== 'completed' &&
+            itemStatus !== 'cancelled'
           ) {
             // Default validity: FREE = 3 months, 50% = 12 months
             let validityMonths = product.validity_months || 0
