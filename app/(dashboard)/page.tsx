@@ -111,6 +111,11 @@ export default function DashboardPage() {
   const [scheduleArtist, setScheduleArtist] = useState('')
   const [artists, setArtists] = useState<{id: number, staff_name: string}[]>([])
 
+  // Inline payment state
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState('cash')
+  const [processingPayment, setProcessingPayment] = useState(false)
+
   // Marketing Data
   const [marketingData, setMarketingData] = useState<MarketingData[]>([])
   const [adsSpending, setAdsSpending] = useState<AdsSpending[]>([])
@@ -179,6 +184,66 @@ export default function DashboardPage() {
       fetchAlerts()
     } else {
       window.alert('เกิดข้อผิดพลาด: ' + error.message)
+    }
+  }
+
+  // Receive payment from alert
+  const receivePaymentFromAlert = async (alert: AlertItem) => {
+    const amount = parseFloat(paymentAmount)
+    if (!paymentAmount || isNaN(amount) || amount <= 0) {
+      window.alert('กรุณาใส่จำนวนเงิน')
+      return
+    }
+
+    setProcessingPayment(true)
+
+    try {
+      // Insert payment record
+      const { error: paymentError } = await supabase
+        .from('payments')
+        .insert({
+          order_id: alert.orderId,
+          amount: amount,
+          payment_method: paymentMethod,
+          note: 'รับชำระจากหน้าแจ้งเตือน',
+        })
+
+      if (paymentError) {
+        window.alert('เกิดข้อผิดพลาดในการบันทึกการชำระ: ' + paymentError.message)
+        return
+      }
+
+      // Update order status to paid
+      const { error: orderError } = await supabase
+        .from('orders')
+        .update({ order_status: 'paid' })
+        .eq('id', alert.orderId)
+
+      if (orderError) {
+        window.alert('เกิดข้อผิดพลาดในการอัพเดทสถานะ: ' + orderError.message)
+        return
+      }
+
+      // Update order item status to completed
+      const { error: itemError } = await supabase
+        .from('order_items')
+        .update({ item_status: 'completed' })
+        .eq('id', alert.orderItemId)
+
+      if (itemError) {
+        console.error('Item status update error:', itemError)
+      }
+
+      window.alert('รับชำระเรียบร้อย!')
+      setPaymentAmount('')
+      setPaymentMethod('cash')
+      setExpandedAlert(null)
+      fetchAlerts()
+    } catch (err) {
+      console.error('Payment error:', err)
+      window.alert('เกิดข้อผิดพลาด')
+    } finally {
+      setProcessingPayment(false)
     }
   }
 
@@ -840,6 +905,8 @@ export default function DashboardPage() {
                           setScheduleTime('')
                           setScheduleArtist('')
                           setNewExpiryMonths('')
+                          setPaymentAmount('')
+                          setPaymentMethod('cash')
                         }
                       }}
                       className={`w-full p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
@@ -941,7 +1008,7 @@ export default function DashboardPage() {
                             </button>
                           </div>
                         ) : alert.type === 'unpaid_completed' ? (
-                          /* Unpaid Completed - Link to order */
+                          /* Unpaid Completed - Inline Payment Form */
                           <div className="p-3 bg-white dark:bg-gray-700 rounded-lg space-y-3">
                             <p className="font-medium text-gray-800 dark:text-white text-sm">รับชำระเงิน</p>
                             {alert.appointmentDate && (
@@ -949,11 +1016,43 @@ export default function DashboardPage() {
                                 วันนัด: {new Date(alert.appointmentDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
                               </p>
                             )}
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-1">จำนวนเงิน (฿)</label>
+                                <input
+                                  type="number"
+                                  value={paymentAmount}
+                                  onChange={(e) => setPaymentAmount(e.target.value)}
+                                  className="input w-full text-sm"
+                                  placeholder="0"
+                                  min="0"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-1">ช่องทาง</label>
+                                <select
+                                  value={paymentMethod}
+                                  onChange={(e) => setPaymentMethod(e.target.value)}
+                                  className="select w-full text-sm"
+                                >
+                                  <option value="cash">เงินสด</option>
+                                  <option value="transfer">โอน</option>
+                                  <option value="credit_card">บัตรเครดิต</option>
+                                </select>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => receivePaymentFromAlert(alert)}
+                              disabled={processingPayment}
+                              className="w-full py-2 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors disabled:opacity-50"
+                            >
+                              {processingPayment ? 'กำลังบันทึก...' : 'รับชำระ'}
+                            </button>
                             <Link
                               href={`/orders/${alert.orderId}`}
-                              className="block w-full py-2 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors text-center"
+                              className="block w-full py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors text-center text-sm"
                             >
-                              ไปหน้า Order เพื่อรับชำระ
+                              ดูรายละเอียด Order
                             </Link>
                           </div>
                         ) : (
