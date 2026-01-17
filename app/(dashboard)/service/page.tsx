@@ -383,6 +383,18 @@ export default function AppointmentPage() {
   const saveStatusChange = async (newStatus: OrderItem['item_status']) => {
     if (!statusChangeItem) return
 
+    // Validation: Cannot mark as "completed" if appointment date is in the future
+    if (newStatus === 'completed' && statusChangeItem.appointment_date) {
+      const appointmentDate = new Date(statusChangeItem.appointment_date)
+      const today = new Date()
+      today.setHours(23, 59, 59, 999) // End of today
+
+      if (appointmentDate > today) {
+        alert('ไม่สามารถเปลี่ยนเป็น "เสร็จแล้ว" ได้\nเนื่องจากยังไม่ถึงวันนัดหมาย')
+        return
+      }
+    }
+
     await supabase
       .from('order_items')
       .update({ item_status: newStatus })
