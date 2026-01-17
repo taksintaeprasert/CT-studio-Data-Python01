@@ -372,34 +372,24 @@ export default function DashboardPage() {
         const totalPaid = order.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
         const remainingBalance = totalIncome - totalPaid
 
-        // Alert: Order with remaining balance AND at least one service that is DONE
-        // DONE means: item_status = 'completed' OR appointment date has passed
+        // Alert: Order with remaining balance AND at least one service that has appointment (scheduled)
+        // Show ALL orders with unpaid balance that have scheduled services
         if (remainingBalance > 0 && !ordersWithUnpaidAlert.has(order.id)) {
-          // Find service that is DONE (completed OR appointment passed)
-          const doneService = order.order_items?.find((item: any) => {
+          // Find any service that is scheduled/completed (has appointment_date)
+          const scheduledService = order.order_items?.find((item: any) => {
             const status = (item.item_status || '').toString().toLowerCase()
-
-            // Case 1: Explicitly marked as completed
-            if (status === 'completed') return true
-
-            // Case 2: Has appointment that has passed (should be done by now)
-            if (item.appointment_date) {
-              const appointmentDate = new Date(item.appointment_date)
-              appointmentDate.setHours(23, 59, 59, 999) // End of appointment day
-              return appointmentDate < today // Appointment day has passed
-            }
-
-            return false
+            // Include if completed OR has appointment date (scheduled)
+            return status === 'completed' || !!item.appointment_date
           })
 
-          // Only show alert if there's a done service
-          if (doneService) {
-            const product = doneService?.products
+          // Show alert if there's a scheduled service
+          if (scheduledService) {
+            const product = scheduledService?.products
 
             alertsList.push({
               type: 'unpaid_completed',
               orderId: order.id,
-              orderItemId: doneService?.id || 0,
+              orderItemId: scheduledService?.id || 0,
               customerName: customer?.full_name || '-',
               phone: customer?.phone || null,
               productName: product?.product_name || '-',
@@ -408,7 +398,7 @@ export default function DashboardPage() {
               severity: 'danger',
               createdAt: order.created_at,
               isFreeOrDiscount: false,
-              appointmentDate: doneService?.appointment_date,
+              appointmentDate: scheduledService?.appointment_date,
               remainingBalance: remainingBalance,
               totalIncome: totalIncome,
             })
