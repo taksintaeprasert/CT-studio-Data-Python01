@@ -274,7 +274,6 @@ export default function DashboardPage() {
 
   // Fetch alerts - unscheduled services and expiring services
   const fetchAlerts = async () => {
-    console.log('=== fetchAlerts started ===')
     setAlertsLoading(true)
     const alertsList: AlertItem[] = []
 
@@ -298,32 +297,6 @@ export default function DashboardPage() {
       .neq('order_status', 'cancelled')
       .order('created_at', { ascending: false })
 
-    console.log('=== Orders fetched ===', {
-      count: ordersWithItems?.length || 0,
-      error: fetchError?.message || null
-    })
-
-    // Debug: Show orders with remaining balance
-    if (ordersWithItems) {
-      const ordersWithRemaining = ordersWithItems.filter((o: any) => {
-        const totalIncome = o.total_income || 0
-        const totalPaid = o.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
-        return totalPaid < totalIncome && totalIncome > 0
-      })
-      console.log('=== Orders with remaining balance ===', ordersWithRemaining.map((o: any) => ({
-        id: o.id,
-        status: o.order_status,
-        total: o.total_income,
-        paid: o.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0,
-        items: o.order_items?.map((i: any) => ({
-          id: i.id,
-          status: i.item_status,
-          appointment: i.appointment_date,
-          product: i.products?.product_name
-        }))
-      })))
-    }
-
     if (ordersWithItems) {
       // Auto-fix order statuses based on payment amounts
       const ordersToMarkPaid: number[] = []
@@ -342,7 +315,6 @@ export default function DashboardPage() {
         // Fix 2: Orders marked as 'paid' but NOT fully paid → change to 'booking'
         if (orderStatus === 'paid' && totalPaid < totalIncome && totalIncome > 0) {
           ordersToMarkBooking.push(order.id)
-          console.log(`Order #${order.id}: paid → booking (paid: ${totalPaid}, total: ${totalIncome}, remaining: ${totalIncome - totalPaid})`)
         }
       })
 
@@ -352,7 +324,6 @@ export default function DashboardPage() {
           .from('orders')
           .update({ order_status: 'paid' })
           .in('id', ordersToMarkPaid)
-        console.log(`Auto-fixed ${ordersToMarkPaid.length} orders: booking → paid (fully paid)`)
       }
 
       // Update not-fully-paid orders to 'booking' status
@@ -361,7 +332,6 @@ export default function DashboardPage() {
           .from('orders')
           .update({ order_status: 'booking' })
           .in('id', ordersToMarkBooking)
-        console.log(`Auto-fixed ${ordersToMarkBooking.length} orders: paid → booking (not fully paid)`)
       }
 
       // Auto-fix services: "completed" but appointment date is in the future → change to "scheduled"
@@ -377,7 +347,6 @@ export default function DashboardPage() {
             // If appointment is in the future, it can't be completed yet
             if (appointmentDate > today) {
               itemsToFixStatus.push(item.id)
-              console.log(`Service #${item.id}: completed → scheduled (appointment in future: ${item.appointment_date})`)
             }
           }
         })
@@ -388,7 +357,6 @@ export default function DashboardPage() {
           .from('order_items')
           .update({ item_status: 'scheduled' })
           .in('id', itemsToFixStatus)
-        console.log(`Auto-fixed ${itemsToFixStatus.length} services: completed → scheduled (future appointment)`)
       }
 
       // Track which orders already have unpaid_completed alert (to avoid duplicates)
@@ -404,29 +372,23 @@ export default function DashboardPage() {
         const totalPaid = order.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
         const remainingBalance = totalIncome - totalPaid
 
-        // Alert: Order with remaining balance AND at least one service that is scheduled/completed
-        // This shows all unpaid orders that have services booked
+        // Alert: Order with remaining balance AND at least one service that is COMPLETED
+        // Only show if service has actually been done (item_status = 'completed')
         if (remainingBalance > 0 && !ordersWithUnpaidAlert.has(order.id)) {
-          // Debug logging for orders with remaining balance
-          console.log(`Order #${order.id} has remaining balance: ฿${remainingBalance}`)
-
-          // Find the first service that has an appointment date (actually scheduled)
-          const scheduledService = order.order_items?.find((item: any) => {
-            // ONLY include if service has appointment_date (meaning it's actually scheduled)
-            const hasAppointment = !!item.appointment_date
-            console.log(`  Service #${item.id}: appointment="${item.appointment_date}", hasAppointment=${hasAppointment}`)
-            return hasAppointment
+          // Find service that is COMPLETED only
+          const completedService = order.order_items?.find((item: any) => {
+            const status = (item.item_status || '').toString().toLowerCase()
+            return status === 'completed'
           })
 
-          console.log(`  → scheduledService found: ${scheduledService ? 'YES' : 'NO'}`)
-
-          if (scheduledService) {
-            const product = scheduledService?.products
+          // Only show alert if there's a completed service
+          if (completedService) {
+            const product = completedService?.products
 
             alertsList.push({
               type: 'unpaid_completed',
               orderId: order.id,
-              orderItemId: scheduledService?.id || 0,
+              orderItemId: completedService?.id || 0,
               customerName: customer?.full_name || '-',
               phone: customer?.phone || null,
               productName: product?.product_name || '-',
@@ -435,7 +397,7 @@ export default function DashboardPage() {
               severity: 'danger',
               createdAt: order.created_at,
               isFreeOrDiscount: false,
-              appointmentDate: scheduledService?.appointment_date,
+              appointmentDate: completedService?.appointment_date,
               remainingBalance: remainingBalance,
               totalIncome: totalIncome,
             })
