@@ -376,8 +376,9 @@ export default function DashboardPage() {
           }
 
           // Alert 2: Unpaid/partially paid services
-          // Regular services that have appointment in the past but still have remaining balance
-          // Show regardless of order_status (booking, paid, etc.) - only check if money still owed
+          // Regular services that:
+          // - Have appointment in the past OR item_status is 'completed'
+          // - Still have remaining balance
           if (
             !isFreeOrDiscount &&
             item.appointment_date
@@ -386,20 +387,32 @@ export default function DashboardPage() {
             const today = new Date()
             today.setHours(0, 0, 0, 0)
 
-            // If appointment date is in the past or today
-            if (appointmentDate <= today) {
-              const daysSince = Math.floor((today.getTime() - appointmentDate.getTime()) / (1000 * 60 * 60 * 24))
+            // Check if appointment is in the past/today OR item is already completed
+            const isPastAppointment = appointmentDate <= today
+            const isCompleted = item.item_status === 'completed'
 
+            // Show alert if appointment passed OR service is completed
+            if (isPastAppointment || isCompleted) {
               // Calculate remaining balance
               const totalIncome = order.total_income || 0
               const totalPaid = order.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
               const remainingBalance = totalIncome - totalPaid
 
               // Only show alert if there's still money to collect (remainingBalance > 0)
-              // Skip orders that are already fully paid or overpaid
               if (remainingBalance > 0) {
-                // Show warning if marked as "paid" but not fully paid
                 const incorrectStatus = order.order_status === 'paid'
+                let message = ''
+
+                if (isCompleted) {
+                  // Service is completed but not fully paid
+                  message = `บริการเสร็จแล้ว - ค้างชำระ ฿${remainingBalance.toLocaleString()}`
+                } else if (incorrectStatus) {
+                  message = `ยังค้างชำระ ฿${remainingBalance.toLocaleString()} (สถานะผิดพลาด)`
+                } else {
+                  const daysSince = Math.floor((today.getTime() - appointmentDate.getTime()) / (1000 * 60 * 60 * 24))
+                  message = daysSince === 0 ? 'นัดวันนี้ - รอรับชำระ' : `นัดผ่านมา ${daysSince} วัน - ค้างชำระ ฿${remainingBalance.toLocaleString()}`
+                }
+
                 alertsList.push({
                   type: 'unpaid_completed',
                   orderId: order.id,
@@ -408,9 +421,7 @@ export default function DashboardPage() {
                   phone: customer?.phone || null,
                   productName: product.product_name,
                   productCode: product.product_code,
-                  message: incorrectStatus
-                    ? `ยังค้างชำระ ฿${remainingBalance.toLocaleString()} (สถานะผิดพลาด)`
-                    : (daysSince === 0 ? 'นัดวันนี้ - รอรับชำระ' : `นัดผ่านมา ${daysSince} วัน - ค้างชำระ ฿${remainingBalance.toLocaleString()}`),
+                  message: message,
                   severity: 'danger',
                   createdAt: order.created_at,
                   isFreeOrDiscount: false,
