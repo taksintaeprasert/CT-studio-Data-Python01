@@ -287,6 +287,28 @@ export default function DashboardPage() {
       .order('created_at', { ascending: false })
 
     if (ordersWithItems) {
+      // Auto-fix orders that are fully paid but still have 'booking' status
+      const ordersToFix: number[] = []
+      ordersWithItems.forEach((order: any) => {
+        if (order.order_status === 'booking') {
+          const totalIncome = order.total_income || 0
+          const totalPaid = order.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
+          // If fully paid or overpaid, mark for status update
+          if (totalPaid >= totalIncome && totalIncome > 0) {
+            ordersToFix.push(order.id)
+          }
+        }
+      })
+
+      // Update overpaid/fully-paid orders to 'paid' status
+      if (ordersToFix.length > 0) {
+        await supabase
+          .from('orders')
+          .update({ order_status: 'paid' })
+          .in('id', ordersToFix)
+        console.log(`Auto-fixed ${ordersToFix.length} orders with booking status that were fully paid`)
+      }
+
       ordersWithItems.forEach((order: any) => {
         const customer = order.customers as { full_name: string; phone: string | null } | null
 
@@ -347,22 +369,26 @@ export default function DashboardPage() {
               const totalPaid = order.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
               const remainingBalance = totalIncome - totalPaid
 
-              alertsList.push({
-                type: 'unpaid_completed',
-                orderId: order.id,
-                orderItemId: item.id,
-                customerName: customer?.full_name || '-',
-                phone: customer?.phone || null,
-                productName: product.product_name,
-                productCode: product.product_code,
-                message: daysSince === 0 ? 'นัดวันนี้ - รอรับชำระ' : `นัดผ่านมา ${daysSince} วัน - ยังไม่รับชำระ`,
-                severity: 'danger',
-                createdAt: order.created_at,
-                isFreeOrDiscount: false,
-                appointmentDate: item.appointment_date,
-                remainingBalance: remainingBalance,
-                totalIncome: totalIncome,
-              })
+              // Only show alert if there's still money to collect (remainingBalance > 0)
+              // Skip orders that are already fully paid or overpaid
+              if (remainingBalance > 0) {
+                alertsList.push({
+                  type: 'unpaid_completed',
+                  orderId: order.id,
+                  orderItemId: item.id,
+                  customerName: customer?.full_name || '-',
+                  phone: customer?.phone || null,
+                  productName: product.product_name,
+                  productCode: product.product_code,
+                  message: daysSince === 0 ? 'นัดวันนี้ - รอรับชำระ' : `นัดผ่านมา ${daysSince} วัน - ยังไม่รับชำระ`,
+                  severity: 'danger',
+                  createdAt: order.created_at,
+                  isFreeOrDiscount: false,
+                  appointmentDate: item.appointment_date,
+                  remainingBalance: remainingBalance,
+                  totalIncome: totalIncome,
+                })
+              }
             }
           }
 
