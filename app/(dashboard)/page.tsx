@@ -410,13 +410,12 @@ export default function DashboardPage() {
           // Debug logging for orders with remaining balance
           console.log(`Order #${order.id} has remaining balance: ฿${remainingBalance}`)
 
-          // Find the first service that is scheduled or completed (has appointment or is done)
+          // Find the first service that has an appointment date (actually scheduled)
           const scheduledService = order.order_items?.find((item: any) => {
-            const status = (item.item_status || '').toString().toLowerCase()
-            // Show if service is completed OR has an appointment date (scheduled)
-            const isScheduledOrCompleted = status === 'completed' || status === 'scheduled' || item.appointment_date
-            console.log(`  Service #${item.id}: status="${status}", appointment="${item.appointment_date}", include=${isScheduledOrCompleted}`)
-            return isScheduledOrCompleted
+            // ONLY include if service has appointment_date (meaning it's actually scheduled)
+            const hasAppointment = !!item.appointment_date
+            console.log(`  Service #${item.id}: appointment="${item.appointment_date}", hasAppointment=${hasAppointment}`)
+            return hasAppointment
           })
 
           console.log(`  → scheduledService found: ${scheduledService ? 'YES' : 'NO'}`)
