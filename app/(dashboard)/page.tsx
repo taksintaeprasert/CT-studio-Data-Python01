@@ -303,6 +303,27 @@ export default function DashboardPage() {
       error: fetchError?.message || null
     })
 
+    // Debug: Show orders with remaining balance
+    if (ordersWithItems) {
+      const ordersWithRemaining = ordersWithItems.filter((o: any) => {
+        const totalIncome = o.total_income || 0
+        const totalPaid = o.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
+        return totalPaid < totalIncome && totalIncome > 0
+      })
+      console.log('=== Orders with remaining balance ===', ordersWithRemaining.map((o: any) => ({
+        id: o.id,
+        status: o.order_status,
+        total: o.total_income,
+        paid: o.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0,
+        items: o.order_items?.map((i: any) => ({
+          id: i.id,
+          status: i.item_status,
+          appointment: i.appointment_date,
+          product: i.products?.product_name
+        }))
+      })))
+    }
+
     if (ordersWithItems) {
       // Auto-fix order statuses based on payment amounts
       const ordersToMarkPaid: number[] = []
@@ -311,15 +332,17 @@ export default function DashboardPage() {
       ordersWithItems.forEach((order: any) => {
         const totalIncome = order.total_income || 0
         const totalPaid = order.payments?.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0) || 0
+        const orderStatus = (order.order_status || '').toString().toLowerCase()
 
         // Fix 1: Orders marked as 'booking' but fully paid → change to 'paid'
-        if (order.order_status === 'booking' && totalPaid >= totalIncome && totalIncome > 0) {
+        if (orderStatus === 'booking' && totalPaid >= totalIncome && totalIncome > 0) {
           ordersToMarkPaid.push(order.id)
         }
 
         // Fix 2: Orders marked as 'paid' but NOT fully paid → change to 'booking'
-        if (order.order_status === 'paid' && totalPaid < totalIncome && totalIncome > 0) {
+        if (orderStatus === 'paid' && totalPaid < totalIncome && totalIncome > 0) {
           ordersToMarkBooking.push(order.id)
+          console.log(`Order #${order.id}: paid → booking (paid: ${totalPaid}, total: ${totalIncome}, remaining: ${totalIncome - totalPaid})`)
         }
       })
 
@@ -348,11 +371,13 @@ export default function DashboardPage() {
 
       ordersWithItems.forEach((order: any) => {
         order.order_items?.forEach((item: any) => {
-          if (item.item_status === 'completed' && item.appointment_date) {
+          const itemStatus = (item.item_status || '').toString().toLowerCase()
+          if (itemStatus === 'completed' && item.appointment_date) {
             const appointmentDate = new Date(item.appointment_date)
             // If appointment is in the future, it can't be completed yet
             if (appointmentDate > today) {
               itemsToFixStatus.push(item.id)
+              console.log(`Service #${item.id}: completed → scheduled (appointment in future: ${item.appointment_date})`)
             }
           }
         })
@@ -382,9 +407,16 @@ export default function DashboardPage() {
         // Alert 2: Order with remaining balance AND at least one service that should be done
         // (either item_status is 'completed' OR appointment_date has passed)
         if (remainingBalance > 0 && !ordersWithUnpaidAlert.has(order.id)) {
+          // Debug logging for orders with remaining balance
+          console.log(`Order #${order.id} has remaining balance: ฿${remainingBalance}`)
+
           // Find service that has been done (completed OR past appointment)
           const doneService = order.order_items?.find((item: any) => {
             const status = (item.item_status || '').toString().toLowerCase()
+            const hasPassedAppointment = item.appointment_date ? new Date(item.appointment_date) <= today : false
+
+            console.log(`  Service #${item.id}: status="${status}", appointment="${item.appointment_date}", passed=${hasPassedAppointment}`)
+
             // Check if status is completed
             if (status === 'completed') return true
             // Check if appointment date has passed (service should be done)
@@ -394,6 +426,8 @@ export default function DashboardPage() {
             }
             return false
           })
+
+          console.log(`  → doneService found: ${doneService ? 'YES' : 'NO'}`)
 
           if (doneService) {
             const product = doneService?.products
