@@ -72,6 +72,7 @@ export default function AppointmentPage() {
   const [filterExpiringSoon, setFilterExpiringSoon] = useState(false)
   const [filterHalfPrice, setFilterHalfPrice] = useState(false)
   const [filterFree, setFilterFree] = useState(false)
+  const [filterMode, setFilterMode] = useState<'AND' | 'OR'>('AND')
 
   // Selected order for detail view
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
@@ -569,14 +570,32 @@ export default function AppointmentPage() {
       }
     }
 
-    // Checkbox filters (if checked, order must match)
-    if (filterCompleted && !hasCompletedService(order)) return false
-    if (filterUnpaid && !hasRemainingBalance(order)) return false
-    if (filterExpiringSoon && !hasExpiringSoon(order)) return false
-    if (filterHalfPrice && !hasHalfPriceService(order)) return false
-    if (filterFree && !hasFreeService(order)) return false
+    // Get active checkbox filters
+    const activeFilters = [
+      filterCompleted && hasCompletedService(order),
+      filterUnpaid && hasRemainingBalance(order),
+      filterExpiringSoon && hasExpiringSoon(order),
+      filterHalfPrice && hasHalfPriceService(order),
+      filterFree && hasFreeService(order),
+    ]
 
-    return true
+    // Check if any checkbox is checked
+    const hasActiveFilter = filterCompleted || filterUnpaid || filterExpiringSoon || filterHalfPrice || filterFree
+
+    if (!hasActiveFilter) return true
+
+    if (filterMode === 'AND') {
+      // AND mode: all checked filters must match
+      if (filterCompleted && !hasCompletedService(order)) return false
+      if (filterUnpaid && !hasRemainingBalance(order)) return false
+      if (filterExpiringSoon && !hasExpiringSoon(order)) return false
+      if (filterHalfPrice && !hasHalfPriceService(order)) return false
+      if (filterFree && !hasFreeService(order)) return false
+      return true
+    } else {
+      // OR mode: at least one checked filter must match
+      return activeFilters.some(result => result === true)
+    }
   })
 
   return (
@@ -678,9 +697,34 @@ export default function AppointmentPage() {
 
         {/* Checkbox Filters */}
         <div>
-          <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-            ตัวกรองเพิ่มเติม
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">
+              ตัวกรองเพิ่มเติม
+            </label>
+            {/* OR/AND Toggle */}
+            <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+              <button
+                onClick={() => setFilterMode('AND')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  filterMode === 'AND'
+                    ? 'bg-pink-500 text-white'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                AND
+              </button>
+              <button
+                onClick={() => setFilterMode('OR')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  filterMode === 'OR'
+                    ? 'bg-pink-500 text-white'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                OR
+              </button>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-4">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -732,6 +776,9 @@ export default function AppointmentPage() {
               <span className="text-sm text-gray-700 dark:text-gray-300">บริการ FREE</span>
             </label>
           </div>
+          <p className="text-xs text-gray-400 mt-2">
+            {filterMode === 'AND' ? 'แสดงออเดอร์ที่ตรงตามเงื่อนไขทั้งหมดที่เลือก' : 'แสดงออเดอร์ที่ตรงตามเงื่อนไขใดเงื่อนไขหนึ่ง'}
+          </p>
         </div>
       </div>
 
