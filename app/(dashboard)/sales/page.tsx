@@ -63,6 +63,10 @@ export default function SalesPerformancePage() {
   const [chatDate, setChatDate] = useState('')
   const [chatInputs, setChatInputs] = useState<Record<number, number>>({})
   const [savingChat, setSavingChat] = useState(false)
+  // New daily metrics
+  const [walkInCount, setWalkInCount] = useState(0)
+  const [googleReviewCount, setGoogleReviewCount] = useState(0)
+  const [followUpClosed, setFollowUpClosed] = useState(0)
 
   // Daily report
   const [sendingReport, setSendingReport] = useState(false)
@@ -357,6 +361,9 @@ export default function SalesPerformancePage() {
     const today = formatLocalDate(new Date())
     setChatDate(today)
     setChatInputs({})
+    setWalkInCount(0)
+    setGoogleReviewCount(0)
+    setFollowUpClosed(0)
     setShowChatModal(true)
     loadChatCountsForDate(today)
   }
@@ -365,7 +372,7 @@ export default function SalesPerformancePage() {
   const loadChatCountsForDate = async (date: string) => {
     const { data } = await supabase
       .from('chat_counts')
-      .select('staff_id, chat_count')
+      .select('staff_id, chat_count, walk_in_count, google_review_count, follow_up_closed')
       .eq('date', date)
 
     const inputs: Record<number, number> = {}
@@ -373,6 +380,18 @@ export default function SalesPerformancePage() {
       inputs[c.staff_id] = c.chat_count
     })
     setChatInputs(inputs)
+
+    // Load daily metrics (from first record with data)
+    const metricsRecord = data?.find(c => c.walk_in_count !== null || c.google_review_count !== null || c.follow_up_closed !== null)
+    if (metricsRecord) {
+      setWalkInCount(metricsRecord.walk_in_count || 0)
+      setGoogleReviewCount(metricsRecord.google_review_count || 0)
+      setFollowUpClosed(metricsRecord.follow_up_closed || 0)
+    } else {
+      setWalkInCount(0)
+      setGoogleReviewCount(0)
+      setFollowUpClosed(0)
+    }
   }
 
   // Save chat counts
@@ -399,22 +418,36 @@ export default function SalesPerformancePage() {
           .maybeSingle()
 
         let error
+        // Include daily metrics in first staff's record
+        const isFirstStaff = staffId === salesStaffIds[0]
         if (existing) {
           // Update existing record
+          const updateData: any = { chat_count: chatCount, updated_at: new Date().toISOString() }
+          if (isFirstStaff) {
+            updateData.walk_in_count = walkInCount
+            updateData.google_review_count = googleReviewCount
+            updateData.follow_up_closed = followUpClosed
+          }
           const result = await supabase
             .from('chat_counts')
-            .update({ chat_count: chatCount, updated_at: new Date().toISOString() })
+            .update(updateData)
             .eq('id', existing.id)
           error = result.error
         } else {
           // Insert new record
+          const insertData: any = {
+            staff_id: staffId,
+            date: chatDate,
+            chat_count: chatCount,
+          }
+          if (isFirstStaff) {
+            insertData.walk_in_count = walkInCount
+            insertData.google_review_count = googleReviewCount
+            insertData.follow_up_closed = followUpClosed
+          }
           const result = await supabase
             .from('chat_counts')
-            .insert({
-              staff_id: staffId,
-              date: chatDate,
-              chat_count: chatCount,
-            })
+            .insert(insertData)
           error = result.error
         }
 
@@ -808,7 +841,9 @@ export default function SalesPerformancePage() {
               />
             </div>
 
-            <div className="space-y-3 mb-6">
+            {/* Staff Chat Counts */}
+            <div className="space-y-3 mb-4">
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">จำนวนแชทต่อ Sales</p>
               {allStaff.map(staff => (
                 <div key={staff.id} className="flex items-center justify-between gap-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <span className="font-medium text-gray-800 dark:text-white">{staff.staff_name}</span>
@@ -825,6 +860,47 @@ export default function SalesPerformancePage() {
                   />
                 </div>
               ))}
+            </div>
+
+            {/* Daily Metrics */}
+            <div className="border-t dark:border-gray-700 pt-4 mb-6 space-y-3">
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">ข้อมูลรายวัน</p>
+
+              <div className="flex items-center justify-between gap-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <span className="font-medium text-gray-800 dark:text-white">🚶 Walk-in customers</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={walkInCount || ''}
+                  onChange={(e) => setWalkInCount(parseInt(e.target.value) || 0)}
+                  placeholder="0"
+                  className="input w-24 text-center"
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                <span className="font-medium text-gray-800 dark:text-white">⭐️ Google reviews</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={googleReviewCount || ''}
+                  onChange={(e) => setGoogleReviewCount(parseInt(e.target.value) || 0)}
+                  placeholder="0"
+                  className="input w-24 text-center"
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <span className="font-medium text-gray-800 dark:text-white">📞 Closed from follow-up</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={followUpClosed || ''}
+                  onChange={(e) => setFollowUpClosed(parseInt(e.target.value) || 0)}
+                  placeholder="0"
+                  className="input w-24 text-center"
+                />
+              </div>
             </div>
 
             <div className="flex gap-3">
