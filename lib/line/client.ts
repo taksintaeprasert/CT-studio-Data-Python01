@@ -1,42 +1,55 @@
 // LINE Messaging API Client
 
 const LINE_API_URL = 'https://api.line.me/v2/bot/message/push'
-const LINE_NOTIFY_API_URL = 'https://notify-api.line.me/api/notify'
 
-// LINE Notify - Free unlimited messages
+// Send message via LINE Messaging API (using Channel Access Token)
 export async function sendLineNotify(message: string): Promise<{ success: boolean; error?: string }> {
-  const token = process.env.LINE_NOTIFY_TOKEN
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN
+  const userId = process.env.LINE_NOTIFY_USER_ID
 
   if (!token) {
-    console.error('LINE_NOTIFY_TOKEN is not configured')
-    return { success: false, error: 'LINE Notify token not configured' }
+    console.error('LINE_CHANNEL_ACCESS_TOKEN is not configured')
+    return { success: false, error: 'LINE Channel Access Token not configured' }
+  }
+
+  if (!userId) {
+    console.error('LINE_NOTIFY_USER_ID is not configured')
+    return { success: false, error: 'LINE User ID not configured' }
   }
 
   try {
     console.log('=== sendLineNotify DEBUG ===')
-    console.log('Sending to LINE Notify...')
+    console.log('Sending via LINE Messaging API...')
 
-    const response = await fetch(LINE_NOTIFY_API_URL, {
+    const response = await fetch(LINE_API_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: `message=${encodeURIComponent(message)}`,
+      body: JSON.stringify({
+        to: userId,
+        messages: [
+          {
+            type: 'text',
+            text: message,
+          },
+        ],
+      }),
     })
 
-    console.log('LINE Notify Response Status:', response.status)
+    console.log('LINE Messaging API Response Status:', response.status)
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('LINE Notify Error:', errorText)
-      return { success: false, error: `LINE Notify failed (${response.status})` }
+      console.error('LINE Messaging API Error:', errorText)
+      return { success: false, error: `LINE Messaging API failed (${response.status}): ${errorText}` }
     }
 
-    console.log('LINE Notify sent successfully!')
+    console.log('LINE message sent successfully!')
     return { success: true }
   } catch (error) {
-    console.error('LINE Notify error:', error)
+    console.error('LINE Messaging API error:', error)
     return { success: false, error: 'Network error: ' + (error instanceof Error ? error.message : String(error)) }
   }
 }

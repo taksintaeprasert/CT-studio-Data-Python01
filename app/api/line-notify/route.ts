@@ -8,16 +8,18 @@ export async function POST(request: NextRequest) {
 
     console.log('=== LINE NOTIFY DEBUG ===')
     console.log('Request type:', type)
-    console.log('Using LINE Notify (free unlimited)')
+    console.log('Using LINE Messaging API')
 
-    // Check LINE Notify token
-    const notifyToken = process.env.LINE_NOTIFY_TOKEN
-    console.log('LINE_NOTIFY_TOKEN:', notifyToken ? 'SET' : 'NOT SET')
+    // Check LINE Messaging API credentials
+    const channelToken = process.env.LINE_CHANNEL_ACCESS_TOKEN
+    const userId = process.env.LINE_NOTIFY_USER_ID
+    console.log('LINE_CHANNEL_ACCESS_TOKEN:', channelToken ? 'SET' : 'NOT SET')
+    console.log('LINE_NOTIFY_USER_ID:', userId ? 'SET' : 'NOT SET')
 
-    if (!notifyToken) {
-      console.error('LINE_NOTIFY_TOKEN is not configured')
+    if (!channelToken || !userId) {
+      console.error('LINE credentials not configured')
       return NextResponse.json(
-        { success: false, error: 'LINE Notify token not configured. Please add LINE_NOTIFY_TOKEN to environment variables.' },
+        { success: false, error: 'LINE_CHANNEL_ACCESS_TOKEN or LINE_NOTIFY_USER_ID not configured.' },
         { status: 500 }
       )
     }
