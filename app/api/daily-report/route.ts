@@ -55,11 +55,17 @@ export async function POST(request: NextRequest) {
       .gte('created_at', `${reportDate}T00:00:00`)
       .lte('created_at', `${reportDate}T23:59:59`)
 
-    // Get chat counts for the date
+    // Get chat counts for the date (including new metrics)
     const { data: chatCounts } = await supabase
       .from('chat_counts')
-      .select('staff_id, chat_count')
+      .select('staff_id, chat_count, walk_in_count, google_review_count, follow_up_closed')
       .eq('date', reportDate)
+
+    // Get daily metrics (from first record with data)
+    const metricsRecord = chatCounts?.find(c => c.walk_in_count !== null || c.google_review_count !== null || c.follow_up_closed !== null)
+    const walkInCount = metricsRecord?.walk_in_count || 0
+    const googleReviewCount = metricsRecord?.google_review_count || 0
+    const followUpClosed = metricsRecord?.follow_up_closed || 0
 
     // Get payments for the date (actual income received)
     const { data: payments } = await supabase
@@ -134,6 +140,24 @@ export async function POST(request: NextRequest) {
       }))
       .sort((a, b) => b.amount - a.amount)
 
+    // Calculate master bookings (services priced at 20,000+)
+    let masterBookingAmount = 0
+    orders?.forEach((order) => {
+      order.order_items?.forEach((item: { products: { list_price: number } | null }) => {
+        if (item.products && item.products.list_price >= 20000) {
+          masterBookingAmount += item.products.list_price
+        }
+      })
+    })
+
+    // Calculate 50% customers (orders containing "50%" in product name/code)
+    const halfPriceCustomers = orders?.filter((order) => {
+      return order.order_items?.some((item: { products: { product_name: string } | null }) => {
+        const productName = item.products?.product_name || ''
+        return productName.toUpperCase().includes('50%')
+      })
+    }).length || 0
+
     // Build report data
     const reportData: DailyReportData = {
       date: reportDate,
@@ -146,6 +170,12 @@ export async function POST(request: NextRequest) {
       totalPaidAmount,
       totalDoneAmount,
       totalRealIncome,
+      // New fields
+      walkInCount,
+      googleReviewCount,
+      followUpClosed,
+      masterBookingAmount,
+      halfPriceCustomers,
       servicesSold,
     }
 

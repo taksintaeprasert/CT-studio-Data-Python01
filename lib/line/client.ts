@@ -91,34 +91,52 @@ export function formatDailyReportNotifyMessage(report: DailyReportData): string 
     year: 'numeric',
   })
 
+  // Sales performance per person
   const salesLines = report.salesReports.map(s =>
-    `  ${s.staffName}: ${s.chatCount}แชท → ${s.orderCount}ออเดอร์ (${s.conversionRate.toFixed(0)}%) ฿${(s.bookingAmount/1000).toFixed(0)}k`
-  ).join('\n')
+    `👤 ${s.staffName}
+   New chats: ${s.chatCount}
+   Deals closed: ${s.orderCount}
+   CR%: ${s.conversionRate.toFixed(0)}%`
+  ).join('\n\n')
 
+  // Services sold
   const serviceLines = report.servicesSold
     .filter(s => s.count > 0)
-    .map(s => `  ${s.category}: ${s.count} pax (฿${s.amount.toLocaleString()})`)
+    .map(s => `  • ${s.category}: ${s.count} pax (฿${s.amount.toLocaleString()})`)
     .join('\n')
 
-  return `
-📊 DAILY REPORT
+  return `📊 DAILY REPORT
 ${dateStr}
 
-📈 สรุปภาพรวม:
-  • New Chat: ${report.totalChats}
-  • Orders: ${report.totalOrders}
-  • CR%: ${report.totalConversionRate.toFixed(0)}%
+━━━━━━━━━━━━━━━━━━
+📈 Daily Performance
+━━━━━━━━━━━━━━━━━━
+New chats: ${report.totalChats}
+Deals closed: ${report.totalOrders}
+CR%: ${report.totalConversionRate.toFixed(0)}%
 
-💰 ยอดขาย:
-  • Booking: ฿${report.totalBookingAmount.toLocaleString()}
-  • รายได้จริง: ฿${report.totalRealIncome.toLocaleString()}
+🚶 Walk-in customers: ${report.walkInCount || 0}
+⭐️ Google reviews: ${report.googleReviewCount || 0}
 
-👥 ผลงาน Sales:
-${salesLines || '  ไม่มีข้อมูล'}
+━━━━━━━━━━━━━━━━━━
+💰 Revenue
+━━━━━━━━━━━━━━━━━━
+Bookings today: ฿${report.totalBookingAmount.toLocaleString()}
+Master bookings (20k+): ฿${(report.masterBookingAmount || 0).toLocaleString()}
+50% customers: ${report.halfPriceCustomers || 0}
+Closed from follow-up: ${report.followUpClosed || 0}
 
-💅 บริการที่ขายได้:
-${serviceLines || '  ไม่มีข้อมูล'}
-`
+💵 Actual revenue: ฿${report.totalRealIncome.toLocaleString()}
+
+━━━━━━━━━━━━━━━━━━
+👥 Sales Performance
+━━━━━━━━━━━━━━━━━━
+${salesLines || 'ไม่มีข้อมูล'}
+
+━━━━━━━━━━━━━━━━━━
+💅 Services Sold
+━━━━━━━━━━━━━━━━━━
+${serviceLines || 'ไม่มีข้อมูล'}`
 }
 
 interface LineMessagePayload {
@@ -278,6 +296,12 @@ export interface DailyReportData {
   totalPaidAmount: number
   totalDoneAmount: number
   totalRealIncome: number
+  // New fields
+  walkInCount: number
+  googleReviewCount: number
+  followUpClosed: number
+  masterBookingAmount: number  // Services 20,000+
+  halfPriceCustomers: number   // Orders containing "50%"
   servicesSold: {
     category: string
     count: number
