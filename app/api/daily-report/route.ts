@@ -149,20 +149,21 @@ export async function POST(request: NextRequest) {
       servicesSold,
     }
 
-    // Check LINE Notify token
-    const notifyToken = process.env.LINE_NOTIFY_TOKEN
+    // Check LINE Messaging API token
+    const channelToken = process.env.LINE_CHANNEL_ACCESS_TOKEN
+    const userId = process.env.LINE_NOTIFY_USER_ID
 
-    if (!notifyToken) {
+    if (!channelToken || !userId) {
       return NextResponse.json(
-        { success: false, error: 'LINE_NOTIFY_TOKEN not configured. Please add it to environment variables.', reportData },
+        { success: false, error: 'LINE_CHANNEL_ACCESS_TOKEN or LINE_NOTIFY_USER_ID not configured.', reportData },
         { status: 500 }
       )
     }
 
-    // Format and send via LINE Notify (free unlimited)
+    // Format and send via LINE Messaging API
     const message = formatDailyReportNotifyMessage(reportData)
 
-    console.log('Sending Daily Report via LINE Notify...')
+    console.log('Sending Daily Report via LINE Messaging API...')
     const result = await sendLineNotify(message)
 
     if (!result.success) {
