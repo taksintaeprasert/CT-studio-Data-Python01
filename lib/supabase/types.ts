@@ -36,6 +36,7 @@ export type Database = {
           staff_name: string
           email: string
           role: 'super_admin' | 'admin' | 'sales' | 'artist' | 'marketer'
+          auth_user_id: string | null
           is_active: boolean
           created_at: string
         }
@@ -44,6 +45,7 @@ export type Database = {
           staff_name: string
           email: string
           role: 'super_admin' | 'admin' | 'sales' | 'artist' | 'marketer'
+          auth_user_id?: string | null
           is_active?: boolean
           created_at?: string
         }
@@ -52,6 +54,7 @@ export type Database = {
           staff_name?: string
           email?: string
           role?: 'super_admin' | 'admin' | 'sales' | 'artist' | 'marketer'
+          auth_user_id?: string | null
           is_active?: boolean
           created_at?: string
         }
