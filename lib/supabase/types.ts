@@ -242,6 +242,7 @@ export type Database = {
           order_item_id: number
           photo_url: string
           photo_path: string
+          photo_type: 'before' | 'after'
           uploaded_by: number | null
           note: string | null
           created_at: string
@@ -251,6 +252,7 @@ export type Database = {
           order_item_id: number
           photo_url: string
           photo_path: string
+          photo_type?: 'before' | 'after'
           uploaded_by?: number | null
           note?: string | null
           created_at?: string
@@ -260,6 +262,7 @@ export type Database = {
           order_item_id?: number
           photo_url?: string
           photo_path?: string
+          photo_type?: 'before' | 'after'
           uploaded_by?: number | null
           note?: string | null
           created_at?: string
@@ -282,6 +285,9 @@ export type ServicePhoto = Database['public']['Tables']['service_photos']['Row']
 
 // Staff role type
 export type StaffRole = 'super_admin' | 'admin' | 'sales' | 'artist' | 'marketer'
+
+// Photo type
+export type PhotoType = 'before' | 'after'
 
 // Role-based access configuration
 export const ROLE_ACCESS: Record<StaffRole, string[]> = {
