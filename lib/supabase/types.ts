@@ -36,6 +36,7 @@ export type Database = {
           staff_name: string
           email: string
           role: 'super_admin' | 'admin' | 'sales' | 'artist' | 'marketer'
+          auth_user_id: string | null
           is_active: boolean
           created_at: string
         }
@@ -44,6 +45,7 @@ export type Database = {
           staff_name: string
           email: string
           role: 'super_admin' | 'admin' | 'sales' | 'artist' | 'marketer'
+          auth_user_id?: string | null
           is_active?: boolean
           created_at?: string
         }
@@ -52,6 +54,7 @@ export type Database = {
           staff_name?: string
           email?: string
           role?: 'super_admin' | 'admin' | 'sales' | 'artist' | 'marketer'
+          auth_user_id?: string | null
           is_active?: boolean
           created_at?: string
         }
@@ -144,6 +147,12 @@ export type Database = {
           order_id: number
           product_id: number
           is_upsell: boolean
+          item_price: number
+          appointment_date: string | null
+          appointment_time: string | null
+          item_status: 'pending' | 'scheduled' | 'completed' | 'cancelled'
+          artist_id: number | null
+          check_in_time: string | null
           created_at: string
         }
         Insert: {
@@ -151,6 +160,12 @@ export type Database = {
           order_id: number
           product_id: number
           is_upsell?: boolean
+          item_price?: number
+          appointment_date?: string | null
+          appointment_time?: string | null
+          item_status?: 'pending' | 'scheduled' | 'completed' | 'cancelled'
+          artist_id?: number | null
+          check_in_time?: string | null
           created_at?: string
         }
         Update: {
@@ -158,6 +173,12 @@ export type Database = {
           order_id?: number
           product_id?: number
           is_upsell?: boolean
+          item_price?: number
+          appointment_date?: string | null
+          appointment_time?: string | null
+          item_status?: 'pending' | 'scheduled' | 'completed' | 'cancelled'
+          artist_id?: number | null
+          check_in_time?: string | null
           created_at?: string
         }
       }
@@ -168,6 +189,8 @@ export type Database = {
           payment_date: string
           amount: number
           payment_method: string | null
+          credit_card_fee: number
+          net_amount: number | null
           note: string | null
           created_at: string
         }
@@ -177,6 +200,8 @@ export type Database = {
           payment_date?: string
           amount: number
           payment_method?: string | null
+          credit_card_fee?: number
+          net_amount?: number | null
           note?: string | null
           created_at?: string
         }
@@ -186,6 +211,8 @@ export type Database = {
           payment_date?: string
           amount?: number
           payment_method?: string | null
+          credit_card_fee?: number
+          net_amount?: number | null
           note?: string | null
           created_at?: string
         }
@@ -268,6 +295,44 @@ export type Database = {
           created_at?: string
         }
       }
+      booking_messages: {
+        Row: {
+          id: number
+          order_item_id: number
+          sender_id: number | null
+          sender_type: 'staff' | 'system'
+          message_type: 'text' | 'url' | 'file'
+          message_text: string | null
+          file_url: string | null
+          file_name: string | null
+          is_read: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          order_item_id: number
+          sender_id?: number | null
+          sender_type: 'staff' | 'system'
+          message_type?: 'text' | 'url' | 'file'
+          message_text?: string | null
+          file_url?: string | null
+          file_name?: string | null
+          is_read?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          order_item_id?: number
+          sender_id?: number | null
+          sender_type?: 'staff' | 'system'
+          message_type?: 'text' | 'url' | 'file'
+          message_text?: string | null
+          file_url?: string | null
+          file_name?: string | null
+          is_read?: boolean
+          created_at?: string
+        }
+      }
     }
   }
 }
@@ -282,6 +347,7 @@ export type Payment = Database['public']['Tables']['payments']['Row']
 export type Chat = Database['public']['Tables']['chats']['Row']
 export type AdsBudget = Database['public']['Tables']['ads_budget']['Row']
 export type ServicePhoto = Database['public']['Tables']['service_photos']['Row']
+export type BookingMessage = Database['public']['Tables']['booking_messages']['Row']
 
 // Staff role type
 export type StaffRole = 'super_admin' | 'admin' | 'sales' | 'artist' | 'marketer'

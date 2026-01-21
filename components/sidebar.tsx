@@ -25,6 +25,13 @@ const menuItems: MenuItem[] = [
     roles: ['super_admin', 'admin', 'sales', 'marketer']
   },
   {
+    href: '/focus',
+    labelKey: 'nav.focus',
+    label: 'Focus',
+    icon: 'M13 10V3L4 14h7v7l9-11h-7z',
+    roles: ['sales']
+  },
+  {
     href: '/artist',
     labelKey: 'nav.artistHome',
     label: 'Artist Home',
