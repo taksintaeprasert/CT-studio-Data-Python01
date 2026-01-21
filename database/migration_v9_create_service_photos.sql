@@ -57,29 +57,29 @@ COMMENT ON COLUMN service_photos.created_at IS 'Timestamp when photo was uploade
 -- =============================================
 ALTER TABLE service_photos ENABLE ROW LEVEL SECURITY;
 
--- Policy: Allow authenticated users to read all photos
+-- Policy: Allow authenticated users (staff) to read all photos
 CREATE POLICY "Authenticated users can read all photos"
 ON service_photos FOR SELECT
 TO authenticated
 USING (true);
 
--- Policy: Allow authenticated users to insert photos
+-- Policy: Allow authenticated users (staff) to insert photos
 CREATE POLICY "Authenticated users can insert photos"
 ON service_photos FOR INSERT
 TO authenticated
 WITH CHECK (true);
 
--- Policy: Allow authenticated users to update their own photos
-CREATE POLICY "Users can update their own photos"
+-- Policy: Allow authenticated users (staff) to update photos
+CREATE POLICY "Authenticated users can update photos"
 ON service_photos FOR UPDATE
 TO authenticated
-USING (uploaded_by = auth.uid()::integer);
+USING (true);
 
--- Policy: Allow authenticated users to delete their own photos
-CREATE POLICY "Users can delete their own photos"
+-- Policy: Allow authenticated users (staff) to delete photos
+CREATE POLICY "Authenticated users can delete photos"
 ON service_photos FOR DELETE
 TO authenticated
-USING (uploaded_by = auth.uid()::integer);
+USING (true);
 
 -- =============================================
 -- VERIFY MIGRATION
