@@ -271,14 +271,23 @@ const result = await uploadServicePhoto({
 
 ### Run Migration V9
 
+**สร้าง `service_photos` table ใหม่:**
+
 1. ไปที่ Supabase Dashboard → SQL Editor
-2. เปิดไฟล์ `database/migration_v9_photo_types.sql`
+2. เปิดไฟล์ `database/migration_v9_create_service_photos.sql`
 3. Copy & Paste และรัน
 4. Verify:
    ```sql
-   SELECT column_name, data_type, column_default
+   -- Check table structure
+   SELECT table_name, column_name, data_type, is_nullable, column_default
    FROM information_schema.columns
-   WHERE table_name = 'service_photos' AND column_name = 'photo_type';
+   WHERE table_name = 'service_photos'
+   ORDER BY ordinal_position;
+
+   -- Check indexes
+   SELECT indexname, indexdef
+   FROM pg_indexes
+   WHERE tablename = 'service_photos';
    ```
 
 ---
