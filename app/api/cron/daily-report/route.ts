@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { sendLineNotify, formatDailyReportNotifyMessage, DailyReportData } from '@/lib/line/client'
+import {
+  sendLineNotify,
+  formatDailyReportNotifyMessage,
+  sendLineFlexMessage,
+  createSalesReportFlex,
+  createDailyReportFlex,
+  DailyReportData,
+  SalesReportData
+} from '@/lib/line/client'
 
 // Create a simple Supabase client for API routes
 function getSupabaseClient() {
@@ -22,14 +30,32 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Use today's date (Thailand timezone)
+    // Calculate date range: 26th of last month to today (or 25th if today >= 26)
     const now = new Date()
-    // Adjust for Thailand timezone (UTC+7)
     const thailandOffset = 7 * 60 * 60 * 1000
     const thailandDate = new Date(now.getTime() + thailandOffset)
-    const reportDate = thailandDate.toISOString().split('T')[0]
 
-    console.log(`[Cron] Generating daily report for ${reportDate}`)
+    const currentDay = thailandDate.getDate()
+    const currentMonth = thailandDate.getMonth()
+    const currentYear = thailandDate.getFullYear()
+
+    let startDate: Date
+    let endDate: Date
+
+    if (currentDay >= 26) {
+      // From 26th of current month to today
+      startDate = new Date(currentYear, currentMonth, 26)
+      endDate = thailandDate
+    } else {
+      // From 26th of last month to today
+      startDate = new Date(currentYear, currentMonth - 1, 26)
+      endDate = thailandDate
+    }
+
+    const startDateStr = startDate.toISOString().split('T')[0]
+    const endDateStr = endDate.toISOString().split('T')[0]
+
+    console.log(`[Cron] Generating report for ${startDateStr} to ${endDateStr}`)
 
     const supabase = getSupabaseClient()
 
@@ -46,7 +72,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'No staff found' })
     }
 
-    // Get orders for the date
+    // Get orders for the date range
     const { data: orders } = await supabase
       .from('orders')
       .select(`
@@ -64,20 +90,20 @@ export async function GET(request: NextRequest) {
           )
         )
       `)
-      .gte('created_at', `${reportDate}T00:00:00`)
-      .lte('created_at', `${reportDate}T23:59:59`)
+      .gte('created_at', `${startDateStr}T00:00:00`)
+      .lte('created_at', `${endDateStr}T23:59:59`)
 
-    // Get chat counts for the date (including new metrics)
+    // Get chat counts for the date range (sum all days)
     const { data: chatCounts } = await supabase
       .from('chat_counts')
       .select('staff_id, chat_count, walk_in_count, google_review_count, follow_up_closed')
-      .eq('date', reportDate)
+      .gte('date', startDateStr)
+      .lte('date', endDateStr)
 
-    // Get daily metrics (from first record with data)
-    const metricsRecord = chatCounts?.find(c => c.walk_in_count !== null || c.google_review_count !== null || c.follow_up_closed !== null)
-    const walkInCount = metricsRecord?.walk_in_count || 0
-    const googleReviewCount = metricsRecord?.google_review_count || 0
-    const followUpClosed = metricsRecord?.follow_up_closed || 0
+    // Sum daily metrics from all records in date range
+    const walkInCount = chatCounts?.reduce((sum, c) => sum + (c.walk_in_count || 0), 0) || 0
+    const googleReviewCount = chatCounts?.reduce((sum, c) => sum + (c.google_review_count || 0), 0) || 0
+    const followUpClosed = chatCounts?.reduce((sum, c) => sum + (c.follow_up_closed || 0), 0) || 0
 
     // Calculate total income from deposits (same as Dashboard)
     const totalDepositsIncome = orders?.reduce((sum, o) => sum + (o.deposit || 0), 0) || 0
@@ -85,8 +111,10 @@ export async function GET(request: NextRequest) {
     // Calculate stats for each staff
     const salesReports = staff.map((s) => {
       const staffOrders = orders?.filter((o) => o.sales_id === s.id) || []
-      const chatData = chatCounts?.find((c) => c.staff_id === s.id)
-      const chatCount = chatData?.chat_count || 0
+
+      // Sum chat counts from all days for this staff
+      const staffChatRecords = chatCounts?.filter((c) => c.staff_id === s.id) || []
+      const chatCount = staffChatRecords.reduce((sum, c) => sum + (c.chat_count || 0), 0)
 
       const bookingOrders = staffOrders.filter((o) => o.order_status === 'booking')
       const paidOrders = staffOrders.filter((o) => o.order_status === 'paid')
@@ -95,6 +123,9 @@ export async function GET(request: NextRequest) {
       const bookingAmount = bookingOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
       const paidAmount = paidOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
       const doneAmount = doneOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
+
+      // Real income = deposits from orders this staff sold
+      const realIncome = staffOrders.reduce((sum, o) => sum + (o.deposit || 0), 0)
 
       const conversionRate = chatCount > 0 ? (staffOrders.length / chatCount) * 100 : 0
 
@@ -107,6 +138,7 @@ export async function GET(request: NextRequest) {
         bookingAmount,
         paidAmount,
         doneAmount,
+        realIncome,
       }
     })
 
@@ -163,9 +195,10 @@ export async function GET(request: NextRequest) {
       })
     }).length || 0
 
-    // Build report data
+    // Build overall report data
     const reportData: DailyReportData = {
-      date: reportDate,
+      startDate: startDateStr,
+      endDate: endDateStr,
       salesReports,
       totalChats,
       totalOrders,
@@ -184,6 +217,55 @@ export async function GET(request: NextRequest) {
       servicesSold,
     }
 
+    // Build individual sales reports
+    const individualReports: SalesReportData[] = staff.map((s) => {
+      const staffOrders = orders?.filter((o) => o.sales_id === s.id) || []
+      const staffChatRecords = chatCounts?.filter((c) => c.staff_id === s.id) || []
+      const chatCount = staffChatRecords.reduce((sum, c) => sum + (c.chat_count || 0), 0)
+
+      const bookingAmount = staffOrders
+        .filter((o) => o.order_status === 'booking')
+        .reduce((sum, o) => sum + (o.total_income || 0), 0)
+
+      const realIncome = staffOrders.reduce((sum, o) => sum + (o.deposit || 0), 0)
+      const conversionRate = chatCount > 0 ? (staffOrders.length / chatCount) * 100 : 0
+
+      // Calculate services sold by this staff
+      const staffServiceMap = new Map<string, { count: number; amount: number }>()
+      staffOrders.forEach((order) => {
+        order.order_items?.forEach((item: { products: { category: string | null; list_price: number } | null }) => {
+          if (item.products) {
+            const category = item.products.category || 'Other'
+            const existing = staffServiceMap.get(category) || { count: 0, amount: 0 }
+            staffServiceMap.set(category, {
+              count: existing.count + 1,
+              amount: existing.amount + (item.products.list_price || 0),
+            })
+          }
+        })
+      })
+
+      const servicesSold = Array.from(staffServiceMap.entries())
+        .map(([category, data]) => ({
+          category,
+          count: data.count,
+          amount: data.amount,
+        }))
+        .sort((a, b) => b.amount - a.amount)
+
+      return {
+        staffName: s.staff_name,
+        startDate: startDateStr,
+        endDate: endDateStr,
+        chatCount,
+        orderCount: staffOrders.length,
+        conversionRate,
+        bookingAmount,
+        realIncome,
+        servicesSold,
+      }
+    })
+
     // Check LINE Messaging API token
     const channelToken = process.env.LINE_CHANNEL_ACCESS_TOKEN
     const userId = process.env.LINE_NOTIFY_USER_ID
@@ -193,23 +275,55 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'LINE credentials not configured' })
     }
 
-    // Format and send via LINE Messaging API
-    const message = formatDailyReportNotifyMessage(reportData)
+    console.log(`[Cron] Sending reports via LINE Messaging API...`)
 
-    console.log(`[Cron] Sending daily report via LINE Messaging API...`)
-    const result = await sendLineNotify(message)
+    // 1. Send individual reports for each sales staff
+    let individualSuccess = 0
+    let individualFailed = 0
 
-    if (!result.success) {
-      console.log(`[Cron] Failed to send LINE Notify: ${result.error}`)
-      return NextResponse.json({ success: false, error: result.error })
+    for (const report of individualReports) {
+      const flexMessage = createSalesReportFlex(report)
+      const result = await sendLineFlexMessage({
+        to: userId,
+        altText: `📊 ${report.staffName} - Report`,
+        contents: flexMessage,
+      })
+
+      if (result.success) {
+        individualSuccess++
+        console.log(`[Cron] Individual report sent for ${report.staffName}`)
+      } else {
+        individualFailed++
+        console.error(`[Cron] Failed to send report for ${report.staffName}: ${result.error}`)
+      }
+
+      // Add small delay between messages to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500))
     }
 
-    console.log(`[Cron] Daily report sent successfully for ${reportDate}`)
+    // 2. Send overall summary report
+    const summaryFlexMessage = createDailyReportFlex(reportData)
+    const summaryResult = await sendLineFlexMessage({
+      to: userId,
+      altText: '📊 Summary Report',
+      contents: summaryFlexMessage,
+    })
+
+    if (!summaryResult.success) {
+      console.error(`[Cron] Failed to send summary report: ${summaryResult.error}`)
+    } else {
+      console.log(`[Cron] Summary report sent successfully`)
+    }
+
+    console.log(`[Cron] Reports sent: ${individualSuccess}/${individualReports.length} individual, summary: ${summaryResult.success ? 'OK' : 'FAILED'}`)
+
     return NextResponse.json({
       success: true,
-      date: reportDate,
+      dateRange: `${startDateStr} to ${endDateStr}`,
       totalOrders,
       totalRealIncome,
+      individualReportsSent: individualSuccess,
+      summaryReportSent: summaryResult.success,
     })
   } catch (error) {
     console.error('[Cron] Daily report error:', error)
