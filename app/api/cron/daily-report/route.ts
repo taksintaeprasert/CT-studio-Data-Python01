@@ -6,6 +6,7 @@ import {
   sendLineFlexMessage,
   createSalesReportFlex,
   createDailyReportFlex,
+  createTodaySummaryFlex,
   DailyReportData,
   SalesReportData
 } from '@/lib/line/client'
@@ -120,7 +121,8 @@ export async function GET(request: NextRequest) {
       const paidOrders = staffOrders.filter((o) => o.order_status === 'paid')
       const doneOrders = staffOrders.filter((o) => o.order_status === 'done')
 
-      const bookingAmount = bookingOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
+      // Booking Amount = total_income of ALL orders (not just 'booking' status)
+      const bookingAmount = staffOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
       const paidAmount = paidOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
       const doneAmount = doneOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
 
@@ -223,9 +225,8 @@ export async function GET(request: NextRequest) {
       const staffChatRecords = chatCounts?.filter((c) => c.staff_id === s.id) || []
       const chatCount = staffChatRecords.reduce((sum, c) => sum + (c.chat_count || 0), 0)
 
-      const bookingAmount = staffOrders
-        .filter((o) => o.order_status === 'booking')
-        .reduce((sum, o) => sum + (o.total_income || 0), 0)
+      // Booking Amount = total_income of ALL orders (not just 'booking' status)
+      const bookingAmount = staffOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
 
       const realIncome = staffOrders.reduce((sum, o) => sum + (o.deposit || 0), 0)
       const conversionRate = chatCount > 0 ? (staffOrders.length / chatCount) * 100 : 0
@@ -266,6 +267,145 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    // Calculate today's statistics (single day)
+    const todayDateStr = endDateStr // Today is the end date
+
+    // Get orders for today only
+    const { data: todayOrders } = await supabase
+      .from('orders')
+      .select(`
+        id,
+        sales_id,
+        order_status,
+        total_income,
+        deposit,
+        order_items (
+          product_id,
+          products (
+            product_name,
+            category,
+            list_price
+          )
+        )
+      `)
+      .gte('created_at', `${todayDateStr}T00:00:00`)
+      .lte('created_at', `${todayDateStr}T23:59:59`)
+
+    // Get chat counts for today only
+    const { data: todayChatCounts } = await supabase
+      .from('chat_counts')
+      .select('staff_id, chat_count, walk_in_count, google_review_count, follow_up_closed')
+      .eq('date', todayDateStr)
+
+    // Calculate today's metrics
+    const todayWalkInCount = todayChatCounts?.reduce((sum, c) => sum + (c.walk_in_count || 0), 0) || 0
+    const todayGoogleReviewCount = todayChatCounts?.reduce((sum, c) => sum + (c.google_review_count || 0), 0) || 0
+    const todayFollowUpClosed = todayChatCounts?.reduce((sum, c) => sum + (c.follow_up_closed || 0), 0) || 0
+
+    const todayDepositsIncome = todayOrders?.reduce((sum, o) => sum + (o.deposit || 0), 0) || 0
+
+    // Calculate stats for each staff (today only)
+    const todaySalesReports = staff.map((s) => {
+      const staffOrders = todayOrders?.filter((o) => o.sales_id === s.id) || []
+      const chatData = todayChatCounts?.find((c) => c.staff_id === s.id)
+      const chatCount = chatData?.chat_count || 0
+
+      const bookingOrders = staffOrders.filter((o) => o.order_status === 'booking')
+      const paidOrders = staffOrders.filter((o) => o.order_status === 'paid')
+      const doneOrders = staffOrders.filter((o) => o.order_status === 'done')
+
+      // Booking Amount = total_income of ALL orders (not just 'booking' status)
+      const bookingAmount = staffOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
+      const paidAmount = paidOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
+      const doneAmount = doneOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
+      const realIncome = staffOrders.reduce((sum, o) => sum + (o.deposit || 0), 0)
+
+      const conversionRate = chatCount > 0 ? (staffOrders.length / chatCount) * 100 : 0
+
+      return {
+        staffName: s.staff_name,
+        chatCount,
+        orderCount: staffOrders.length,
+        closeCount: doneOrders.length,
+        conversionRate,
+        bookingAmount,
+        paidAmount,
+        doneAmount,
+        realIncome,
+      }
+    })
+
+    // Calculate today's totals
+    const todayTotalChats = todaySalesReports.reduce((sum, s) => sum + s.chatCount, 0)
+    const todayTotalOrders = todaySalesReports.reduce((sum, s) => sum + s.orderCount, 0)
+    const todayTotalClose = todaySalesReports.reduce((sum, s) => sum + s.closeCount, 0)
+    const todayTotalConversionRate = todayTotalChats > 0 ? (todayTotalOrders / todayTotalChats) * 100 : 0
+    const todayTotalBookingAmount = todaySalesReports.reduce((sum, s) => sum + s.bookingAmount, 0)
+    const todayTotalPaidAmount = todaySalesReports.reduce((sum, s) => sum + s.paidAmount, 0)
+    const todayTotalDoneAmount = todaySalesReports.reduce((sum, s) => sum + s.doneAmount, 0)
+
+    // Calculate today's services sold
+    const todayServiceMap = new Map<string, { count: number; amount: number }>()
+    todayOrders?.forEach((order) => {
+      order.order_items?.forEach((item: { products: { category: string | null; list_price: number } | null }) => {
+        if (item.products) {
+          const category = item.products.category || 'Other'
+          const existing = todayServiceMap.get(category) || { count: 0, amount: 0 }
+          todayServiceMap.set(category, {
+            count: existing.count + 1,
+            amount: existing.amount + (item.products.list_price || 0),
+          })
+        }
+      })
+    })
+
+    const todayServicesSold = Array.from(todayServiceMap.entries())
+      .map(([category, data]) => ({
+        category,
+        count: data.count,
+        amount: data.amount,
+      }))
+      .sort((a, b) => b.amount - a.amount)
+
+    // Calculate today's master bookings
+    let todayMasterBookingAmount = 0
+    todayOrders?.forEach((order) => {
+      order.order_items?.forEach((item: { products: { list_price: number } | null }) => {
+        if (item.products && item.products.list_price >= 20000) {
+          todayMasterBookingAmount += item.products.list_price
+        }
+      })
+    })
+
+    // Calculate today's 50% customers
+    const todayHalfPriceCustomers = todayOrders?.filter((order) => {
+      return order.order_items?.some((item: { products: { product_name: string } | null }) => {
+        const productName = item.products?.product_name || ''
+        return productName.toUpperCase().includes('50%')
+      })
+    }).length || 0
+
+    // Build today's report data
+    const todayReportData: DailyReportData = {
+      startDate: todayDateStr,
+      endDate: todayDateStr,
+      salesReports: todaySalesReports,
+      totalChats: todayTotalChats,
+      totalOrders: todayTotalOrders,
+      totalClose: todayTotalClose,
+      totalConversionRate: todayTotalConversionRate,
+      totalBookingAmount: todayTotalBookingAmount,
+      totalPaidAmount: todayTotalPaidAmount,
+      totalDoneAmount: todayTotalDoneAmount,
+      totalRealIncome: todayDepositsIncome,
+      walkInCount: todayWalkInCount,
+      googleReviewCount: todayGoogleReviewCount,
+      followUpClosed: todayFollowUpClosed,
+      masterBookingAmount: todayMasterBookingAmount,
+      halfPriceCustomers: todayHalfPriceCustomers,
+      servicesSold: todayServicesSold,
+    }
+
     // Check LINE Messaging API token
     const channelToken = process.env.LINE_CHANNEL_ACCESS_TOKEN
     const userId = process.env.LINE_NOTIFY_USER_ID
@@ -301,29 +441,48 @@ export async function GET(request: NextRequest) {
       await new Promise(resolve => setTimeout(resolve, 500))
     }
 
-    // 2. Send overall summary report
+    // 2. Send overall period summary report (26-25)
+    await new Promise(resolve => setTimeout(resolve, 500))
     const summaryFlexMessage = createDailyReportFlex(reportData)
     const summaryResult = await sendLineFlexMessage({
       to: userId,
-      altText: '📊 Summary Report',
+      altText: '📊 Period Summary Report',
       contents: summaryFlexMessage,
     })
 
     if (!summaryResult.success) {
-      console.error(`[Cron] Failed to send summary report: ${summaryResult.error}`)
+      console.error(`[Cron] Failed to send period summary report: ${summaryResult.error}`)
     } else {
-      console.log(`[Cron] Summary report sent successfully`)
+      console.log(`[Cron] Period summary report sent successfully`)
     }
 
-    console.log(`[Cron] Reports sent: ${individualSuccess}/${individualReports.length} individual, summary: ${summaryResult.success ? 'OK' : 'FAILED'}`)
+    // 3. Send today's summary report (single day)
+    await new Promise(resolve => setTimeout(resolve, 500))
+    const todaySummaryFlexMessage = createTodaySummaryFlex(todayReportData)
+    const todaySummaryResult = await sendLineFlexMessage({
+      to: userId,
+      altText: '📊 Today Summary',
+      contents: todaySummaryFlexMessage,
+    })
+
+    if (!todaySummaryResult.success) {
+      console.error(`[Cron] Failed to send today summary report: ${todaySummaryResult.error}`)
+    } else {
+      console.log(`[Cron] Today summary report sent successfully`)
+    }
+
+    console.log(`[Cron] Reports sent: ${individualSuccess}/${individualReports.length} individual, period summary: ${summaryResult.success ? 'OK' : 'FAILED'}, today summary: ${todaySummaryResult.success ? 'OK' : 'FAILED'}`)
 
     return NextResponse.json({
       success: true,
       dateRange: `${startDateStr} to ${endDateStr}`,
       totalOrders,
       totalRealIncome,
+      todayOrders: todayTotalOrders,
+      todayRealIncome: todayDepositsIncome,
       individualReportsSent: individualSuccess,
-      summaryReportSent: summaryResult.success,
+      periodSummaryReportSent: summaryResult.success,
+      todaySummaryReportSent: todaySummaryResult.success,
     })
   } catch (error) {
     console.error('[Cron] Daily report error:', error)

@@ -489,6 +489,209 @@ export function createSalesReportFlex(report: SalesReportData): object {
   }
 }
 
+// Create Single Day Summary Flex Message (for today only)
+export function createTodaySummaryFlex(report: DailyReportData): object {
+  const dateObj = new Date(report.startDate)
+  const dateDisplay = dateObj.toLocaleDateString('th-TH', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  })
+
+  // Build sales rows
+  const salesRows = report.salesReports.map((s) => ({
+    type: 'box',
+    layout: 'horizontal',
+    contents: [
+      { type: 'text', text: s.staffName, size: 'xs', flex: 2, color: '#555555' },
+      { type: 'text', text: String(s.chatCount), size: 'xs', flex: 1, align: 'center' },
+      { type: 'text', text: String(s.orderCount), size: 'xs', flex: 1, align: 'center' },
+      { type: 'text', text: `${s.conversionRate.toFixed(0)}%`, size: 'xs', flex: 1, align: 'center', color: s.conversionRate > 0 ? '#10B981' : '#8c8c8c' },
+      { type: 'text', text: `฿${(s.bookingAmount / 1000).toFixed(0)}k`, size: 'xs', flex: 2, align: 'end' },
+    ],
+    margin: 'sm',
+  }))
+
+  // Build services rows
+  const serviceRows = report.servicesSold
+    .filter(s => s.count > 0)
+    .map((s) => ({
+      type: 'box',
+      layout: 'horizontal',
+      contents: [
+        { type: 'text', text: s.category, size: 'xs', flex: 3, color: '#555555' },
+        { type: 'text', text: `${s.count} pax`, size: 'xs', flex: 2, align: 'center' },
+        { type: 'text', text: `฿${s.amount.toLocaleString()}`, size: 'xs', flex: 2, align: 'end', color: '#EC4899' },
+      ],
+      margin: 'sm',
+    }))
+
+  return {
+    type: 'bubble',
+    size: 'giga',
+    header: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        {
+          type: 'text',
+          text: '📊 TODAY SUMMARY',
+          color: '#ffffff',
+          size: 'lg',
+          weight: 'bold',
+        },
+        {
+          type: 'text',
+          text: dateDisplay,
+          color: '#ffffff',
+          size: 'xs',
+          margin: 'sm',
+        },
+      ],
+      backgroundColor: '#10B981',
+      paddingAll: 'lg',
+    },
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        // Summary Section
+        {
+          type: 'text',
+          text: '📈 Summary',
+          weight: 'bold',
+          size: 'sm',
+          color: '#1f2937',
+        },
+        {
+          type: 'box',
+          layout: 'horizontal',
+          contents: [
+            {
+              type: 'box',
+              layout: 'vertical',
+              contents: [
+                { type: 'text', text: 'New Chat', size: 'xxs', color: '#8c8c8c', align: 'center' },
+                { type: 'text', text: String(report.totalChats), size: 'lg', weight: 'bold', align: 'center', color: '#3B82F6' },
+              ],
+              flex: 1,
+            },
+            {
+              type: 'box',
+              layout: 'vertical',
+              contents: [
+                { type: 'text', text: 'Orders', size: 'xxs', color: '#8c8c8c', align: 'center' },
+                { type: 'text', text: String(report.totalOrders), size: 'lg', weight: 'bold', align: 'center', color: '#F59E0B' },
+              ],
+              flex: 1,
+            },
+            {
+              type: 'box',
+              layout: 'vertical',
+              contents: [
+                { type: 'text', text: 'CR%', size: 'xxs', color: '#8c8c8c', align: 'center' },
+                { type: 'text', text: `${report.totalConversionRate.toFixed(0)}%`, size: 'lg', weight: 'bold', align: 'center', color: '#8B5CF6' },
+              ],
+              flex: 1,
+            },
+          ],
+          margin: 'md',
+          paddingAll: 'sm',
+          backgroundColor: '#f9fafb',
+          cornerRadius: 'md',
+        },
+
+        // Income Summary
+        {
+          type: 'box',
+          layout: 'horizontal',
+          contents: [
+            {
+              type: 'box',
+              layout: 'vertical',
+              contents: [
+                { type: 'text', text: 'Booking', size: 'xxs', color: '#8c8c8c', align: 'center' },
+                { type: 'text', text: `฿${report.totalBookingAmount.toLocaleString()}`, size: 'sm', weight: 'bold', align: 'center', color: '#F59E0B' },
+              ],
+              flex: 1,
+            },
+            {
+              type: 'box',
+              layout: 'vertical',
+              contents: [
+                { type: 'text', text: 'Income', size: 'xxs', color: '#8c8c8c', align: 'center' },
+                { type: 'text', text: `฿${report.totalRealIncome.toLocaleString()}`, size: 'sm', weight: 'bold', align: 'center', color: '#10B981' },
+              ],
+              flex: 1,
+            },
+          ],
+          margin: 'md',
+          paddingAll: 'sm',
+          backgroundColor: '#f9fafb',
+          cornerRadius: 'md',
+        },
+
+        { type: 'separator', margin: 'lg' },
+
+        // Sales Performance
+        {
+          type: 'text',
+          text: '👥 Sales Performance',
+          weight: 'bold',
+          size: 'sm',
+          color: '#1f2937',
+          margin: 'lg',
+        },
+        {
+          type: 'box',
+          layout: 'horizontal',
+          contents: [
+            { type: 'text', text: 'Name', size: 'xxs', flex: 2, color: '#8c8c8c' },
+            { type: 'text', text: 'Chat', size: 'xxs', flex: 1, align: 'center', color: '#8c8c8c' },
+            { type: 'text', text: 'Order', size: 'xxs', flex: 1, align: 'center', color: '#8c8c8c' },
+            { type: 'text', text: 'CR%', size: 'xxs', flex: 1, align: 'center', color: '#8c8c8c' },
+            { type: 'text', text: 'Booking', size: 'xxs', flex: 2, align: 'end', color: '#8c8c8c' },
+          ],
+          margin: 'md',
+        },
+        ...salesRows,
+
+        { type: 'separator', margin: 'lg' },
+
+        // Services Sold
+        {
+          type: 'text',
+          text: '💅 Services Sold',
+          weight: 'bold',
+          size: 'sm',
+          color: '#1f2937',
+          margin: 'lg',
+        },
+        ...(serviceRows.length > 0 ? serviceRows : [
+          { type: 'text', text: 'No data', size: 'xs', color: '#8c8c8c', margin: 'sm' },
+        ]),
+      ],
+      paddingAll: 'lg',
+    },
+    footer: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        {
+          type: 'text',
+          text: 'CT Studio - Today Report',
+          size: 'xxs',
+          color: '#8c8c8c',
+          align: 'center',
+        },
+      ],
+      paddingAll: 'md',
+      backgroundColor: '#f7f7f7',
+    },
+  }
+}
+
 // Create Daily Report Flex Message (Overall Summary)
 export function createDailyReportFlex(report: DailyReportData): object {
   // Format date range
