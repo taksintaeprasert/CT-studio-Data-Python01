@@ -152,6 +152,7 @@ export type Database = {
           appointment_time: string | null
           item_status: 'pending' | 'scheduled' | 'completed' | 'cancelled'
           artist_id: number | null
+          booking_title: string | null
           check_in_time: string | null
           created_at: string
         }
@@ -165,6 +166,7 @@ export type Database = {
           appointment_time?: string | null
           item_status?: 'pending' | 'scheduled' | 'completed' | 'cancelled'
           artist_id?: number | null
+          booking_title?: string | null
           check_in_time?: string | null
           created_at?: string
         }
@@ -178,6 +180,7 @@ export type Database = {
           appointment_time?: string | null
           item_status?: 'pending' | 'scheduled' | 'completed' | 'cancelled'
           artist_id?: number | null
+          booking_title?: string | null
           check_in_time?: string | null
           created_at?: string
         }

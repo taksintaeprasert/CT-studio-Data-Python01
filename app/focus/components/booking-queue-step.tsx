@@ -30,6 +30,7 @@ interface OrderItem {
 interface Customer {
   id: number
   full_name: string
+  nickname: string | null
   phone: string | null
 }
 
@@ -71,7 +72,7 @@ export default function BookingQueueStep({ orderId, onComplete }: BookingQueueSt
 
     const { data: order } = await supabase
       .from('orders')
-      .select('customers (id, full_name, phone)')
+      .select('customers (id, full_name, nickname, phone)')
       .eq('id', orderId)
       .single()
 
