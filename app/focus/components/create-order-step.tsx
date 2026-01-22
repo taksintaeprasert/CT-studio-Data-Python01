@@ -37,8 +37,8 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
     age: '',
     contact_channel: 'line',
   })
-  const [photoFile, setPhotoFile] = useState<File | null>(null)
-  const [photoPreview, setPhotoPreview] = useState<string>('')
+  const [photoFiles, setPhotoFiles] = useState<File[]>([])
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([])
 
   // Order state
   const [products, setProducts] = useState<Product[]>([])
@@ -100,16 +100,35 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
     }
   }
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setPhotoFile(file)
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
-    }
+  const handlePhotosAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+
+    const newFiles = [...photoFiles, ...files]
+    setPhotoFiles(newFiles)
+
+    // Create previews
+    const readers = files.map((file) => {
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          resolve(reader.result as string)
+        }
+        reader.readAsDataURL(file)
+      })
+    })
+
+    Promise.all(readers).then((newPreviews) => {
+      setPhotoPreviews([...photoPreviews, ...newPreviews])
+    })
+
+    // Clear input
+    e.target.value = ''
+  }
+
+  const removePhoto = (index: number) => {
+    setPhotoFiles(photoFiles.filter((_, i) => i !== index))
+    setPhotoPreviews(photoPreviews.filter((_, i) => i !== index))
   }
 
   // Extract price code from product code (e.g., "10900" from "LIP10900")
@@ -317,6 +336,24 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
           })
       }
 
+      // 5. Upload customer photos if any
+      if (photoFiles.length > 0 && customerId) {
+        const { uploadMultipleServicePhotos } = await import('@/lib/storage/photos')
+
+        const uploadResult = await uploadMultipleServicePhotos({
+          files: photoFiles,
+          customerId,
+          photoType: 'before',
+          uploadedBy: user?.id,
+          note: `Upload from Focus Mode - Order #${order.id}`,
+        })
+
+        if (uploadResult.errors.length > 0) {
+          console.error('Photo upload errors:', uploadResult.errors)
+          // Don't fail order creation if photo upload fails
+        }
+      }
+
       // Success!
       alert(`✅ สร้าง Order #${order.id} สำเร็จ!`)
       onOrderCreated(order.id)
@@ -422,27 +459,44 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
             </select>
           </div>
 
-          {/* Photo Upload */}
+          {/* Photo Upload - Multiple Photos */}
           <div className="md:col-span-2">
-            <label className="label">รูปภาพ (Optional)</label>
-            <div className="flex items-center gap-4">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handlePhotoChange}
-                className="input flex-1"
-              />
-              {photoPreview && (
-                <div className="relative w-20 h-20">
-                  <Image
-                    src={photoPreview}
-                    alt="Preview"
-                    fill
-                    className="object-cover rounded-lg"
-                  />
-                </div>
-              )}
-            </div>
+            <label className="label">รูปภาพลูกค้า (Optional - เพิ่มได้หลายรูป)</label>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handlePhotosAdd}
+              className="input mb-3"
+            />
+
+            {/* Photo Previews Grid */}
+            {photoPreviews.length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                {photoPreviews.map((preview, index) => (
+                  <div key={index} className="relative group">
+                    <div className="relative w-full aspect-square">
+                      <Image
+                        src={preview}
+                        alt={`รูปที่ ${index + 1}`}
+                        fill
+                        className="object-cover rounded-lg border-2 border-pink-200 dark:border-gray-700"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(index)}
+                      className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600 flex items-center justify-center text-xs font-bold shadow-lg"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {photoPreviews.length > 0 && (
+              <p className="text-xs text-gray-500 mt-2">เลือกแล้ว {photoPreviews.length} รูป</p>
+            )}
           </div>
         </div>
       </div>

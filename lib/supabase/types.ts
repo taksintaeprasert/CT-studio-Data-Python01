@@ -266,7 +266,7 @@ export type Database = {
       service_photos: {
         Row: {
           id: number
-          order_item_id: number
+          customer_id: number
           photo_url: string
           photo_path: string
           photo_type: 'before' | 'after'
@@ -276,7 +276,7 @@ export type Database = {
         }
         Insert: {
           id?: number
-          order_item_id: number
+          customer_id: number
           photo_url: string
           photo_path: string
           photo_type?: 'before' | 'after'
@@ -286,7 +286,7 @@ export type Database = {
         }
         Update: {
           id?: number
-          order_item_id?: number
+          customer_id?: number
           photo_url?: string
           photo_path?: string
           photo_type?: 'before' | 'after'
