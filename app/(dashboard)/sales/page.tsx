@@ -134,7 +134,7 @@ export default function SalesPerformancePage() {
     // Get orders within date range
     const { data: orders } = await supabase
       .from('orders')
-      .select('id, sales_id, order_status, total_income')
+      .select('id, sales_id, order_status, total_income, deposit')
       .gte('created_at', `${startDate}T00:00:00`)
       .lte('created_at', `${endDate}T23:59:59`)
 
