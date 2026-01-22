@@ -21,6 +21,7 @@ interface BookingModalProps {
   customer: {
     id: number
     full_name: string
+    nickname: string | null
     phone: string | null
   }
   onClose: () => void
@@ -87,18 +88,25 @@ export default function BookingModal({ orderItem, customer, onClose, onComplete 
         ? `${appointmentDate}T${appointmentTime}:00`
         : `${appointmentDate}T10:00:00`
 
+      // Get artist info
+      const artist = artists.find(a => a.id === selectedArtist)
+
+      // Create booking title: ชื่อช่าง-รหัสบริการ-ชื่อจริงลูกค้า-ชื่อเล่น
+      const firstName = customer.full_name.split(' ')[0]
+      const bookingTitle = `${artist?.staff_name || 'ไม่ระบุช่าง'}-${orderItem.products?.product_code || 'N/A'}-${firstName}-${customer.nickname || ''}`
+
       const { error } = await supabase
         .from('order_items')
         .update({
           artist_id: selectedArtist,
           appointment_date: dateTimeString,
+          booking_title: bookingTitle,
         })
         .eq('id', orderItem.id)
 
       if (error) throw error
 
       // Create system message
-      const artist = artists.find(a => a.id === selectedArtist)
       await supabase.from('booking_messages').insert({
         order_item_id: orderItem.id,
         sender_type: 'system',
