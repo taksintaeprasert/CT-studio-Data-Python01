@@ -32,6 +32,7 @@ interface SalesData {
   id: number
   staff_name: string
   totalSales: number
+  realIncome: number  // Deposits (actual income received)
   orderCount: number
   completedOrders: number
   upsellRate: number
@@ -153,6 +154,7 @@ export default function SalesPerformancePage() {
     const salesStats: SalesData[] = staff.map(s => {
       const staffOrders = orders?.filter(o => o.sales_id === s.id) || []
       const totalSales = staffOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
+      const realIncome = staffOrders.reduce((sum, o) => sum + (o.deposit || 0), 0)  // Actual income from deposits
       const completedOrders = staffOrders.filter(o => o.order_status === 'done').length
 
       // Calculate upsell rate
@@ -174,6 +176,7 @@ export default function SalesPerformancePage() {
         id: s.id,
         staff_name: s.staff_name,
         totalSales,
+        realIncome,
         orderCount: staffOrders.length,
         completedOrders,
         upsellRate,
@@ -335,12 +338,12 @@ export default function SalesPerformancePage() {
     ],
   }
 
-  // Pie Chart - Income by Staff (using payments)
+  // Pie Chart - Income by Staff (using deposits/real income)
   const incomePieData = {
     labels: salesData.map(s => s.staff_name),
     datasets: [
       {
-        data: salesData.map(s => s.totalSales), // We'll improve this with actual income data
+        data: salesData.map(s => s.realIncome),  // Use actual income from deposits
         backgroundColor: pieColors.slice(0, salesData.length),
         borderWidth: 2,
         borderColor: '#fff',
@@ -614,11 +617,17 @@ export default function SalesPerformancePage() {
       ) : (
         <>
           {/* Summary Stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="card">
               <p className="text-sm text-gray-500 dark:text-gray-400">{t('sales.totalSales')}</p>
               <p className="text-2xl font-bold text-pink-600 mt-1">
                 {formatCurrency(salesData.reduce((sum, s) => sum + s.totalSales, 0))}
+              </p>
+            </div>
+            <div className="card">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Income (ยอดรับจริง)</p>
+              <p className="text-2xl font-bold text-green-600 mt-1">
+                {formatCurrency(salesData.reduce((sum, s) => sum + s.realIncome, 0))}
               </p>
             </div>
             <div className="card">
@@ -635,7 +644,7 @@ export default function SalesPerformancePage() {
             </div>
             <div className="card">
               <p className="text-sm text-gray-500 dark:text-gray-400">Avg Conversion Rate</p>
-              <p className="text-2xl font-bold text-green-600 mt-1">
+              <p className="text-2xl font-bold text-purple-600 mt-1">
                 {(() => {
                   const totalChats = salesData.reduce((sum, s) => sum + s.chatCount, 0)
                   const totalOrders = salesData.reduce((sum, s) => sum + s.orderCount, 0)
@@ -791,6 +800,10 @@ export default function SalesPerformancePage() {
                       <span className="font-bold text-pink-600">{formatCurrency(sales.totalSales)}</span>
                     </div>
                     <div className="flex justify-between">
+                      <span className="text-gray-500 dark:text-gray-400">Income (รับจริง)</span>
+                      <span className="font-bold text-green-600">{formatCurrency(sales.realIncome)}</span>
+                    </div>
+                    <div className="flex justify-between">
                       <span className="text-gray-500 dark:text-gray-400">Orders</span>
                       <span className="font-medium text-gray-800 dark:text-white">{sales.orderCount}</span>
                     </div>
@@ -800,7 +813,7 @@ export default function SalesPerformancePage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500 dark:text-gray-400">Conversion Rate</span>
-                      <span className="font-medium text-green-600">{conversionRate.toFixed(1)}%</span>
+                      <span className="font-medium text-purple-600">{conversionRate.toFixed(1)}%</span>
                     </div>
                     <div className="pt-2 border-t dark:border-gray-700">
                       <div className="flex justify-between">

@@ -121,7 +121,8 @@ export async function GET(request: NextRequest) {
       const paidOrders = staffOrders.filter((o) => o.order_status === 'paid')
       const doneOrders = staffOrders.filter((o) => o.order_status === 'done')
 
-      const bookingAmount = bookingOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
+      // Booking Amount = total_income of ALL orders (not just 'booking' status)
+      const bookingAmount = staffOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
       const paidAmount = paidOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
       const doneAmount = doneOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
 
@@ -224,9 +225,8 @@ export async function GET(request: NextRequest) {
       const staffChatRecords = chatCounts?.filter((c) => c.staff_id === s.id) || []
       const chatCount = staffChatRecords.reduce((sum, c) => sum + (c.chat_count || 0), 0)
 
-      const bookingAmount = staffOrders
-        .filter((o) => o.order_status === 'booking')
-        .reduce((sum, o) => sum + (o.total_income || 0), 0)
+      // Booking Amount = total_income of ALL orders (not just 'booking' status)
+      const bookingAmount = staffOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
 
       const realIncome = staffOrders.reduce((sum, o) => sum + (o.deposit || 0), 0)
       const conversionRate = chatCount > 0 ? (staffOrders.length / chatCount) * 100 : 0
@@ -314,7 +314,8 @@ export async function GET(request: NextRequest) {
       const paidOrders = staffOrders.filter((o) => o.order_status === 'paid')
       const doneOrders = staffOrders.filter((o) => o.order_status === 'done')
 
-      const bookingAmount = bookingOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
+      // Booking Amount = total_income of ALL orders (not just 'booking' status)
+      const bookingAmount = staffOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
       const paidAmount = paidOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
       const doneAmount = doneOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
       const realIncome = staffOrders.reduce((sum, o) => sum + (o.deposit || 0), 0)
