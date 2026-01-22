@@ -52,8 +52,7 @@ export default function FocusModePage() {
     setCurrentStep('booking-queue')
   }
 
-  const handleBookingCompleted = (orderItemIds: number[]) => {
-    setStepData({ ...stepData, selectedOrderItemIds: orderItemIds })
+  const handleBookingCompleted = () => {
     setCurrentStep('check-in')
   }
 
@@ -165,15 +164,11 @@ export default function FocusModePage() {
           {currentStep === 'booking-queue' && stepData.orderId && (
             <BookingQueueStep
               orderId={stepData.orderId}
-              onCompleted={handleBookingCompleted}
-              onBack={() => setCurrentStep('create-order')}
+              onComplete={handleBookingCompleted}
             />
           )}
           {currentStep === 'check-in' && (
-            <CheckInStep
-              onBack={() => setCurrentStep('booking-queue')}
-              onCompleted={handleReset}
-            />
+            <CheckInStep />
           )}
         </div>
       </div>
