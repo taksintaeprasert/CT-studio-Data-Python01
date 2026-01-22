@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useLanguage } from '@/lib/language-context'
+import BookingChatModal from '@/components/booking-chat-modal'
 
 interface Staff {
   id: number
@@ -22,6 +23,7 @@ interface Appointment {
   artist_id: number | null
   artist_name: string | null
   customer_name: string
+  booking_title: string | null
   note: string | null
 }
 
@@ -35,6 +37,9 @@ export default function CalendarPage() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [dayAppointments, setDayAppointments] = useState<Appointment[]>([])
   const [showFilterDropdown, setShowFilterDropdown] = useState(false)
+  const [selectedOrderItemId, setSelectedOrderItemId] = useState<number | null>(null)
+  const [selectedBookingTitle, setSelectedBookingTitle] = useState<string>('')
+  const [showBookingChat, setShowBookingChat] = useState(false)
 
   const { t, language } = useLanguage()
   const supabase = createClient()
@@ -90,6 +95,7 @@ export default function CalendarPage() {
         appointment_time,
         item_status,
         artist_id,
+        booking_title,
         artist:staff!order_items_artist_id_fkey(staff_name),
         product:products(product_name, product_code),
         order:orders(
@@ -113,6 +119,7 @@ export default function CalendarPage() {
       artist_id: item.artist_id,
       artist_name: item.artist?.staff_name || null,
       customer_name: item.order?.customers?.full_name || 'Unknown',
+      booking_title: item.booking_title || null,
       note: item.order?.note || null,
     }))
 
@@ -264,6 +271,12 @@ export default function CalendarPage() {
   const formatTime = (time: string | null) => {
     if (!time) return '--:--'
     return time.substring(0, 5)
+  }
+
+  const handleOpenChat = (apt: Appointment) => {
+    setSelectedOrderItemId(apt.id)
+    setSelectedBookingTitle(apt.booking_title || `${apt.product_name} - ${apt.customer_name}`)
+    setShowBookingChat(true)
   }
 
   const days = getDaysInMonth()
@@ -559,6 +572,19 @@ export default function CalendarPage() {
                         </div>
                       </div>
                     )}
+
+                    {/* Chat Button */}
+                    <div className="pt-3 mt-3 border-t dark:border-gray-700">
+                      <button
+                        onClick={() => handleOpenChat(apt)}
+                        className="w-full px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        💬 เปิดแชท Booking
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -583,6 +609,15 @@ export default function CalendarPage() {
           </div>
         </div>
       </div>
+
+      {/* Booking Chat Modal */}
+      {showBookingChat && selectedOrderItemId && (
+        <BookingChatModal
+          orderItemId={selectedOrderItemId}
+          bookingTitle={selectedBookingTitle}
+          onClose={() => setShowBookingChat(false)}
+        />
+      )}
     </div>
   )
 }
