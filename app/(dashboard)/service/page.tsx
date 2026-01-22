@@ -6,10 +6,12 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import DateRangeFilter from '@/components/date-range-filter'
 import { useLanguage } from '@/lib/language-context'
+import BookingModal from '@/app/focus/components/booking-modal'
 
 interface Customer {
   id: number
   full_name: string
+  nickname: string | null
   phone: string | null
   contact_channel: string | null
 }
@@ -29,6 +31,7 @@ interface OrderItem {
   item_status: 'pending' | 'scheduled' | 'completed' | 'cancelled'
   artist_id: number | null
   item_price: number | null
+  booking_title: string | null
   artist: { staff_name: string } | null
   product: {
     product_name: string
@@ -90,6 +93,11 @@ export default function AppointmentPage() {
   const [editDate, setEditDate] = useState('')
   const [editTime, setEditTime] = useState('')
   const [editArtistId, setEditArtistId] = useState<string>('')
+
+  // Booking Modal (with chat)
+  const [showBookingModal, setShowBookingModal] = useState(false)
+  const [bookingOrderItem, setBookingOrderItem] = useState<OrderItem | null>(null)
+  const [bookingCustomer, setBookingCustomer] = useState<Customer | null>(null)
 
   // Status change modal
   const [statusChangeItem, setStatusChangeItem] = useState<OrderItem | null>(null)
@@ -186,6 +194,7 @@ export default function AppointmentPage() {
         sales:staff!orders_sales_id_fkey(staff_name),
         order_items(
           *,
+          booking_title,
           artist:staff!order_items_artist_id_fkey(staff_name),
           product:products(product_name, product_code, is_free, validity_months, list_price)
         )
@@ -212,6 +221,7 @@ export default function AppointmentPage() {
         sales:staff!orders_sales_id_fkey(staff_name),
         order_items(
           *,
+          booking_title,
           artist:staff!order_items_artist_id_fkey(staff_name),
           product:products(product_name, product_code, is_free, validity_months, list_price)
         )
@@ -240,6 +250,7 @@ export default function AppointmentPage() {
         sales:staff!orders_sales_id_fkey(staff_name),
         order_items(
           *,
+          booking_title,
           artist:staff!order_items_artist_id_fkey(staff_name),
           product:products(product_name, product_code, is_free, validity_months, list_price)
         )
@@ -385,6 +396,21 @@ export default function AppointmentPage() {
     await refreshOrders()
   }
 
+  // Open Booking Modal with chat
+  const openBookingModal = (item: OrderItem) => {
+    if (!selectedOrder?.customers) return
+
+    setBookingOrderItem(item)
+    setBookingCustomer(selectedOrder.customers)
+    setShowBookingModal(true)
+  }
+
+  const closeBookingModal = () => {
+    setShowBookingModal(false)
+    setBookingOrderItem(null)
+    setBookingCustomer(null)
+  }
+
   // Open status change modal
   const openStatusChange = (item: OrderItem) => {
     setStatusChangeItem(item)
@@ -496,6 +522,7 @@ export default function AppointmentPage() {
         sales:staff!orders_sales_id_fkey(staff_name),
         order_items(
           *,
+          booking_title,
           artist:staff!order_items_artist_id_fkey(staff_name),
           product:products(product_name, product_code, is_free, validity_months, list_price)
         )
@@ -989,7 +1016,7 @@ export default function AppointmentPage() {
                               </button>
                               {/* Schedule/Edit Button - changes based on status */}
                               <button
-                                onClick={() => openItemEdit(item)}
+                                onClick={() => openBookingModal(item)}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                                   item.item_status === 'pending' || !item.appointment_date
                                     ? 'bg-pink-500 text-white hover:bg-pink-600'
@@ -1139,7 +1166,7 @@ export default function AppointmentPage() {
                                item.item_status === 'completed' ? 'เสร็จ' : 'ยกเลิก'}
                             </button>
                             <button
-                              onClick={() => openItemEdit(item)}
+                              onClick={() => openBookingModal(item)}
                               className={`px-2 py-1.5 rounded-lg text-xs font-medium ${
                                 item.item_status === 'pending' || !item.appointment_date
                                   ? 'bg-pink-500 text-white'
@@ -1456,6 +1483,35 @@ export default function AppointmentPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Booking Modal with Chat */}
+      {showBookingModal && bookingOrderItem && bookingCustomer && (
+        <BookingModal
+          orderItem={{
+            id: bookingOrderItem.id,
+            product_id: bookingOrderItem.product_id,
+            item_price: bookingOrderItem.item_price || 0,
+            appointment_date: bookingOrderItem.appointment_date,
+            artist_id: bookingOrderItem.artist_id,
+            products: bookingOrderItem.product ? {
+              product_code: bookingOrderItem.product.product_code,
+              product_name: bookingOrderItem.product.product_name,
+              list_price: bookingOrderItem.product.list_price || 0,
+            } : null,
+          }}
+          customer={{
+            id: bookingCustomer.id,
+            full_name: bookingCustomer.full_name,
+            nickname: bookingCustomer.nickname,
+            phone: bookingCustomer.phone,
+          }}
+          onClose={closeBookingModal}
+          onComplete={async () => {
+            closeBookingModal()
+            await refreshOrders()
+          }}
+        />
       )}
     </div>
   )
