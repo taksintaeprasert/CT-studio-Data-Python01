@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import CustomerPhotosManager from '@/components/customer-photos-manager'
 
 interface Staff {
   id: number
@@ -36,6 +37,7 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
 
   // Order fields
+  const [customerId, setCustomerId] = useState<number | null>(null)
   const [salesId, setSalesId] = useState('')
   const [orderStatus, setOrderStatus] = useState('booking')
   const [note, setNote] = useState('')
@@ -78,6 +80,7 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
     ])
 
     if (orderRes.data) {
+      setCustomerId(orderRes.data.customer_id)
       setSalesId(orderRes.data.sales?.id?.toString() || '')
       setOrderStatus(orderRes.data.order_status || 'booking')
       setNote(orderRes.data.note || '')
@@ -388,6 +391,14 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
           </button>
         </div>
       </form>
+
+      {/* Customer Photos Manager */}
+      {customerId && (
+        <CustomerPhotosManager
+          customerId={customerId}
+          customerName={customerName}
+        />
+      )}
     </div>
   )
 }

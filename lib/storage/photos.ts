@@ -1,6 +1,9 @@
 import { createClient } from '@/lib/supabase/client'
 import type { PhotoType, ServicePhoto } from '@/lib/supabase/types'
 
+// Re-export types for convenience
+export type { PhotoType, ServicePhoto }
+
 export const STORAGE_BUCKET = 'service-photos'
 export const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic']
@@ -10,13 +13,13 @@ export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'ima
  */
 export async function uploadServicePhoto({
   file,
-  orderItemId,
+  customerId,
   photoType,
   uploadedBy,
   note,
 }: {
   file: File
-  orderItemId: number
+  customerId: number
   photoType: PhotoType
   uploadedBy?: number
   note?: string
@@ -41,8 +44,8 @@ export async function uploadServicePhoto({
 
     // Generate unique filename
     const fileExt = file.name.split('.').pop()
-    const fileName = `${orderItemId}_${photoType}_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
-    const filePath = `${photoType}/${fileName}`
+    const fileName = `${photoType}_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
+    const filePath = `customer_${customerId}/${fileName}`
 
     // Upload to Storage
     const { error: uploadError } = await supabase.storage
@@ -66,7 +69,7 @@ export async function uploadServicePhoto({
     const { data: photo, error: dbError } = await supabase
       .from('service_photos')
       .insert({
-        order_item_id: orderItemId,
+        customer_id: customerId,
         photo_url: urlData.publicUrl,
         photo_path: filePath,
         photo_type: photoType,
@@ -98,13 +101,13 @@ export async function uploadServicePhoto({
  */
 export async function uploadMultipleServicePhotos({
   files,
-  orderItemId,
+  customerId,
   photoType,
   uploadedBy,
   note,
 }: {
   files: File[]
-  orderItemId: number
+  customerId: number
   photoType: PhotoType
   uploadedBy?: number
   note?: string
@@ -119,7 +122,7 @@ export async function uploadMultipleServicePhotos({
   for (const file of files) {
     const result = await uploadServicePhoto({
       file,
-      orderItemId,
+      customerId,
       photoType,
       uploadedBy,
       note,
@@ -140,10 +143,10 @@ export async function uploadMultipleServicePhotos({
 }
 
 /**
- * Get all photos for an order item
+ * Get all photos for a customer
  */
 export async function getServicePhotos(
-  orderItemId: number,
+  customerId: number,
   photoType?: PhotoType
 ): Promise<ServicePhoto[]> {
   const supabase = createClient()
@@ -151,7 +154,7 @@ export async function getServicePhotos(
   let query = supabase
     .from('service_photos')
     .select('*')
-    .eq('order_item_id', orderItemId)
+    .eq('customer_id', customerId)
     .order('created_at', { ascending: true })
 
   if (photoType) {
@@ -222,7 +225,7 @@ export async function deleteServicePhoto(
  * Get photo count by type
  */
 export async function getPhotoCount(
-  orderItemId: number,
+  customerId: number,
   photoType: PhotoType
 ): Promise<number> {
   const supabase = createClient()
@@ -230,7 +233,7 @@ export async function getPhotoCount(
   const { count, error } = await supabase
     .from('service_photos')
     .select('*', { count: 'exact', head: true })
-    .eq('order_item_id', orderItemId)
+    .eq('customer_id', customerId)
     .eq('photo_type', photoType)
 
   if (error) {
@@ -242,18 +245,18 @@ export async function getPhotoCount(
 }
 
 /**
- * Check if an order item has before photos
+ * Check if a customer has before photos
  */
-export async function hasBeforePhotos(orderItemId: number): Promise<boolean> {
-  const count = await getPhotoCount(orderItemId, 'before')
+export async function hasBeforePhotos(customerId: number): Promise<boolean> {
+  const count = await getPhotoCount(customerId, 'before')
   return count > 0
 }
 
 /**
- * Check if an order item has after photos
+ * Check if a customer has after photos
  */
-export async function hasAfterPhotos(orderItemId: number): Promise<boolean> {
-  const count = await getPhotoCount(orderItemId, 'after')
+export async function hasAfterPhotos(customerId: number): Promise<boolean> {
+  const count = await getPhotoCount(customerId, 'after')
   return count > 0
 }
 
