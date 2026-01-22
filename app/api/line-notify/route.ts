@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { sendLineNotify, formatOrderNotifyMessage } from '@/lib/line/client'
+import { sendLineNotify, formatOrderNotifyMessage, sendLineFlexMessage, createOrderNotificationFlex } from '@/lib/line/client'
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,8 +27,8 @@ export async function POST(request: NextRequest) {
     if (type === 'new_order') {
       const { orderId, customerName, salesName, products, totalAmount, deposit, status } = data
 
-      // Format message for LINE Notify
-      const message = formatOrderNotifyMessage({
+      // Create Flex Message for new order
+      const flexMessage = createOrderNotificationFlex({
         orderId,
         customerName,
         salesName,
@@ -38,20 +38,24 @@ export async function POST(request: NextRequest) {
         status,
       })
 
-      console.log('Sending via LINE Notify...')
-      const result = await sendLineNotify(message)
+      console.log('Sending via LINE Messaging API (Flex Message)...')
+      const result = await sendLineFlexMessage({
+        to: userId!,
+        altText: `NEW ORDER #${orderId}`,
+        contents: flexMessage,
+      })
 
-      console.log('LINE Notify Result:', JSON.stringify(result))
+      console.log('LINE Flex Message Result:', JSON.stringify(result))
 
       if (!result.success) {
-        console.error('LINE Notify Failed:', result.error)
+        console.error('LINE Flex Message Failed:', result.error)
         return NextResponse.json(
           { success: false, error: result.error },
           { status: 500 }
         )
       }
 
-      console.log('LINE Notify Sent Successfully!')
+      console.log('LINE Flex Message Sent Successfully!')
       return NextResponse.json({ success: true })
     }
 
