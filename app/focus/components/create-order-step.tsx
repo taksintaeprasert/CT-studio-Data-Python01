@@ -46,6 +46,12 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
   const [deposit, setDeposit] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('cash')
 
+  // Product search & suggestion state
+  const [productSearch, setProductSearch] = useState('')
+  const [showDropdown, setShowDropdown] = useState(false)
+  const [suggestedProduct, setSuggestedProduct] = useState<Product | null>(null)
+  const [missingFreeProduct, setMissingFreeProduct] = useState<string | null>(null)
+
   const [loading, setLoading] = useState(false)
   const [searching, setSearching] = useState(false)
 
@@ -106,13 +112,102 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
     }
   }
 
-  const toggleProduct = (product: Product) => {
-    const exists = selectedProducts.find(p => p.product.id === product.id)
-    if (exists) {
-      setSelectedProducts(selectedProducts.filter(p => p.product.id !== product.id))
-    } else {
-      setSelectedProducts([...selectedProducts, { product, price: product.list_price }])
+  // Extract price code from product code (e.g., "10900" from "LIP10900")
+  const extractPriceCode = (productCode: string): string | null => {
+    const match = productCode.match(/(\d+)$/)
+    return match ? match[1] : null
+  }
+
+  // Extract all digits from product code (for FREE products)
+  const extractAllDigits = (productCode: string): string | null => {
+    const match = productCode.match(/(\d+)/)
+    return match ? match[1] : null
+  }
+
+  // Extract base code (letters at the start)
+  const extractBaseCode = (productCode: string): string => {
+    const match = productCode.toUpperCase().match(/^([A-Z]+?)(?:FREE|\d)/)
+    return match ? match[1] : productCode.replace(/[\dFREE]+/gi, '')
+  }
+
+  // Find related free product by matching base code and price code
+  const findRelatedFreeProduct = (product: Product): { found: Product | null; suggestedCode: string | null } => {
+    const priceCode = extractPriceCode(product.product_code)
+    if (!priceCode) {
+      return { found: null, suggestedCode: null }
     }
+
+    const baseCode = extractBaseCode(product.product_code)
+
+    // Look for free product with same base code and price code
+    const relatedFree = products.find(p => {
+      if (p.id === product.id) return false
+      if (!p.is_free && p.list_price !== 0) return false
+      if (selectedProducts.some(sp => sp.product.id === p.id)) return false
+
+      const pCode = p.product_code.toUpperCase()
+      const freePriceCode = extractAllDigits(p.product_code)
+      const freeBaseCode = extractBaseCode(p.product_code)
+
+      return (
+        freeBaseCode === baseCode.toUpperCase() &&
+        freePriceCode === priceCode &&
+        pCode.includes('FREE')
+      )
+    })
+
+    if (relatedFree) {
+      return { found: relatedFree, suggestedCode: null }
+    }
+
+    // No matching free product found - suggest creating one
+    const suggestedCode = `${baseCode}${priceCode}FREE`
+    return { found: null, suggestedCode }
+  }
+
+  const addProductById = (productId: number) => {
+    const product = products.find(p => p.id === productId)
+    if (!product) return
+
+    if (selectedProducts.find(p => p.product.id === product.id)) {
+      alert('บริการนี้ถูกเลือกไปแล้ว')
+      return
+    }
+
+    setSelectedProducts([...selectedProducts, { product, price: product.list_price }])
+
+    // Clear previous suggestions
+    setSuggestedProduct(null)
+    setMissingFreeProduct(null)
+
+    // Check for related free product (only for non-free products)
+    if (!product.is_free && product.list_price > 0) {
+      const { found, suggestedCode } = findRelatedFreeProduct(product)
+      if (found) {
+        setSuggestedProduct(found)
+      } else if (suggestedCode) {
+        setMissingFreeProduct(suggestedCode)
+      }
+    }
+
+    // Clear search
+    setProductSearch('')
+    setShowDropdown(false)
+  }
+
+  const addSuggestedProduct = () => {
+    if (!suggestedProduct) return
+    setSelectedProducts([...selectedProducts, { product: suggestedProduct, price: suggestedProduct.list_price }])
+    setSuggestedProduct(null)
+  }
+
+  const dismissSuggestion = () => {
+    setSuggestedProduct(null)
+    setMissingFreeProduct(null)
+  }
+
+  const removeProduct = (productId: number) => {
+    setSelectedProducts(selectedProducts.filter(p => p.product.id !== productId))
   }
 
   const updateProductPrice = (productId: number, price: number) => {
@@ -358,53 +453,148 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
           2. เลือกบริการ *
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-          {products.map((product) => {
-            const selected = selectedProducts.find(p => p.product.id === product.id)
-            return (
+        {/* Searchable Product Input */}
+        <div className="relative mb-4">
+          <div className="relative">
+            <input
+              type="text"
+              value={productSearch}
+              onChange={(e) => {
+                setProductSearch(e.target.value)
+                setShowDropdown(true)
+              }}
+              onFocus={() => setShowDropdown(true)}
+              placeholder="🔍 พิมพ์ค้นหาบริการ..."
+              className="input w-full text-lg"
+            />
+            {productSearch && (
               <button
-                key={product.id}
-                onClick={() => toggleProduct(product)}
-                className={`p-4 rounded-lg border-2 text-left transition-all ${
-                  selected
-                    ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/20'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-pink-300'
-                }`}
+                type="button"
+                onClick={() => {
+                  setProductSearch('')
+                  setShowDropdown(false)
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
               >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-800 dark:text-white text-sm">
-                      {product.product_name}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {product.product_code}
-                    </p>
-                  </div>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                    selected ? 'border-pink-500 bg-pink-500' : 'border-gray-300'
-                  }`}>
-                    {selected && (
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </div>
-                </div>
-                <p className="text-lg font-bold text-pink-600 dark:text-pink-400">
-                  ฿{product.list_price.toLocaleString()}
-                </p>
+                ✕
               </button>
-            )
-          })}
+            )}
+          </div>
+
+          {/* Dropdown Results */}
+          {showDropdown && (() => {
+            const availableProducts = products.filter(p => !selectedProducts.some(sp => sp.product.id === p.id))
+            const filteredProducts = availableProducts.filter(p => {
+              if (!productSearch.trim()) return true
+              const search = productSearch.toLowerCase()
+              return (
+                p.product_name.toLowerCase().includes(search) ||
+                p.product_code.toLowerCase().includes(search) ||
+                (p.category && p.category.toLowerCase().includes(search))
+              )
+            })
+
+            return filteredProducts.length > 0 ? (
+              <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-2xl max-h-60 overflow-y-auto">
+                {filteredProducts.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => addProductById(p.id)}
+                    className="w-full px-4 py-3 text-left hover:bg-pink-50 dark:hover:bg-gray-700 flex justify-between items-center border-b dark:border-gray-700 last:border-b-0"
+                  >
+                    <div>
+                      <span className="text-xs text-pink-500 font-mono mr-2">[{p.product_code}]</span>
+                      <span className="font-medium dark:text-white">{p.product_name}</span>
+                      {p.is_free && <span className="ml-2 text-xs text-green-500">ฟรี</span>}
+                    </div>
+                    <span className="text-pink-500 font-bold">
+                      {p.is_free || p.list_price === 0 ? 'ฟรี' : `฿${p.list_price.toLocaleString()}`}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : productSearch ? (
+              <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg p-4 text-center text-gray-500">
+                ไม่พบบริการที่ค้นหา
+              </div>
+            ) : null
+          })()}
+
+          {/* Click outside to close dropdown */}
+          {showDropdown && (
+            <div
+              className="fixed inset-0 z-10"
+              onClick={() => setShowDropdown(false)}
+            />
+          )}
         </div>
 
+        {/* Suggestion Banner - Found Free Product */}
+        {suggestedProduct && (
+          <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-4 flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">💡</span>
+              <div>
+                <p className="text-sm text-green-800 dark:text-green-300 font-medium">
+                  แนะนำเพิ่ม: [{suggestedProduct.product_code}] {suggestedProduct.product_name}
+                </p>
+                <p className="text-xs text-green-600 dark:text-green-400">
+                  {suggestedProduct.is_free || suggestedProduct.list_price === 0 ? 'บริการฟรี' : `฿${suggestedProduct.list_price.toLocaleString()}`}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={addSuggestedProduct}
+                className="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 shadow-lg"
+              >
+                + เพิ่ม
+              </button>
+              <button
+                type="button"
+                onClick={dismissSuggestion}
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-300"
+              >
+                ไม่ใช้
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Suggestion Banner - Missing Free Product */}
+        {missingFreeProduct && (
+          <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">⚠️</span>
+              <div>
+                <p className="text-sm text-yellow-800 dark:text-yellow-300 font-medium">
+                  ไม่พบบริการฟรีที่ตรงกัน
+                </p>
+                <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                  แนะนำให้สร้างสินค้า: <span className="font-mono font-bold">{missingFreeProduct}</span>
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={dismissSuggestion}
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-300"
+            >
+              ปิด
+            </button>
+          </div>
+        )}
+
         {/* Selected Products with Price Edit */}
-        {selectedProducts.length > 0 && (
-          <div className="mt-6 space-y-3">
+        {selectedProducts.length > 0 ? (
+          <div className="space-y-3">
             <h3 className="font-bold text-gray-800 dark:text-white">บริการที่เลือก:</h3>
             {selectedProducts.map((item) => (
-              <div key={item.product.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div key={item.product.id} className="flex items-center gap-3 p-4 bg-gradient-to-r from-pink-50 to-purple-50 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-pink-200 dark:border-gray-600">
                 <div className="flex-1">
+                  <p className="text-xs text-pink-500 font-mono mb-1">[{item.product.product_code}]</p>
                   <p className="font-medium text-gray-800 dark:text-white">
                     {item.product.product_name}
                   </p>
@@ -415,13 +605,14 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
                     type="number"
                     value={item.price}
                     onChange={(e) => updateProductPrice(item.product.id, parseFloat(e.target.value) || 0)}
-                    className="input w-32 text-right"
+                    className="input w-32 text-right font-bold"
                   />
                   <span className="text-sm text-gray-500">บาท</span>
                 </div>
                 <button
-                  onClick={() => toggleProduct(item.product)}
-                  className="text-red-500 hover:text-red-700"
+                  type="button"
+                  onClick={() => removeProduct(item.product.id)}
+                  className="p-2 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -430,12 +621,20 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
               </div>
             ))}
 
-            <div className="flex justify-end items-center gap-3 pt-3 border-t dark:border-gray-700">
-              <span className="text-lg font-bold text-gray-800 dark:text-white">รวม:</span>
-              <span className="text-2xl font-bold text-pink-600 dark:text-pink-400">
+            <div className="flex justify-end items-center gap-3 pt-4 border-t-2 border-pink-200 dark:border-gray-600">
+              <span className="text-lg font-bold text-gray-800 dark:text-white">รวมทั้งหมด:</span>
+              <span className="text-3xl font-bold text-pink-600 dark:text-pink-400">
                 ฿{calculateTotal().toLocaleString()}
               </span>
             </div>
+          </div>
+        ) : (
+          <div className="text-center text-gray-500 dark:text-gray-400 py-8 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl">
+            <svg className="w-12 h-12 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            <p>ยังไม่ได้เลือกบริการ</p>
+            <p className="text-sm mt-1">ใช้ช่องค้นหาด้านบนเพื่อเลือกบริการ</p>
           </div>
         )}
       </div>
