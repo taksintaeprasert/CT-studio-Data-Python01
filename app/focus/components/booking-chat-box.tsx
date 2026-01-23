@@ -23,7 +23,6 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
 
   const [messages, setMessages] = useState<MessageWithSender[]>([])
   const [newMessage, setNewMessage] = useState('')
-  const [urlInput, setUrlInput] = useState('')
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -59,27 +58,22 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
   }
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() && !urlInput.trim()) {
-      alert('กรุณาพิมพ์ข้อความหรือ URL')
+    if (!newMessage.trim()) {
       return
     }
 
     try {
-      let messageData: any = {
+      // Detect if message contains URL
+      const urlPattern = /https?:\/\/[^\s]+/gi
+      const hasUrl = urlPattern.test(newMessage.trim())
+
+      const messageData: any = {
         order_item_id: orderItemId,
         sender_id: user?.id || null,
         sender_type: 'staff',
+        message_type: hasUrl ? 'url' : 'text',
+        message_text: newMessage.trim(),
         is_read: false,
-      }
-
-      // If has URL, send as URL message
-      if (urlInput.trim()) {
-        messageData.message_type = 'url'
-        messageData.message_text = urlInput.trim()
-      } else {
-        // Otherwise send as text
-        messageData.message_type = 'text'
-        messageData.message_text = newMessage.trim()
       }
 
       const { error } = await supabase
@@ -89,7 +83,6 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
       if (error) throw error
 
       setNewMessage('')
-      setUrlInput('')
       await loadMessages()
     } catch (error) {
       console.error('Error sending message:', error)
@@ -164,31 +157,21 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
 
   if (loading) {
     return (
-      <div className="text-center text-gray-500 py-4">กำลังโหลดข้อความ...</div>
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center text-gray-500 py-8">กำลังโหลดข้อความ...</div>
+      </div>
     )
   }
 
   return (
-    <div className="space-y-4">
-      {/* Optional URL Input */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          URL (ถ้ามี)
-        </label>
-        <input
-          type="url"
-          value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
-          placeholder="https://example.com"
-          className="input w-full"
-        />
-      </div>
-
-      {/* Messages List */}
-      <div className="border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 h-80 overflow-y-auto p-4 space-y-3">
+    <div className="flex flex-col h-full bg-white dark:bg-gray-900">
+      {/* Messages List - Takes up available space */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-950">
         {messages.length === 0 ? (
-          <div className="text-center text-gray-400 dark:text-gray-500 py-8">
-            ยังไม่มีข้อความ เริ่มต้นการสนทนา...
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center text-gray-400 dark:text-gray-500">
+              ยังไม่มีข้อความ เริ่มต้นการสนทนา...
+            </div>
           </div>
         ) : (
           messages.map((msg) => {
@@ -197,7 +180,11 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
 
             return (
               <div key={msg.id} className={`flex ${isSystem ? 'justify-center' : 'justify-start'}`}>
-                <div className={`max-w-[80%] ${isSystem ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-center px-3 py-2' : 'bg-white dark:bg-gray-700 px-4 py-3'} rounded-lg shadow-sm`}>
+                <div className={`max-w-[85%] md:max-w-[70%] ${
+                  isSystem
+                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-center px-3 py-2 text-xs rounded-full'
+                    : 'bg-white dark:bg-gray-800 px-4 py-3 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700'
+                }`}>
                   {!isSystem && (
                     <div className="text-xs font-semibold text-pink-600 dark:text-pink-400 mb-1">
                       {senderName}
@@ -205,7 +192,7 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
                   )}
 
                   {msg.message_type === 'text' && (
-                    <div className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
+                    <div className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words">
                       {msg.message_text}
                     </div>
                   )}
@@ -228,13 +215,13 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
                           <img
                             src={msg.file_url || ''}
                             alt={msg.file_name || 'รูปภาพ'}
-                            className="rounded-lg max-w-full h-auto max-h-64 object-contain"
+                            className="rounded-xl max-w-full h-auto max-h-96 object-contain bg-gray-100 dark:bg-gray-900"
                           />
                         </div>
                       ) : (
                         <>
                           {msg.message_text && (
-                            <div className="text-sm text-gray-800 dark:text-gray-200">
+                            <div className="text-sm text-gray-900 dark:text-gray-100">
                               {msg.message_text}
                             </div>
                           )}
@@ -253,9 +240,11 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
                     </div>
                   )}
 
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    {formatTimestamp(msg.created_at)}
-                  </div>
+                  {!isSystem && (
+                    <div className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
+                      {formatTimestamp(msg.created_at)}
+                    </div>
+                  )}
                 </div>
               </div>
             )
@@ -264,38 +253,41 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-          placeholder="พิมพ์ข้อความ..."
-          className="input flex-1"
-          disabled={uploading}
-        />
-
-        {/* File Upload Button */}
-        <label className={`btn-secondary px-4 cursor-pointer ${uploading ? 'opacity-50' : ''}`}>
-          {uploading ? '📤' : '📎'}
+      {/* Input Area - Fixed at bottom */}
+      <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 md:p-4">
+        <div className="flex gap-2 items-end">
           <input
-            type="file"
-            onChange={handleFileUpload}
+            type="text"
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+            placeholder="พิมพ์ข้อความ..."
+            className="input flex-1 resize-none"
             disabled={uploading}
-            className="hidden"
-            accept="image/*,.pdf,.doc,.docx"
           />
-        </label>
 
-        {/* Send Button */}
-        <button
-          onClick={handleSendMessage}
-          disabled={!newMessage.trim() && !urlInput.trim()}
-          className="btn-primary px-6"
-        >
-          ส่ง
-        </button>
+          {/* File Upload Button */}
+          <label className={`btn-secondary px-3 py-2 md:px-4 cursor-pointer flex items-center justify-center ${uploading ? 'opacity-50' : ''}`}>
+            <span className="text-lg">{uploading ? '📤' : '📎'}</span>
+            <input
+              type="file"
+              onChange={handleFileUpload}
+              disabled={uploading}
+              className="hidden"
+              accept="image/*,.pdf,.doc,.docx"
+            />
+          </label>
+
+          {/* Send Button */}
+          <button
+            onClick={handleSendMessage}
+            disabled={!newMessage.trim()}
+            className="btn-primary px-4 md:px-6 py-2"
+          >
+            <span className="hidden md:inline">ส่ง</span>
+            <span className="md:hidden">➤</span>
+          </button>
+        </div>
       </div>
     </div>
   )
