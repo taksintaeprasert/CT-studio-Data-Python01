@@ -103,55 +103,67 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
   const bookingTitle = orderItem.booking_title || `${orderItem.artists?.staff_name || 'ไม่ระบุช่าง'}-${orderItem.products?.product_code || 'N/A'}`
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-5xl">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl shadow-2xl p-6 mb-6">
-        <div className="flex items-start justify-between">
-          <div className="text-white flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <button
-                onClick={() => router.back()}
-                className="text-white hover:text-gray-200 text-2xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/20"
-              >
-                ←
-              </button>
-              <h1 className="text-3xl font-bold">💬 Booking Chat</h1>
-            </div>
-            <p className="text-purple-100 text-xl font-medium mb-3">{bookingTitle}</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm text-purple-100">
-              <div className="bg-white/10 rounded-lg px-3 py-2">
-                <div className="text-purple-200 text-xs mb-1">📅 วันนัด</div>
-                <div className="font-medium">{formatDateTime(orderItem.appointment_date)}</div>
-              </div>
-              <div className="bg-white/10 rounded-lg px-3 py-2">
-                <div className="text-purple-200 text-xs mb-1">👨‍🎨 ช่าง</div>
-                <div className="font-medium">{orderItem.artists?.staff_name || '-'}</div>
-              </div>
-              <div className="bg-white/10 rounded-lg px-3 py-2">
-                <div className="text-purple-200 text-xs mb-1">💼 บริการ</div>
-                <div className="font-medium">{orderItem.products?.product_name}</div>
-              </div>
-              <div className="bg-white/10 rounded-lg px-3 py-2">
-                <div className="text-purple-200 text-xs mb-1">💰 ราคา</div>
-                <div className="font-medium">฿{orderItem.item_price.toLocaleString()}</div>
-              </div>
-            </div>
-            {orderItem.orders?.customers && (
-              <div className="mt-3 bg-white/10 rounded-lg px-3 py-2 inline-block">
-                <div className="text-purple-200 text-xs mb-1">👤 ลูกค้า</div>
-                <div className="font-medium">
-                  {orderItem.orders.customers.full_name}
-                  {orderItem.orders.customers.nickname && ` (${orderItem.orders.customers.nickname})`}
-                </div>
-              </div>
-            )}
+    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950">
+      {/* Header - Clean and Minimal */}
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
+        <div className="container mx-auto px-4 py-3 max-w-5xl">
+          <div className="flex items-center gap-3 mb-3">
+            <button
+              onClick={() => router.back()}
+              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white text-xl w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              ←
+            </button>
+            <h1 className="text-lg font-semibold text-gray-900 dark:text-white truncate flex-1">
+              {bookingTitle}
+            </h1>
           </div>
+
+          {/* Info Grid - Compact */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+            <div className="bg-gray-50 dark:bg-gray-800 rounded px-2 py-1.5">
+              <div className="text-gray-500 dark:text-gray-400 mb-0.5">วันนัด</div>
+              <div className="font-medium text-gray-900 dark:text-white text-xs">
+                {formatDateTime(orderItem.appointment_date)}
+              </div>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded px-2 py-1.5">
+              <div className="text-gray-500 dark:text-gray-400 mb-0.5">ช่าง</div>
+              <div className="font-medium text-gray-900 dark:text-white text-xs">
+                {orderItem.artists?.staff_name || '-'}
+              </div>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded px-2 py-1.5">
+              <div className="text-gray-500 dark:text-gray-400 mb-0.5">บริการ</div>
+              <div className="font-medium text-gray-900 dark:text-white text-xs truncate">
+                {orderItem.products?.product_name}
+              </div>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded px-2 py-1.5">
+              <div className="text-gray-500 dark:text-gray-400 mb-0.5">ราคา</div>
+              <div className="font-medium text-pink-600 dark:text-pink-400 text-xs">
+                ฿{orderItem.item_price.toLocaleString()}
+              </div>
+            </div>
+          </div>
+
+          {/* Customer Info - Inline */}
+          {orderItem.orders?.customers && (
+            <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+              ลูกค้า: <span className="font-medium text-gray-900 dark:text-white">
+                {orderItem.orders.customers.full_name}
+                {orderItem.orders.customers.nickname && ` (${orderItem.orders.customers.nickname})`}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Chat Content */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-6">
-        <BookingChatBox orderItemId={orderItem.id} />
+      {/* Chat Content - Takes Full Height */}
+      <div className="flex-1 overflow-hidden">
+        <div className="container mx-auto px-4 h-full max-w-5xl">
+          <BookingChatBox orderItemId={orderItem.id} />
+        </div>
       </div>
     </div>
   )
