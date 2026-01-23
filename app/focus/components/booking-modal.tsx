@@ -85,11 +85,6 @@ export default function BookingModal({ orderItem, customer, onClose, onComplete 
     setSaving(true)
 
     try {
-      // Combine date and time
-      const dateTimeString = appointmentTime
-        ? `${appointmentDate}T${appointmentTime}:00`
-        : `${appointmentDate}T10:00:00`
-
       // Get artist info
       const artist = artists.find(a => a.id === selectedArtist)
 
@@ -101,20 +96,28 @@ export default function BookingModal({ orderItem, customer, onClose, onComplete 
         .from('order_items')
         .update({
           artist_id: selectedArtist,
-          appointment_date: dateTimeString,
+          appointment_date: appointmentDate,
+          appointment_time: appointmentTime || null,
           booking_title: bookingTitle,
           item_status: 'scheduled',
         })
         .eq('id', orderItem.id)
 
-      if (error) throw error
+      if (error) {
+        console.error('Update error:', error)
+        throw error
+      }
 
       // Create system message
-      await supabase.from('booking_messages').insert({
+      const dateTimeForMessage = appointmentTime
+        ? `${appointmentDate}T${appointmentTime}:00`
+        : `${appointmentDate}T10:00:00`
+
+      const { error: msgError } = await supabase.from('booking_messages').insert({
         order_item_id: orderItem.id,
         sender_type: 'system',
         message_type: 'text',
-        message_text: `จองคิวช่าง ${artist?.staff_name} วันที่ ${new Date(dateTimeString).toLocaleDateString('th-TH', {
+        message_text: `จองคิวช่าง ${artist?.staff_name} วันที่ ${new Date(dateTimeForMessage).toLocaleDateString('th-TH', {
           year: 'numeric',
           month: 'long',
           day: 'numeric',
@@ -124,13 +127,22 @@ export default function BookingModal({ orderItem, customer, onClose, onComplete 
         is_read: false,
       })
 
+      if (msgError) {
+        console.error('Message insert error:', msgError)
+      }
+
       alert('✅ บันทึกการจองสำเร็จ!')
-      onComplete()
+
       // Navigate to full page booking view
       router.push(`/booking/${orderItem.id}`)
-    } catch (error) {
+
+      // Close modal after a short delay to allow navigation
+      setTimeout(() => {
+        onComplete()
+      }, 100)
+    } catch (error: any) {
       console.error('Error saving booking:', error)
-      alert('เกิดข้อผิดพลาดในการบันทึก')
+      alert(`เกิดข้อผิดพลาดในการบันทึก: ${error.message || 'Unknown error'}`)
     } finally {
       setSaving(false)
     }
