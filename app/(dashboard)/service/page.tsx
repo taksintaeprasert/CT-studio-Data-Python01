@@ -515,11 +515,10 @@ export default function AppointmentPage() {
       .from('orders')
       .select(`
         *,
-        customers (*),
+        customers (id, full_name, nickname, phone, contact_channel),
         sales:staff!orders_sales_id_fkey(staff_name),
         order_items(
           *,
-          booking_title,
           artist:staff!order_items_artist_id_fkey(staff_name),
           product:products(product_name, product_code, is_free, validity_months, list_price)
         )
