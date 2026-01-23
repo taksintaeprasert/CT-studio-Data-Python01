@@ -15,12 +15,17 @@ export default function DateRangeFilter({
   showQuickOptions = true,
   className = ''
 }: DateRangeFilterProps) {
-  const [quickRange, setQuickRange] = useState('7')
+  // Default to 'all' if onShowAll is provided, otherwise '7'
+  const [quickRange, setQuickRange] = useState(onShowAll ? 'all' : '7')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
 
   useEffect(() => {
-    calculateDates(quickRange)
+    if (quickRange === 'all' && onShowAll) {
+      onShowAll()
+    } else if (quickRange !== 'all') {
+      calculateDates(quickRange)
+    }
   }, [])
 
   const calculateDates = (range: string) => {
