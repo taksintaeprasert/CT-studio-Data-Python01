@@ -24,26 +24,32 @@ ON CONFLICT (id) DO NOTHING;
 -- =============================================
 -- 3. STORAGE POLICIES
 -- =============================================
+-- Drop existing policies if they exist (to avoid errors on re-run)
+DROP POLICY IF EXISTS "Authenticated users can upload payment receipts" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can view payment receipts" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can update payment receipts" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can delete payment receipts" ON storage.objects;
+
 -- Policy: Allow authenticated users to upload payment receipts
-CREATE POLICY IF NOT EXISTS "Authenticated users can upload payment receipts"
+CREATE POLICY "Authenticated users can upload payment receipts"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (bucket_id = 'payment-receipts');
 
 -- Policy: Allow authenticated users to view payment receipts
-CREATE POLICY IF NOT EXISTS "Authenticated users can view payment receipts"
+CREATE POLICY "Authenticated users can view payment receipts"
 ON storage.objects FOR SELECT
 TO authenticated
 USING (bucket_id = 'payment-receipts');
 
 -- Policy: Allow authenticated users to update payment receipts
-CREATE POLICY IF NOT EXISTS "Authenticated users can update payment receipts"
+CREATE POLICY "Authenticated users can update payment receipts"
 ON storage.objects FOR UPDATE
 TO authenticated
 USING (bucket_id = 'payment-receipts');
 
 -- Policy: Allow authenticated users to delete payment receipts
-CREATE POLICY IF NOT EXISTS "Authenticated users can delete payment receipts"
+CREATE POLICY "Authenticated users can delete payment receipts"
 ON storage.objects FOR DELETE
 TO authenticated
 USING (bucket_id = 'payment-receipts');
