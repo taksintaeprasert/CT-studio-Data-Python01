@@ -121,6 +121,19 @@ export default function PaymentModal({
         is_read: false,
       })
 
+      // If receipt was uploaded, also add it as a file message in chat
+      if (receiptUrl) {
+        await supabase.from('booking_messages').insert({
+          order_item_id: orderItemId,
+          sender_type: 'system',
+          message_type: 'file',
+          message_text: 'สลิปการโอนเงิน',
+          file_url: receiptUrl,
+          file_path: receiptPath,
+          is_read: false,
+        })
+      }
+
       alert('✅ บันทึกการรับชำระเงินสำเร็จ!')
       onSuccess()
       onClose()
