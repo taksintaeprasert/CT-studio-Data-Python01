@@ -20,7 +20,7 @@ interface Order {
   order_status: string
   total_income: number
   deposit: number
-  customers: { full_name: string } | null
+  customers: { full_name: string; phone: string | null } | null
   sales: { id: number; staff_name: string } | null
   order_items: OrderItem[]
 }
@@ -52,6 +52,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchStaffList()
+    fetchAllOrders() // Load all orders by default
   }, [])
 
   useEffect(() => {
@@ -83,7 +84,7 @@ export default function OrdersPage() {
         order_status,
         total_income,
         deposit,
-        customers (full_name),
+        customers (full_name, phone),
         sales:staff!orders_sales_id_fkey (id, staff_name),
         order_items (is_upsell, item_status, products (product_code))
       `)
@@ -108,7 +109,7 @@ export default function OrdersPage() {
         order_status,
         total_income,
         deposit,
-        customers (full_name),
+        customers (full_name, phone),
         sales:staff!orders_sales_id_fkey (id, staff_name),
         order_items (is_upsell, item_status, products (product_code))
       `)
@@ -159,7 +160,8 @@ export default function OrdersPage() {
 
   const filteredOrders = orders.filter((order) => {
     const matchSearch = order.customers?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-      order.id.toString().includes(search)
+      order.id.toString().includes(search) ||
+      order.customers?.phone?.includes(search)
     const computedStatus = getComputedStatus(order)
     const matchStatus = !statusFilter || computedStatus === statusFilter
     const matchSales = !salesFilter || order.sales?.id === parseInt(salesFilter)
@@ -243,7 +245,7 @@ export default function OrdersPage() {
       <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
         <input
           type="text"
-          placeholder="ค้นหาชื่อ หรือ ID..."
+          placeholder="ค้นหาชื่อ, เบอร์โทร หรือ ID..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="input flex-1 min-w-[200px]"

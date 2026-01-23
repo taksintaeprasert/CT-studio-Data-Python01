@@ -119,6 +119,7 @@ export default function AppointmentPage() {
 
   useEffect(() => {
     fetchArtists()
+    fetchAllOrders() // Load all orders by default
     // Auto-complete past appointments on page load
     autoCompletePastAppointments()
   }, [])
