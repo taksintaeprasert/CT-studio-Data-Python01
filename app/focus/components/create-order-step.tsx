@@ -39,6 +39,7 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
   })
   const [photoFiles, setPhotoFiles] = useState<File[]>([])
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([])
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
 
   // Order state
   const [products, setProducts] = useState<Product[]>([])
@@ -129,6 +130,26 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
   const removePhoto = (index: number) => {
     setPhotoFiles(photoFiles.filter((_, i) => i !== index))
     setPhotoPreviews(photoPreviews.filter((_, i) => i !== index))
+  }
+
+  const handleReceiptSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น')
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('ขนาดไฟล์ต้องไม่เกิน 5MB')
+      return
+    }
+
+    setReceiptFile(file)
+    e.target.value = ''
   }
 
   // Extract price code from product code (e.g., "10900" from "LIP10900")
@@ -326,12 +347,42 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
 
       // 4. Record payment if deposit > 0
       if (depositAmount > 0) {
+        let receiptUrl = null
+        let receiptPath = null
+
+        // Upload receipt if provided
+        if (receiptFile) {
+          const fileName = `${Date.now()}_${receiptFile.name}`
+          const filePath = `payment-receipts/${order.id}/${fileName}`
+
+          const { error: uploadError } = await supabase.storage
+            .from('payment-receipts')
+            .upload(filePath, receiptFile)
+
+          if (!uploadError) {
+            const { data: urlData } = supabase.storage
+              .from('payment-receipts')
+              .getPublicUrl(filePath)
+
+            receiptUrl = urlData.publicUrl
+            receiptPath = filePath
+          }
+        }
+
+        // Calculate credit card fee
+        const creditCardFee = paymentMethod.toLowerCase() === 'credit card' ? depositAmount * 0.03 : 0
+        const netAmount = depositAmount - creditCardFee
+
         await supabase
           .from('payments')
           .insert({
             order_id: order.id,
             amount: depositAmount,
             payment_method: paymentMethod,
+            credit_card_fee: creditCardFee,
+            net_amount: netAmount,
+            receipt_url: receiptUrl,
+            receipt_path: receiptPath,
             note: 'มัดจำ',
           })
       }
@@ -724,6 +775,46 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
               <option value="promptpay">พร้อมเพย์</option>
             </select>
           </div>
+        </div>
+
+        {/* Receipt Upload - Optional */}
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            อัพโหลดสลิปโอนเงิน (ไม่บังคับ)
+          </label>
+          <div className="flex items-center gap-3">
+            <label className="flex-1 btn-secondary cursor-pointer text-center py-3">
+              {receiptFile ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span>✅</span>
+                  <span className="truncate">{receiptFile.name}</span>
+                  <span className="text-xs text-gray-500">({(receiptFile.size / 1024).toFixed(1)} KB)</span>
+                </span>
+              ) : (
+                <span className="flex items-center justify-center gap-2">
+                  <span>📎</span>
+                  <span>เลือกไฟล์รูปภาพ</span>
+                </span>
+              )}
+              <input
+                type="file"
+                onChange={handleReceiptSelect}
+                accept="image/*"
+                className="hidden"
+              />
+            </label>
+            {receiptFile && (
+              <button
+                onClick={() => setReceiptFile(null)}
+                className="px-4 py-3 text-red-500 hover:text-red-700 font-medium"
+              >
+                ลบ
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+            รองรับไฟล์: JPG, PNG, GIF (ขนาดไม่เกิน 5MB)
+          </p>
         </div>
       </div>
 
