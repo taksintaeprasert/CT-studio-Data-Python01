@@ -51,7 +51,7 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
   const [productSearch, setProductSearch] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
   const [suggestedProduct, setSuggestedProduct] = useState<Product | null>(null)
-  const [missingFreeProduct, setMissingFreeProduct] = useState<string | null>(null)
+  const [missingFreeProduct, setMissingFreeProduct] = useState<{ productName: string; productCode: string } | null>(null)
 
   const [loading, setLoading] = useState(false)
   const [searching, setSearching] = useState(false)
@@ -171,10 +171,10 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
   }
 
   // Find related free product by matching base code and price code
-  const findRelatedFreeProduct = (product: Product): { found: Product | null; suggestedCode: string | null } => {
+  const findRelatedFreeProduct = (product: Product): { found: Product | null; suggestion: { productName: string; productCode: string } | null } => {
     const priceCode = extractPriceCode(product.product_code)
     if (!priceCode) {
-      return { found: null, suggestedCode: null }
+      return { found: null, suggestion: null }
     }
 
     const baseCode = extractBaseCode(product.product_code)
@@ -197,12 +197,13 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
     })
 
     if (relatedFree) {
-      return { found: relatedFree, suggestedCode: null }
+      return { found: relatedFree, suggestion: null }
     }
 
     // No matching free product found - suggest creating one
-    const suggestedCode = `${baseCode}${priceCode}FREE`
-    return { found: null, suggestedCode }
+    const suggestedCode = `${baseCode}${priceCode}`
+    const suggestedName = product.product_name
+    return { found: null, suggestion: { productName: suggestedName, productCode: suggestedCode } }
   }
 
   const addProductById = (productId: number) => {
@@ -222,11 +223,11 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
 
     // Check for related free product (only for non-free products)
     if (!product.is_free && product.list_price > 0) {
-      const { found, suggestedCode } = findRelatedFreeProduct(product)
+      const { found, suggestion } = findRelatedFreeProduct(product)
       if (found) {
         setSuggestedProduct(found)
-      } else if (suggestedCode) {
-        setMissingFreeProduct(suggestedCode)
+      } else if (suggestion) {
+        setMissingFreeProduct(suggestion)
       }
     }
 
@@ -678,7 +679,7 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
                   ไม่พบบริการฟรีที่ตรงกัน
                 </p>
                 <p className="text-xs text-yellow-600 dark:text-yellow-400">
-                  แนะนำให้สร้างสินค้า: <span className="font-mono font-bold">{missingFreeProduct}</span>
+                  แนะนำให้สร้างสินค้า: <span className="font-bold">{missingFreeProduct.productName} {missingFreeProduct.productCode} FREE</span>
                 </p>
               </div>
             </div>
