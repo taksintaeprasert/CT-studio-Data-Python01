@@ -3,9 +3,9 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useLanguage } from '@/lib/language-context'
-import BookingChatModal from '@/components/booking-chat-modal'
 
 interface Staff {
   id: number
@@ -28,6 +28,7 @@ interface Appointment {
 }
 
 export default function CalendarPage() {
+  const router = useRouter()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [artists, setArtists] = useState<Staff[]>([])
@@ -37,9 +38,6 @@ export default function CalendarPage() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [dayAppointments, setDayAppointments] = useState<Appointment[]>([])
   const [showFilterDropdown, setShowFilterDropdown] = useState(false)
-  const [selectedOrderItemId, setSelectedOrderItemId] = useState<number | null>(null)
-  const [selectedBookingTitle, setSelectedBookingTitle] = useState<string>('')
-  const [showBookingChat, setShowBookingChat] = useState(false)
 
   const { t, language } = useLanguage()
   const supabase = createClient()
@@ -274,9 +272,7 @@ export default function CalendarPage() {
   }
 
   const handleOpenChat = (apt: Appointment) => {
-    setSelectedOrderItemId(apt.id)
-    setSelectedBookingTitle(apt.booking_title || `${apt.product_name} - ${apt.customer_name}`)
-    setShowBookingChat(true)
+    router.push(`/booking/${apt.id}`)
   }
 
   const days = getDaysInMonth()
@@ -609,15 +605,6 @@ export default function CalendarPage() {
           </div>
         </div>
       </div>
-
-      {/* Booking Chat Modal */}
-      {showBookingChat && selectedOrderItemId && (
-        <BookingChatModal
-          orderItemId={selectedOrderItemId}
-          bookingTitle={selectedBookingTitle}
-          onClose={() => setShowBookingChat(false)}
-        />
-      )}
     </div>
   )
 }

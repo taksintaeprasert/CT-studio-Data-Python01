@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useUser } from '@/lib/user-context'
 import BookingChatBox from './booking-chat-box'
@@ -35,6 +36,7 @@ interface Artist {
 }
 
 export default function BookingModal({ orderItem, customer, onClose, onComplete }: BookingModalProps) {
+  const router = useRouter()
   const supabase = createClient()
   const { user } = useUser()
 
@@ -101,6 +103,7 @@ export default function BookingModal({ orderItem, customer, onClose, onComplete 
           artist_id: selectedArtist,
           appointment_date: dateTimeString,
           booking_title: bookingTitle,
+          item_status: 'scheduled',
         })
         .eq('id', orderItem.id)
 
@@ -123,6 +126,8 @@ export default function BookingModal({ orderItem, customer, onClose, onComplete 
 
       alert('✅ บันทึกการจองสำเร็จ!')
       onComplete()
+      // Navigate to full page booking view
+      router.push(`/booking/${orderItem.id}`)
     } catch (error) {
       console.error('Error saving booking:', error)
       alert('เกิดข้อผิดพลาดในการบันทึก')
