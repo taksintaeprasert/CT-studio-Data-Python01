@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import BookingChatBox from '@/app/focus/components/booking-chat-box'
+import PaymentModal from '@/app/focus/components/payment-modal'
 
 interface OrderItemDetails {
   id: number
+  order_id: number
   appointment_date: string | null
   artist_id: number | null
   item_price: number
@@ -20,6 +22,7 @@ interface OrderItemDetails {
   } | null
   orders: {
     id: number
+    total_income: number
     customers: {
       full_name: string
       nickname: string | null
@@ -32,6 +35,9 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
   const supabase = createClient()
   const [orderItem, setOrderItem] = useState<OrderItemDetails | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [totalPaid, setTotalPaid] = useState(0)
+  const [remainingAmount, setRemainingAmount] = useState(0)
 
   useEffect(() => {
     loadOrderItemDetails()
@@ -43,6 +49,7 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
       .from('order_items')
       .select(`
         id,
+        order_id,
         appointment_date,
         artist_id,
         item_price,
@@ -51,6 +58,7 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
         artists:staff!order_items_artist_id_fkey (staff_name),
         orders!inner (
           id,
+          total_income,
           customers!inner (
             full_name,
             nickname
@@ -64,8 +72,27 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
       console.error('Error loading order item:', error)
     } else {
       setOrderItem(data)
+      if (data.orders) {
+        await loadPaymentData(data.orders.id, data.orders.total_income)
+      }
     }
     setLoading(false)
+  }
+
+  const loadPaymentData = async (orderId: number, totalIncome: number) => {
+    // Get sum of all payments for this order
+    const { data: payments } = await supabase
+      .from('payments')
+      .select('amount')
+      .eq('order_id', orderId)
+
+    const paid = payments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0
+    setTotalPaid(paid)
+    setRemainingAmount(totalIncome - paid)
+  }
+
+  const handlePaymentSuccess = () => {
+    loadOrderItemDetails()
   }
 
   const formatDateTime = (dateTime: string | null) => {
@@ -117,6 +144,14 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
             <h1 className="text-lg font-semibold text-gray-900 dark:text-white truncate flex-1">
               {bookingTitle}
             </h1>
+            {/* Payment Button */}
+            <button
+              onClick={() => setShowPaymentModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium text-sm transition-colors"
+            >
+              <span>💰</span>
+              <span className="hidden md:inline">รับชำระเงิน</span>
+            </button>
           </div>
 
           {/* Info Grid - Compact */}
@@ -147,15 +182,31 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
             </div>
           </div>
 
-          {/* Customer Info - Inline */}
-          {orderItem.orders?.customers && (
-            <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-              ลูกค้า: <span className="font-medium text-gray-900 dark:text-white">
-                {orderItem.orders.customers.full_name}
-                {orderItem.orders.customers.nickname && ` (${orderItem.orders.customers.nickname})`}
-              </span>
-            </div>
-          )}
+          {/* Customer Info & Payment Status - Inline */}
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+            {orderItem.orders?.customers && (
+              <div className="text-gray-600 dark:text-gray-400">
+                ลูกค้า: <span className="font-medium text-gray-900 dark:text-white">
+                  {orderItem.orders.customers.full_name}
+                  {orderItem.orders.customers.nickname && ` (${orderItem.orders.customers.nickname})`}
+                </span>
+              </div>
+            )}
+            {orderItem.orders && (
+              <div className="flex items-center gap-3">
+                <div className="text-gray-600 dark:text-gray-400">
+                  ชำระแล้ว: <span className="font-medium text-blue-600 dark:text-blue-400">
+                    ฿{totalPaid.toLocaleString()}
+                  </span>
+                </div>
+                <div className="text-gray-600 dark:text-gray-400">
+                  คงเหลือ: <span className={`font-medium ${remainingAmount > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`}>
+                    ฿{remainingAmount.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -165,6 +216,17 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
           <BookingChatBox orderItemId={orderItem.id} />
         </div>
       </div>
+
+      {/* Payment Modal */}
+      {showPaymentModal && orderItem.orders && (
+        <PaymentModal
+          orderId={orderItem.orders.id}
+          orderItemId={orderItem.id}
+          remainingAmount={remainingAmount}
+          onClose={() => setShowPaymentModal(false)}
+          onSuccess={handlePaymentSuccess}
+        />
+      )}
     </div>
   )
 }
