@@ -190,7 +190,7 @@ export default function AppointmentPage() {
       .from('orders')
       .select(`
         *,
-        customers (*),
+        customers (id, full_name, nickname, phone, contact_channel),
         sales:staff!orders_sales_id_fkey(staff_name),
         order_items(
           *,
@@ -216,7 +216,7 @@ export default function AppointmentPage() {
       .from('orders')
       .select(`
         *,
-        customers (*),
+        customers (id, full_name, nickname, phone, contact_channel),
         sales:staff!orders_sales_id_fkey(staff_name),
         order_items(
           *,
@@ -244,7 +244,7 @@ export default function AppointmentPage() {
       .from('orders')
       .select(`
         *,
-        customers!inner (*),
+        customers!inner (id, full_name, nickname, phone, contact_channel),
         sales:staff!orders_sales_id_fkey(staff_name),
         order_items(
           *,
