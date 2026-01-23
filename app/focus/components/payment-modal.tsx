@@ -20,7 +20,9 @@ export default function PaymentModal({
 }: PaymentModalProps) {
   const supabase = createClient()
 
-  const [amount, setAmount] = useState(remainingAmount.toString())
+  // ป้องกัน negative amount - ถ้า remainingAmount ติดลบให้เป็น 0
+  const initialAmount = remainingAmount > 0 ? remainingAmount : 0
+  const [amount, setAmount] = useState(initialAmount.toString())
   const [paymentMethod, setPaymentMethod] = useState<string>('cash')
   const [note, setNote] = useState('')
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
@@ -134,8 +136,10 @@ export default function PaymentModal({
         })
       }
 
+      // Call onSuccess to refresh data BEFORE closing modal
+      await onSuccess()
+
       alert('✅ บันทึกการรับชำระเงินสำเร็จ!')
-      onSuccess()
       onClose()
     } catch (error: any) {
       console.error('Error saving payment:', error)
@@ -164,6 +168,20 @@ export default function PaymentModal({
 
         {/* Content */}
         <div className="p-6 space-y-4">
+          {/* Warning if fully paid or overpaid */}
+          {remainingAmount <= 0 && (
+            <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+              <p className="text-sm text-yellow-800 dark:text-yellow-300 font-medium">
+                ⚠️ {remainingAmount === 0 ? 'ชำระครบแล้ว' : 'ชำระเกินแล้ว'}
+              </p>
+              <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                {remainingAmount === 0
+                  ? 'ไม่มียอดค้างชำระ'
+                  : `ชำระเกิน ฿${Math.abs(remainingAmount).toLocaleString()}`}
+              </p>
+            </div>
+          )}
+
           {/* Amount */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
