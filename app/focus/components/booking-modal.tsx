@@ -48,16 +48,14 @@ export default function BookingModal({ orderItem, customer, onClose, onComplete 
 
   useEffect(() => {
     loadArtists()
-    
+
     // Pre-fill if already booked
     if (orderItem.appointment_date) {
       const date = new Date(orderItem.appointment_date)
       setAppointmentDate(date.toISOString().split('T')[0])
       setAppointmentTime(date.toTimeString().slice(0, 5))
-    } else {
-      // Default to today
-      setAppointmentDate(new Date().toISOString().split('T')[0])
     }
+    // Don't set default date - allow booking without date
   }, [orderItem])
 
   const loadArtists = async () => {
@@ -77,10 +75,7 @@ export default function BookingModal({ orderItem, customer, onClose, onComplete 
       return
     }
 
-    if (!appointmentDate) {
-      alert('กรุณาเลือกวันนัดหมาย')
-      return
-    }
+    // Date is now optional - booking can be saved without appointment date
 
     setSaving(true)
 
@@ -96,10 +91,10 @@ export default function BookingModal({ orderItem, customer, onClose, onComplete 
         .from('order_items')
         .update({
           artist_id: selectedArtist,
-          appointment_date: appointmentDate,
+          appointment_date: appointmentDate || null,
           appointment_time: appointmentTime || null,
           booking_title: bookingTitle,
-          item_status: 'scheduled',
+          item_status: appointmentDate ? 'scheduled' : 'pending',
         })
         .eq('id', orderItem.id)
 
@@ -109,21 +104,28 @@ export default function BookingModal({ orderItem, customer, onClose, onComplete 
       }
 
       // Create system message
-      const dateTimeForMessage = appointmentTime
-        ? `${appointmentDate}T${appointmentTime}:00`
-        : `${appointmentDate}T10:00:00`
+      let messageText = ''
+      if (appointmentDate) {
+        const dateTimeForMessage = appointmentTime
+          ? `${appointmentDate}T${appointmentTime}:00`
+          : `${appointmentDate}T10:00:00`
 
-      const { error: msgError } = await supabase.from('booking_messages').insert({
-        order_item_id: orderItem.id,
-        sender_type: 'system',
-        message_type: 'text',
-        message_text: `จองคิวช่าง ${artist?.staff_name} วันที่ ${new Date(dateTimeForMessage).toLocaleDateString('th-TH', {
+        messageText = `จองคิวช่าง ${artist?.staff_name} วันที่ ${new Date(dateTimeForMessage).toLocaleDateString('th-TH', {
           year: 'numeric',
           month: 'long',
           day: 'numeric',
           hour: '2-digit',
           minute: '2-digit'
-        })}`,
+        })}`
+      } else {
+        messageText = `เลือกช่าง ${artist?.staff_name} (ยังไม่ได้นัดหมายวัน)`
+      }
+
+      const { error: msgError } = await supabase.from('booking_messages').insert({
+        order_item_id: orderItem.id,
+        sender_type: 'system',
+        message_type: 'text',
+        message_text: messageText,
         is_read: false,
       })
 
@@ -131,7 +133,11 @@ export default function BookingModal({ orderItem, customer, onClose, onComplete 
         console.error('Message insert error:', msgError)
       }
 
-      alert('✅ บันทึกการจองสำเร็จ!')
+      if (appointmentDate) {
+        alert('✅ บันทึกการจองสำเร็จ!')
+      } else {
+        alert('✅ บันทึกการเลือกช่างสำเร็จ! (ยังไม่ได้นัดหมายวัน)')
+      }
 
       // Navigate to full page booking view
       router.push(`/booking/${orderItem.id}`)
@@ -195,14 +201,29 @@ export default function BookingModal({ orderItem, customer, onClose, onComplete 
             {/* Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                วันที่นัดหมาย <span className="text-red-500">*</span>
+                วันที่นัดหมาย <span className="text-gray-400 text-xs">(ไม่บังคับ)</span>
               </label>
-              <input
-                type="date"
-                value={appointmentDate}
-                onChange={(e) => setAppointmentDate(e.target.value)}
-                className="input w-full"
-              />
+              <div className="space-y-2">
+                <input
+                  type="date"
+                  value={appointmentDate}
+                  onChange={(e) => setAppointmentDate(e.target.value)}
+                  className="input w-full"
+                  placeholder="เลือกวันนัดหมาย"
+                />
+                {appointmentDate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppointmentDate('')
+                      setAppointmentTime('')
+                    }}
+                    className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  >
+                    ✕ ล้างวันนัดหมาย (เลือกช่างอย่างเดียว)
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Time */}
