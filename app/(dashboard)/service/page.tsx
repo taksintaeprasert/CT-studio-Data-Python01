@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import DateRangeFilter from '@/components/date-range-filter'
 import { useLanguage } from '@/lib/language-context'
 import BookingModal from '@/app/focus/components/booking-modal'
+import PaymentModal from '@/app/focus/components/payment-modal'
 
 interface Customer {
   id: number
@@ -82,8 +83,9 @@ export default function AppointmentPage() {
 
   // Payment modal
   const [showPaymentModal, setShowPaymentModal] = useState(false)
-  const [paymentAmount, setPaymentAmount] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState('Transfer')
+  const [paymentOrderItemId, setPaymentOrderItemId] = useState<number | null>(null)
+  const [totalPaid, setTotalPaid] = useState(0)
+  const [remainingAmount, setRemainingAmount] = useState(0)
 
   // Confirmation modal
   const [confirmAction, setConfirmAction] = useState<{type: string; message: string} | null>(null)
@@ -287,42 +289,53 @@ export default function AppointmentPage() {
     }
   }
 
-  const openPaymentModal = () => {
+  const openPaymentModal = async () => {
     if (!selectedOrder) return
-    const remaining = selectedOrder.total_income - selectedOrder.deposit
-    setPaymentAmount(remaining.toString())
+
+    // Load payment data
+    const { data: payments } = await supabase
+      .from('payments')
+      .select('amount')
+      .eq('order_id', selectedOrder.id)
+
+    const paid = payments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0
+    const remaining = selectedOrder.total_income - paid
+
+    setTotalPaid(paid)
+    setRemainingAmount(remaining)
+
+    // Set first order item id for booking messages
+    const firstItem = selectedOrder.order_items?.[0]
+    if (firstItem) {
+      setPaymentOrderItemId(firstItem.id)
+    }
+
     setShowPaymentModal(true)
   }
 
-  const processPayment = async () => {
-    if (!selectedOrder) return
-
-    const amount = parseFloat(paymentAmount)
-    if (isNaN(amount) || amount <= 0) {
-      alert('Please enter a valid amount')
-      return
-    }
-
-    await supabase.from('payments').insert({
-      order_id: selectedOrder.id,
-      amount: amount,
-      payment_method: paymentMethod,
-      note: 'Additional payment',
-    })
-
-    const newDeposit = selectedOrder.deposit + amount
-    const newStatus = newDeposit >= selectedOrder.total_income ? 'paid' : selectedOrder.order_status
-
-    await supabase
-      .from('orders')
-      .update({
-        deposit: newDeposit,
-        order_status: newStatus,
-      })
-      .eq('id', selectedOrder.id)
-
-    setShowPaymentModal(false)
+  const handlePaymentSuccess = async () => {
     await refreshOrders()
+    if (selectedOrder) {
+      // Reload selected order
+      const { data } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          customers (id, full_name, nickname, phone, contact_channel),
+          sales:staff!orders_sales_id_fkey(id, staff_name),
+          order_items(
+            *,
+            artist:staff!order_items_artist_id_fkey(staff_name),
+            product:products(product_name, product_code, is_free, validity_months, list_price)
+          )
+        `)
+        .eq('id', selectedOrder.id)
+        .single()
+
+      if (data) {
+        setSelectedOrder(data)
+      }
+    }
   }
 
   const handleCancelOrder = () => {
@@ -1192,72 +1205,14 @@ export default function AppointmentPage() {
       )}
 
       {/* Payment Modal */}
-      {showPaymentModal && selectedOrder && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6 space-y-4">
-            <h3 className="text-xl font-bold text-gray-800 dark:text-white">
-              {t('appointments.receivePayment')}
-            </h3>
-
-            <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl space-y-2">
-              <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-gray-400">{t('common.total')}</span>
-                <span className="font-bold text-gray-800 dark:text-white">฿{selectedOrder.total_income.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-gray-400">{t('common.paid')}</span>
-                <span className="font-bold text-green-600">฿{selectedOrder.deposit.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between pt-2 border-t dark:border-gray-600">
-                <span className="text-gray-500 dark:text-gray-400">{t('common.remaining')}</span>
-                <span className="font-bold text-orange-600">฿{(selectedOrder.total_income - selectedOrder.deposit).toLocaleString()}</span>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t('common.amount')}
-              </label>
-              <input
-                type="number"
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(e.target.value)}
-                className="input w-full text-xl font-bold text-center"
-                placeholder="0"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t('common.paymentMethod')}
-              </label>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                className="select w-full"
-              >
-                <option value="Transfer">Transfer</option>
-                <option value="Cash">Cash</option>
-                <option value="Credit Card">Credit Card</option>
-              </select>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={() => setShowPaymentModal(false)}
-                className="btn btn-secondary flex-1"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={processPayment}
-                className="btn btn-primary flex-1"
-              >
-                {t('common.confirm')}
-              </button>
-            </div>
-          </div>
-        </div>
+      {showPaymentModal && selectedOrder && paymentOrderItemId && (
+        <PaymentModal
+          orderId={selectedOrder.id}
+          orderItemId={paymentOrderItemId}
+          remainingAmount={remainingAmount}
+          onClose={() => setShowPaymentModal(false)}
+          onSuccess={handlePaymentSuccess}
+        />
       )}
 
       {/* Confirmation Modal */}
