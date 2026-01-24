@@ -8,6 +8,7 @@ import DateRangeFilter from '@/components/date-range-filter'
 import { useLanguage } from '@/lib/language-context'
 import BookingModal from '@/app/focus/components/booking-modal'
 import PaymentModal from '@/app/focus/components/payment-modal'
+import PaymentHistoryModal from '@/app/focus/components/payment-history-modal'
 
 interface Customer {
   id: number
@@ -87,6 +88,9 @@ export default function AppointmentPage() {
   const [paymentOrderItemId, setPaymentOrderItemId] = useState<number | null>(null)
   const [totalPaid, setTotalPaid] = useState(0)
   const [remainingAmount, setRemainingAmount] = useState(0)
+
+  // Payment History modal
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false)
 
   // Confirmation modal
   const [confirmAction, setConfirmAction] = useState<{type: string; message: string} | null>(null)
@@ -974,6 +978,12 @@ export default function AppointmentPage() {
                       {t('appointments.receivePayment')}
                     </button>
                   )}
+                  <button
+                    onClick={() => setShowPaymentHistory(true)}
+                    className="px-6 py-3 bg-blue-500 text-white rounded-xl font-bold hover:bg-blue-600 transition-colors"
+                  >
+                    📋 ดู LOG การรับชำระ
+                  </button>
                 </div>
 
                 {/* Services List */}
@@ -1136,6 +1146,12 @@ export default function AppointmentPage() {
                     {t('appointments.receivePayment')}
                   </button>
                 )}
+                <button
+                  onClick={() => setShowPaymentHistory(true)}
+                  className="flex-1 px-4 py-3 bg-blue-500 text-white rounded-xl font-bold"
+                >
+                  📋 LOG
+                </button>
               </div>
 
               {/* Services List */}
@@ -1475,6 +1491,17 @@ export default function AppointmentPage() {
           onClose={closeBookingModal}
           onComplete={async () => {
             closeBookingModal()
+            await refreshOrders()
+          }}
+        />
+      )}
+
+      {/* Payment History Modal */}
+      {showPaymentHistory && selectedOrder && (
+        <PaymentHistoryModal
+          orderId={selectedOrder.id}
+          onClose={() => setShowPaymentHistory(false)}
+          onUpdate={async () => {
             await refreshOrders()
           }}
         />
