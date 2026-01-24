@@ -285,7 +285,8 @@ export default function AppointmentPage() {
             *,
             artist:staff!order_items_artist_id_fkey(staff_name),
             product:products(product_name, product_code, is_free, validity_months, list_price)
-          )
+          ),
+          payments(amount)
         `)
         .eq('id', selectedOrder.id)
         .single()
@@ -321,7 +322,7 @@ export default function AppointmentPage() {
   const handlePaymentSuccess = async () => {
     await refreshOrders()
     if (selectedOrder) {
-      // Reload selected order
+      // Reload selected order WITH payments
       const { data } = await supabase
         .from('orders')
         .select(`
@@ -332,7 +333,8 @@ export default function AppointmentPage() {
             *,
             artist:staff!order_items_artist_id_fkey(staff_name),
             product:products(product_name, product_code, is_free, validity_months, list_price)
-          )
+          ),
+          payments(amount)
         `)
         .eq('id', selectedOrder.id)
         .single()
@@ -539,7 +541,8 @@ export default function AppointmentPage() {
           *,
           artist:staff!order_items_artist_id_fkey(staff_name),
           product:products(product_name, product_code, is_free, validity_months, list_price)
-        )
+        ),
+        payments(amount)
       `)
       .eq('id', orderId)
       .single()
