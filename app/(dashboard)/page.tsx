@@ -676,8 +676,10 @@ export default function DashboardPage() {
 
   // Calculate metrics
   const totalBooking = orders.reduce((sum, o) => sum + (o.total_income || 0), 0)
-  // Calculate income from payments made in the date range (by payment_date, not order created_at)
-  const totalIncome = paymentsInPeriod.reduce((sum, p) => sum + (p.amount || 0), 0)
+  // Calculate total income: deposit from orders created in period + payments made in period
+  const depositIncome = orders.reduce((sum, o) => sum + (o.deposit || 0), 0)
+  const paymentIncome = paymentsInPeriod.reduce((sum, p) => sum + (p.amount || 0), 0)
+  const totalIncome = depositIncome + paymentIncome
   const totalOrders = orders.length
 
   // AOV
