@@ -138,10 +138,12 @@ export default function SalesPerformancePage() {
       .gte('created_at', `${startDate}T00:00:00`)
       .lte('created_at', `${endDate}T23:59:59`)
 
-    // Get payments for these orders
+    // Get payments made within date range
     const { data: payments } = await supabase
       .from('payments')
       .select('order_id, amount')
+      .gte('payment_date', startDate)
+      .lte('payment_date', endDate)
 
     // Get order items with upsell
     const { data: orderItems } = await supabase
