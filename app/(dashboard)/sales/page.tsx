@@ -153,6 +153,7 @@ export default function SalesPerformancePage() {
     // Calculate stats for each staff
     const salesStats: SalesData[] = staff.map(s => {
       const staffOrders = orders?.filter(o => o.sales_id === s.id) || []
+      const staffOrderIds = staffOrders.map(o => o.id)
       const totalSales = staffOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
       const realIncome = staffOrders.reduce((sum, o) => sum + (o.deposit || 0), 0)  // Actual income from deposits
       const completedOrders = staffOrders.filter(o => o.order_status === 'done').length
