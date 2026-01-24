@@ -92,6 +92,7 @@ interface PriceBreakdown {
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'alerts' | 'overview' | 'marketing' | 'report'>('alerts')
   const [orders, setOrders] = useState<Order[]>([])
+  const [paymentsInPeriod, setPaymentsInPeriod] = useState<{amount: number}[]>([])
   const [loading, setLoading] = useState(true)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -444,6 +445,7 @@ export default function DashboardPage() {
 
     setLoading(true)
 
+    // Fetch orders created in date range (for booking counts)
     const { data: ordersData } = await supabase
       .from('orders')
       .select(`
@@ -467,6 +469,15 @@ export default function DashboardPage() {
       .order('created_at', { ascending: false })
 
     setOrders(ordersData || [])
+
+    // Fetch payments made in date range (for income calculation)
+    const { data: paymentsData } = await supabase
+      .from('payments')
+      .select('amount')
+      .gte('payment_date', startDate)
+      .lte('payment_date', endDate)
+
+    setPaymentsInPeriod(paymentsData || [])
 
     // Fetch marketing data for the period
     const { data: mkData } = await supabase
@@ -665,10 +676,8 @@ export default function DashboardPage() {
 
   // Calculate metrics
   const totalBooking = orders.reduce((sum, o) => sum + (o.total_income || 0), 0)
-  const totalIncome = orders.reduce((sum, o) => {
-    const orderPaid = o.payments?.reduce((pSum, p) => pSum + (p.amount || 0), 0) || 0
-    return sum + orderPaid
-  }, 0)
+  // Calculate income from payments made in the date range (by payment_date, not order created_at)
+  const totalIncome = paymentsInPeriod.reduce((sum, p) => sum + (p.amount || 0), 0)
   const totalOrders = orders.length
 
   // AOV
