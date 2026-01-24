@@ -43,6 +43,7 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
   const [note, setNote] = useState('')
   const [customerName, setCustomerName] = useState('')
   const [createdAt, setCreatedAt] = useState('')
+  const [deposit, setDeposit] = useState('')
 
   // Product selection
   const [productSearch, setProductSearch] = useState('')
@@ -85,6 +86,7 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
       setOrderStatus(orderRes.data.order_status || 'booking')
       setNote(orderRes.data.note || '')
       setCustomerName(orderRes.data.customers?.full_name || '')
+      setDeposit(orderRes.data.deposit?.toString() || '0')
       // Set created_at date (format: YYYY-MM-DD)
       if (orderRes.data.created_at) {
         const date = new Date(orderRes.data.created_at)
@@ -193,6 +195,7 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
         order_status: orderStatus,
         note: note || null,
         created_at: createdAt ? `${createdAt}T12:00:00` : undefined,
+        deposit: deposit ? parseFloat(deposit) : 0,
       })
       .eq('id', params.id)
 
@@ -281,6 +284,19 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
                 className="input"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">เงินมัดจำ (฿)</label>
+            <input
+              type="number"
+              value={deposit}
+              onChange={(e) => setDeposit(e.target.value)}
+              className="input"
+              placeholder="0"
+              min="0"
+              step="0.01"
+            />
           </div>
 
           <div>
