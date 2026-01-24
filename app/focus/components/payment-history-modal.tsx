@@ -273,11 +273,12 @@ export default function PaymentHistoryModal({
                   <p className="text-gray-500 dark:text-gray-400 text-lg">ยังไม่มีรายการชำระเงิน</p>
                 </div>
               ) : (
-                payments.map((payment, index) => (
-                <div
-                  key={payment.id}
-                  className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 border-l-4 border-pink-500"
-                >
+                <>
+                  {payments.map((payment, index) => (
+                    <div
+                      key={payment.id}
+                      className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 border-l-4 border-pink-500"
+                    >
                   <div className="flex items-start justify-between gap-4">
                     {/* Left: Payment Info */}
                     <div className="flex-1">
@@ -351,7 +352,9 @@ export default function PaymentHistoryModal({
                     </div>
                   </div>
                 </div>
-              ))}
+                  ))}
+                </>
+              )}
             </div>
           )}
         </div>
