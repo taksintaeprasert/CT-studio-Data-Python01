@@ -20,9 +20,8 @@ export default function PaymentModal({
 }: PaymentModalProps) {
   const supabase = createClient()
 
-  // ป้องกัน negative amount - ถ้า remainingAmount ติดลบให้เป็น 0
-  const initialAmount = remainingAmount > 0 ? remainingAmount : 0
-  const [amount, setAmount] = useState(initialAmount.toString())
+  // ตั้งค่า initialAmount เป็น remainingAmount (รับค่าติดลบได้เพื่อแก้ไขยอดเกิน)
+  const [amount, setAmount] = useState(remainingAmount.toString())
   const [paymentMethod, setPaymentMethod] = useState<string>('cash')
   const [note, setNote] = useState('')
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
@@ -49,8 +48,14 @@ export default function PaymentModal({
   const handleSubmit = async () => {
     // Validate
     const amountNum = parseFloat(amount)
-    if (isNaN(amountNum) || amountNum <= 0) {
-      alert('กรุณากรอกจำนวนเงินที่ถูกต้อง')
+    if (isNaN(amountNum) || amountNum === 0) {
+      alert('กรุณากรอกจำนวนเงินที่ถูกต้อง (ไม่สามารถเป็น 0 ได้)')
+      return
+    }
+
+    // ป้องกันการเพิ่มเงินเมื่อชำระครบแล้ว (แต่อนุญาตให้ลดได้ด้วยค่าติดลบ)
+    if (remainingAmount <= 0 && amountNum > 0) {
+      alert('⚠️ ไม่สามารถรับชำระเงินเพิ่มได้\nเนื่องจากชำระครบหรือเกินแล้ว\n\n💡 หากต้องการแก้ไขยอด ให้ใส่จำนวนติดลบเพื่อลดยอดชำระ')
       return
     }
 
@@ -90,8 +95,8 @@ export default function PaymentModal({
         setUploading(false)
       }
 
-      // Calculate credit card fee if applicable
-      const creditCardFee = paymentMethod.toLowerCase() === 'credit card' ? amountNum * 0.03 : 0
+      // Calculate credit card fee if applicable (only for positive amounts)
+      const creditCardFee = paymentMethod.toLowerCase() === 'credit card' && amountNum > 0 ? amountNum * 0.03 : 0
       const netAmount = amountNum - creditCardFee
 
       // Insert payment record
@@ -113,13 +118,17 @@ export default function PaymentModal({
       }
 
       // Create system message in booking chat
+      const messageText = amountNum > 0
+        ? `รับชำระเงิน ฿${amountNum.toLocaleString()} ผ่าน ${paymentMethod}${
+            creditCardFee > 0 ? ` (ค่าธรรมเนียม ฿${creditCardFee.toLocaleString()})` : ''
+          }`
+        : `ปรับลดยอดชำระ ฿${Math.abs(amountNum).toLocaleString()} (แก้ไขยอดเกิน)`
+
       await supabase.from('booking_messages').insert({
         order_item_id: orderItemId,
         sender_type: 'system',
         message_type: 'text',
-        message_text: `รับชำระเงิน ฿${amountNum.toLocaleString()} ผ่าน ${paymentMethod}${
-          creditCardFee > 0 ? ` (ค่าธรรมเนียม ฿${creditCardFee.toLocaleString()})` : ''
-        }`,
+        message_text: messageText,
         is_read: false,
       })
 
@@ -193,12 +202,21 @@ export default function PaymentModal({
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
               step="0.01"
-              min="0"
               className="input w-full text-lg font-semibold"
             />
             {remainingAmount > 0 && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 ยอดคงเหลือ: ฿{remainingAmount.toLocaleString()}
+              </p>
+            )}
+            {remainingAmount < 0 && (
+              <p className="text-xs text-orange-500 dark:text-orange-400 mt-1">
+                💡 ชำระเกิน ฿{Math.abs(remainingAmount).toLocaleString()} - ใส่จำนวนติดลบเพื่อลดยอด
+              </p>
+            )}
+            {remainingAmount === 0 && (
+              <p className="text-xs text-green-500 dark:text-green-400 mt-1">
+                ✅ ชำระครบแล้ว - ใส่จำนวนติดลบเพื่อแก้ไขหากต้องการ
               </p>
             )}
           </div>
