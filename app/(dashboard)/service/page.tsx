@@ -125,8 +125,6 @@ export default function AppointmentPage() {
   useEffect(() => {
     fetchArtists()
     fetchAllOrders() // Load all orders by default
-    // Auto-complete past appointments on page load
-    autoCompletePastAppointments()
   }, [])
 
   useEffect(() => {
@@ -134,48 +132,6 @@ export default function AppointmentPage() {
       fetchOrders()
     }
   }, [startDate, endDate])
-
-  // Auto-complete scheduled services when appointment time has passed
-  const autoCompletePastAppointments = async () => {
-    const now = new Date()
-    const todayDate = getTodayDate()
-    const currentTime = now.toTimeString().slice(0, 5) // HH:MM format
-
-    // Fetch scheduled services that are in the past
-    const { data: pastServices } = await supabase
-      .from('order_items')
-      .select('id, appointment_date, appointment_time')
-      .eq('item_status', 'scheduled')
-      .not('appointment_date', 'is', null)
-
-    if (!pastServices || pastServices.length === 0) return
-
-    const toComplete: number[] = []
-
-    pastServices.forEach((service: any) => {
-      const appointmentDate = service.appointment_date
-      const appointmentTime = service.appointment_time || '23:59'
-
-      // Check if appointment is in the past
-      if (appointmentDate < todayDate) {
-        // Past day - should be completed
-        toComplete.push(service.id)
-      } else if (appointmentDate === todayDate && appointmentTime < currentTime) {
-        // Same day but time has passed - should be completed
-        toComplete.push(service.id)
-      }
-    })
-
-    // Update all past services to completed
-    if (toComplete.length > 0) {
-      await supabase
-        .from('order_items')
-        .update({ item_status: 'completed' })
-        .in('id', toComplete)
-
-      console.log(`Auto-completed ${toComplete.length} past services`)
-    }
-  }
 
   const fetchArtists = async () => {
     const { data } = await supabase
