@@ -169,7 +169,6 @@ export default function SalesPerformancePage() {
       const completedOrders = staffOrders.filter(o => o.order_status === 'done').length
 
       // Calculate upsell rate
-      const staffOrderIds = staffOrders.map(o => o.id)
       const staffItems = orderItems?.filter(i => staffOrderIds.includes(i.order_id)) || []
       const upsellItems = staffItems.filter(i => i.is_upsell).length
       const upsellRate = staffItems.length > 0 ? (upsellItems / staffItems.length) * 100 : 0
