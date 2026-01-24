@@ -138,11 +138,6 @@ export default function SalesPerformancePage() {
       .gte('created_at', `${startDate}T00:00:00`)
       .lte('created_at', `${endDate}T23:59:59`)
 
-    // Get payments for these orders
-    const { data: payments } = await supabase
-      .from('payments')
-      .select('order_id, amount')
-
     // Get order items with upsell
     const { data: orderItems } = await supabase
       .from('order_items')
@@ -159,13 +154,7 @@ export default function SalesPerformancePage() {
     const salesStats: SalesData[] = staff.map(s => {
       const staffOrders = orders?.filter(o => o.sales_id === s.id) || []
       const totalSales = staffOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
-
-      // Calculate real income: deposit + payments
-      const staffOrderIds = staffOrders.map(o => o.id)
-      const staffDeposit = staffOrders.reduce((sum, o) => sum + (o.deposit || 0), 0)
-      const staffPayments = payments?.filter(p => staffOrderIds.includes(p.order_id)).reduce((sum, p) => sum + (p.amount || 0), 0) || 0
-      const realIncome = staffDeposit + staffPayments
-
+      const realIncome = staffOrders.reduce((sum, o) => sum + (o.deposit || 0), 0)  // Actual income from deposits
       const completedOrders = staffOrders.filter(o => o.order_status === 'done').length
 
       // Calculate upsell rate
