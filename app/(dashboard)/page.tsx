@@ -45,6 +45,7 @@ interface Order {
   contact_channel: string | null
   customers: { full_name: string; phone: string | null; contact_channel: string | null } | null
   order_items: OrderItem[]
+  payments?: { amount: number }[]
 }
 
 interface MarketingData {
@@ -458,7 +459,8 @@ export default function DashboardPage() {
           id,
           is_upsell,
           products (list_price)
-        )
+        ),
+        payments(amount)
       `)
       .gte('created_at', `${startDate}T00:00:00`)
       .lte('created_at', `${endDate}T23:59:59`)
@@ -663,7 +665,10 @@ export default function DashboardPage() {
 
   // Calculate metrics
   const totalBooking = orders.reduce((sum, o) => sum + (o.total_income || 0), 0)
-  const totalIncome = orders.reduce((sum, o) => sum + (o.deposit || 0), 0)
+  const totalIncome = orders.reduce((sum, o) => {
+    const orderPaid = o.payments?.reduce((pSum, p) => pSum + (p.amount || 0), 0) || 0
+    return sum + orderPaid
+  }, 0)
   const totalOrders = orders.length
 
   // AOV

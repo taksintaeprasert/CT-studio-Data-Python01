@@ -56,6 +56,7 @@ interface Order {
   customers: Customer | null
   sales: { staff_name: string } | null
   order_items: OrderItem[]
+  payments?: { amount: number }[]
 }
 
 export default function AppointmentPage() {
@@ -199,7 +200,8 @@ export default function AppointmentPage() {
           *,
           artist:staff!order_items_artist_id_fkey(staff_name),
           product:products(product_name, product_code, is_free, validity_months, list_price)
-        )
+        ),
+        payments(amount)
       `)
       .gte('created_at', `${startDate}T00:00:00`)
       .lte('created_at', `${endDate}T23:59:59`)
@@ -225,7 +227,8 @@ export default function AppointmentPage() {
           *,
           artist:staff!order_items_artist_id_fkey(staff_name),
           product:products(product_name, product_code, is_free, validity_months, list_price)
-        )
+        ),
+        payments(amount)
       `)
       .order('created_at', { ascending: false })
       .limit(200)
@@ -253,7 +256,8 @@ export default function AppointmentPage() {
           *,
           artist:staff!order_items_artist_id_fkey(staff_name),
           product:products(product_name, product_code, is_free, validity_months, list_price)
-        )
+        ),
+        payments(amount)
       `)
       .or(`full_name.ilike.%${searchQuery.trim()}%,phone.ilike.%${searchQuery.trim()}%`, { foreignTable: 'customers' })
       .order('created_at', { ascending: false })
@@ -553,6 +557,11 @@ export default function AppointmentPage() {
     })
   }
 
+  // Helper: Calculate total paid from payments table
+  const getTotalPaid = (order: Order): number => {
+    return order.payments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0
+  }
+
   // Helper: Check if order has any completed service
   const hasCompletedService = (order: Order) => {
     return order.order_items.some(item =>
@@ -562,7 +571,8 @@ export default function AppointmentPage() {
 
   // Helper: Check if order has remaining balance (unpaid)
   const hasRemainingBalance = (order: Order) => {
-    return order.total_income - order.deposit > 0
+    const totalPaid = getTotalPaid(order)
+    return order.total_income - totalPaid > 0
   }
 
   // Helper: Check if order has service expiring within 2 months
@@ -842,7 +852,8 @@ export default function AppointmentPage() {
                 {filteredOrders.map(order => {
                   const statusConfig = getOrderStatusConfig(order)
                   const isSelected = selectedOrder?.id === order.id
-                  const remaining = order.total_income - order.deposit
+                  const totalPaid = getTotalPaid(order)
+                  const remaining = order.total_income - totalPaid
                   const hasPaidUnscheduled = hasUnscheduledPaidService(order)
 
                   return (
@@ -939,13 +950,13 @@ export default function AppointmentPage() {
                   <div className="text-center">
                     <p className="text-sm text-gray-500 dark:text-gray-400">{t('common.paid')}</p>
                     <p className="text-2xl font-bold text-green-600">
-                      ฿{selectedOrder.deposit.toLocaleString()}
+                      ฿{getTotalPaid(selectedOrder).toLocaleString()}
                     </p>
                   </div>
                   <div className="text-center">
                     <p className="text-sm text-gray-500 dark:text-gray-400">{t('common.remaining')}</p>
-                    <p className={`text-2xl font-bold ${selectedOrder.total_income - selectedOrder.deposit > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                      ฿{(selectedOrder.total_income - selectedOrder.deposit).toLocaleString()}
+                    <p className={`text-2xl font-bold ${selectedOrder.total_income - getTotalPaid(selectedOrder) > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                      ฿{(selectedOrder.total_income - getTotalPaid(selectedOrder)).toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -1101,13 +1112,13 @@ export default function AppointmentPage() {
                 <div className="text-center">
                   <p className="text-xs text-gray-500 dark:text-gray-400">{t('common.paid')}</p>
                   <p className="text-lg font-bold text-green-600">
-                    ฿{selectedOrder.deposit.toLocaleString()}
+                    ฿{getTotalPaid(selectedOrder).toLocaleString()}
                   </p>
                 </div>
                 <div className="text-center">
                   <p className="text-xs text-gray-500 dark:text-gray-400">{t('common.remaining')}</p>
-                  <p className={`text-lg font-bold ${selectedOrder.total_income - selectedOrder.deposit > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                    ฿{(selectedOrder.total_income - selectedOrder.deposit).toLocaleString()}
+                  <p className={`text-lg font-bold ${selectedOrder.total_income - getTotalPaid(selectedOrder) > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                    ฿{(selectedOrder.total_income - getTotalPaid(selectedOrder)).toLocaleString()}
                   </p>
                 </div>
               </div>

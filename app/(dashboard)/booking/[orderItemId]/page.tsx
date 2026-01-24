@@ -91,8 +91,8 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
     setRemainingAmount(totalIncome - paid)
   }
 
-  const handlePaymentSuccess = () => {
-    loadOrderItemDetails()
+  const handlePaymentSuccess = async () => {
+    await loadOrderItemDetails()
   }
 
   const formatDateTime = (dateTime: string | null) => {
