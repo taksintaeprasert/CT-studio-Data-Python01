@@ -67,12 +67,12 @@ export async function POST(request: NextRequest) {
     const googleReviewCount = metricsRecord?.google_review_count || 0
     const followUpClosed = metricsRecord?.follow_up_closed || 0
 
-    // Get payments for the date (actual income received)
+    // Get payments for the date (actual income received by payment_date)
     const { data: payments } = await supabase
       .from('payments')
       .select('amount, order_id')
-      .gte('created_at', `${reportDate}T00:00:00`)
-      .lte('created_at', `${reportDate}T23:59:59`)
+      .gte('payment_date', reportDate)
+      .lte('payment_date', reportDate)
 
     // Calculate total income from payments
     const totalPaymentsIncome = payments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0
