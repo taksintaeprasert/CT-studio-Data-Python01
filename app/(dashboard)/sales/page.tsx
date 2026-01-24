@@ -134,9 +134,16 @@ export default function SalesPerformancePage() {
     // Get orders within date range
     const { data: orders } = await supabase
       .from('orders')
-      .select('id, sales_id, order_status, total_income, deposit')
+      .select('id, sales_id, order_status, total_income')
       .gte('created_at', `${startDate}T00:00:00`)
       .lte('created_at', `${endDate}T23:59:59`)
+
+    // Get payments made within date range (by payment_date)
+    const { data: payments } = await supabase
+      .from('payments')
+      .select('order_id, amount')
+      .gte('payment_date', startDate)
+      .lte('payment_date', endDate)
 
     // Get order items with upsell
     const { data: orderItems } = await supabase
@@ -155,7 +162,11 @@ export default function SalesPerformancePage() {
       const staffOrders = orders?.filter(o => o.sales_id === s.id) || []
       const staffOrderIds = staffOrders.map(o => o.id)
       const totalSales = staffOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
-      const realIncome = staffOrders.reduce((sum, o) => sum + (o.deposit || 0), 0)  // Actual income from deposits
+
+      // Calculate real income from payments (by payment_date)
+      const staffPayments = payments?.filter(p => staffOrderIds.includes(p.order_id)) || []
+      const realIncome = staffPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
+
       const completedOrders = staffOrders.filter(o => o.order_status === 'done').length
 
       // Calculate upsell rate
@@ -202,12 +213,12 @@ export default function SalesPerformancePage() {
       .gte('created_at', `${startDate}T00:00:00`)
       .lte('created_at', `${endDate}T23:59:59`)
 
-    // Get payments within date range
+    // Get payments within date range (by payment_date)
     const { data: payments } = await supabase
       .from('payments')
-      .select('order_id, amount, created_at')
-      .gte('created_at', `${startDate}T00:00:00`)
-      .lte('created_at', `${endDate}T23:59:59`)
+      .select('order_id, amount, payment_date')
+      .gte('payment_date', startDate)
+      .lte('payment_date', endDate)
 
     // Filter by staff if selected
     const filteredOrders = selectedStaffId
@@ -233,11 +244,11 @@ export default function SalesPerformancePage() {
       }
     })
 
-    // Sum income (payments) by date - filter by order if staff selected
+    // Sum income (payments) by payment_date - filter by order if staff selected
     const orderIds = filteredOrders?.map(o => o.id) || []
     payments?.forEach(payment => {
       if (!selectedStaffId || orderIds.includes(payment.order_id)) {
-        const dateStr = payment.created_at.split('T')[0]
+        const dateStr = payment.payment_date
         if (dailyMap[dateStr]) {
           dailyMap[dateStr].income += payment.amount || 0
         }
