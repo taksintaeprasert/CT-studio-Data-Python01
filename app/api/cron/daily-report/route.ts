@@ -81,7 +81,6 @@ export async function GET(request: NextRequest) {
         sales_id,
         order_status,
         total_income,
-        deposit,
         order_items (
           product_id,
           products (
@@ -106,12 +105,20 @@ export async function GET(request: NextRequest) {
     const googleReviewCount = chatCounts?.reduce((sum, c) => sum + (c.google_review_count || 0), 0) || 0
     const followUpClosed = chatCounts?.reduce((sum, c) => sum + (c.follow_up_closed || 0), 0) || 0
 
-    // Calculate total income from deposits (same as Dashboard)
-    const totalDepositsIncome = orders?.reduce((sum, o) => sum + (o.deposit || 0), 0) || 0
+    // Get payments made within date range (by payment_date)
+    const { data: payments } = await supabase
+      .from('payments')
+      .select('order_id, amount')
+      .gte('payment_date', startDateStr)
+      .lte('payment_date', endDateStr)
+
+    // Calculate total income from payments (actual income received in period)
+    const totalPaymentsIncome = payments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0
 
     // Calculate stats for each staff
     const salesReports = staff.map((s) => {
       const staffOrders = orders?.filter((o) => o.sales_id === s.id) || []
+      const staffOrderIds = staffOrders.map(o => o.id)
 
       // Sum chat counts from all days for this staff
       const staffChatRecords = chatCounts?.filter((c) => c.staff_id === s.id) || []
@@ -126,8 +133,9 @@ export async function GET(request: NextRequest) {
       const paidAmount = paidOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
       const doneAmount = doneOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
 
-      // Real income = deposits from orders this staff sold
-      const realIncome = staffOrders.reduce((sum, o) => sum + (o.deposit || 0), 0)
+      // Real income = payments received for orders this staff sold (by payment_date)
+      const staffPayments = payments?.filter(p => staffOrderIds.includes(p.order_id)) || []
+      const realIncome = staffPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
 
       const conversionRate = chatCount > 0 ? (staffOrders.length / chatCount) * 100 : 0
 
@@ -152,8 +160,8 @@ export async function GET(request: NextRequest) {
     const totalBookingAmount = salesReports.reduce((sum, s) => sum + s.bookingAmount, 0)
     const totalPaidAmount = salesReports.reduce((sum, s) => sum + s.paidAmount, 0)
     const totalDoneAmount = salesReports.reduce((sum, s) => sum + s.doneAmount, 0)
-    // Use deposits from orders created today (same as Dashboard)
-    const totalRealIncome = totalDepositsIncome
+    // Use payments received in period (by payment_date) - same as Dashboard
+    const totalRealIncome = totalPaymentsIncome
 
     // Calculate services sold by category
     const serviceMap = new Map<string, { count: number; amount: number }>()
@@ -222,13 +230,16 @@ export async function GET(request: NextRequest) {
     // Build individual sales reports
     const individualReports: SalesReportData[] = staff.map((s) => {
       const staffOrders = orders?.filter((o) => o.sales_id === s.id) || []
+      const staffOrderIds = staffOrders.map(o => o.id)
       const staffChatRecords = chatCounts?.filter((c) => c.staff_id === s.id) || []
       const chatCount = staffChatRecords.reduce((sum, c) => sum + (c.chat_count || 0), 0)
 
       // Booking Amount = total_income of ALL orders (not just 'booking' status)
       const bookingAmount = staffOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
 
-      const realIncome = staffOrders.reduce((sum, o) => sum + (o.deposit || 0), 0)
+      // Real income = payments received for orders this staff sold (by payment_date)
+      const staffPayments = payments?.filter(p => staffOrderIds.includes(p.order_id)) || []
+      const realIncome = staffPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
       const conversionRate = chatCount > 0 ? (staffOrders.length / chatCount) * 100 : 0
 
       // Calculate services sold by this staff
@@ -278,7 +289,6 @@ export async function GET(request: NextRequest) {
         sales_id,
         order_status,
         total_income,
-        deposit,
         order_items (
           product_id,
           products (
@@ -297,16 +307,24 @@ export async function GET(request: NextRequest) {
       .select('staff_id, chat_count, walk_in_count, google_review_count, follow_up_closed')
       .eq('date', todayDateStr)
 
+    // Get payments for today only (by payment_date)
+    const { data: todayPayments } = await supabase
+      .from('payments')
+      .select('order_id, amount')
+      .gte('payment_date', todayDateStr)
+      .lte('payment_date', todayDateStr)
+
     // Calculate today's metrics
     const todayWalkInCount = todayChatCounts?.reduce((sum, c) => sum + (c.walk_in_count || 0), 0) || 0
     const todayGoogleReviewCount = todayChatCounts?.reduce((sum, c) => sum + (c.google_review_count || 0), 0) || 0
     const todayFollowUpClosed = todayChatCounts?.reduce((sum, c) => sum + (c.follow_up_closed || 0), 0) || 0
 
-    const todayDepositsIncome = todayOrders?.reduce((sum, o) => sum + (o.deposit || 0), 0) || 0
+    const todayPaymentsIncome = todayPayments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0
 
     // Calculate stats for each staff (today only)
     const todaySalesReports = staff.map((s) => {
       const staffOrders = todayOrders?.filter((o) => o.sales_id === s.id) || []
+      const staffOrderIds = staffOrders.map(o => o.id)
       const chatData = todayChatCounts?.find((c) => c.staff_id === s.id)
       const chatCount = chatData?.chat_count || 0
 
@@ -318,7 +336,10 @@ export async function GET(request: NextRequest) {
       const bookingAmount = staffOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
       const paidAmount = paidOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
       const doneAmount = doneOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
-      const realIncome = staffOrders.reduce((sum, o) => sum + (o.deposit || 0), 0)
+
+      // Real income = payments received today for orders this staff sold (by payment_date)
+      const staffPayments = todayPayments?.filter(p => staffOrderIds.includes(p.order_id)) || []
+      const realIncome = staffPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
 
       const conversionRate = chatCount > 0 ? (staffOrders.length / chatCount) * 100 : 0
 
@@ -397,7 +418,7 @@ export async function GET(request: NextRequest) {
       totalBookingAmount: todayTotalBookingAmount,
       totalPaidAmount: todayTotalPaidAmount,
       totalDoneAmount: todayTotalDoneAmount,
-      totalRealIncome: todayDepositsIncome,
+      totalRealIncome: todayPaymentsIncome,
       walkInCount: todayWalkInCount,
       googleReviewCount: todayGoogleReviewCount,
       followUpClosed: todayFollowUpClosed,
@@ -479,7 +500,7 @@ export async function GET(request: NextRequest) {
       totalOrders,
       totalRealIncome,
       todayOrders: todayTotalOrders,
-      todayRealIncome: todayDepositsIncome,
+      todayRealIncome: todayPaymentsIncome,
       individualReportsSent: individualSuccess,
       periodSummaryReportSent: summaryResult.success,
       todaySummaryReportSent: todaySummaryResult.success,
