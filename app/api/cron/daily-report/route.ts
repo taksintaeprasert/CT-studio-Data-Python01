@@ -85,8 +85,11 @@ export async function GET(request: NextRequest) {
           product_id,
           products (
             product_name,
+            product_code,
             category,
-            list_price
+            list_price,
+            is_free,
+            validity_months
           )
         )
       `)
@@ -163,18 +166,33 @@ export async function GET(request: NextRequest) {
     // Use payments received in period (by payment_date) - same as Dashboard
     const totalRealIncome = totalPaymentsIncome
 
-    // Calculate services sold by category
+    // Calculate services sold by category (exclude free items)
     const serviceMap = new Map<string, { count: number; amount: number }>()
 
     orders?.forEach((order) => {
-      order.order_items?.forEach((item: { products: { category: string | null; list_price: number } | null }) => {
+      order.order_items?.forEach((item: { products: { category: string | null; product_code: string | null; product_name: string | null; list_price: number; is_free: boolean | null; validity_months: number | null } | null }) => {
         if (item.products) {
-          const category = item.products.category || 'Other'
-          const existing = serviceMap.get(category) || { count: 0, amount: 0 }
-          serviceMap.set(category, {
-            count: existing.count + 1,
-            amount: existing.amount + (item.products.list_price || 0),
-          })
+          const product = item.products
+          const productCode = product.product_code?.toUpperCase() || ''
+          const productName = product.product_name?.toUpperCase() || ''
+
+          // Filter out free items
+          const isFreeOrDiscount =
+            product.is_free ||
+            productCode.includes('FREE') ||
+            productCode.includes('50%') ||
+            productName.includes('FREE') ||
+            productName.includes('50%') ||
+            (product.validity_months && product.validity_months > 0)
+
+          if (!isFreeOrDiscount) {
+            const category = product.category || 'Other'
+            const existing = serviceMap.get(category) || { count: 0, amount: 0 }
+            serviceMap.set(category, {
+              count: existing.count + 1,
+              amount: existing.amount + (product.list_price || 0),
+            })
+          }
         }
       })
     })
@@ -242,17 +260,32 @@ export async function GET(request: NextRequest) {
       const realIncome = staffPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
       const conversionRate = chatCount > 0 ? (staffOrders.length / chatCount) * 100 : 0
 
-      // Calculate services sold by this staff
+      // Calculate services sold by this staff (exclude free items)
       const staffServiceMap = new Map<string, { count: number; amount: number }>()
       staffOrders.forEach((order) => {
-        order.order_items?.forEach((item: { products: { category: string | null; list_price: number } | null }) => {
+        order.order_items?.forEach((item: { products: { category: string | null; product_code: string | null; product_name: string | null; list_price: number; is_free: boolean | null; validity_months: number | null } | null }) => {
           if (item.products) {
-            const category = item.products.category || 'Other'
-            const existing = staffServiceMap.get(category) || { count: 0, amount: 0 }
-            staffServiceMap.set(category, {
-              count: existing.count + 1,
-              amount: existing.amount + (item.products.list_price || 0),
-            })
+            const product = item.products
+            const productCode = product.product_code?.toUpperCase() || ''
+            const productName = product.product_name?.toUpperCase() || ''
+
+            // Filter out free items
+            const isFreeOrDiscount =
+              product.is_free ||
+              productCode.includes('FREE') ||
+              productCode.includes('50%') ||
+              productName.includes('FREE') ||
+              productName.includes('50%') ||
+              (product.validity_months && product.validity_months > 0)
+
+            if (!isFreeOrDiscount) {
+              const category = product.category || 'Other'
+              const existing = staffServiceMap.get(category) || { count: 0, amount: 0 }
+              staffServiceMap.set(category, {
+                count: existing.count + 1,
+                amount: existing.amount + (product.list_price || 0),
+              })
+            }
           }
         })
       })
@@ -293,8 +326,11 @@ export async function GET(request: NextRequest) {
           product_id,
           products (
             product_name,
+            product_code,
             category,
-            list_price
+            list_price,
+            is_free,
+            validity_months
           )
         )
       `)
@@ -365,17 +401,32 @@ export async function GET(request: NextRequest) {
     const todayTotalPaidAmount = todaySalesReports.reduce((sum, s) => sum + s.paidAmount, 0)
     const todayTotalDoneAmount = todaySalesReports.reduce((sum, s) => sum + s.doneAmount, 0)
 
-    // Calculate today's services sold
+    // Calculate today's services sold (exclude free items)
     const todayServiceMap = new Map<string, { count: number; amount: number }>()
     todayOrders?.forEach((order) => {
-      order.order_items?.forEach((item: { products: { category: string | null; list_price: number } | null }) => {
+      order.order_items?.forEach((item: { products: { category: string | null; product_code: string | null; product_name: string | null; list_price: number; is_free: boolean | null; validity_months: number | null } | null }) => {
         if (item.products) {
-          const category = item.products.category || 'Other'
-          const existing = todayServiceMap.get(category) || { count: 0, amount: 0 }
-          todayServiceMap.set(category, {
-            count: existing.count + 1,
-            amount: existing.amount + (item.products.list_price || 0),
-          })
+          const product = item.products
+          const productCode = product.product_code?.toUpperCase() || ''
+          const productName = product.product_name?.toUpperCase() || ''
+
+          // Filter out free items
+          const isFreeOrDiscount =
+            product.is_free ||
+            productCode.includes('FREE') ||
+            productCode.includes('50%') ||
+            productName.includes('FREE') ||
+            productName.includes('50%') ||
+            (product.validity_months && product.validity_months > 0)
+
+          if (!isFreeOrDiscount) {
+            const category = product.category || 'Other'
+            const existing = todayServiceMap.get(category) || { count: 0, amount: 0 }
+            todayServiceMap.set(category, {
+              count: existing.count + 1,
+              amount: existing.amount + (product.list_price || 0),
+            })
+          }
         }
       })
     })

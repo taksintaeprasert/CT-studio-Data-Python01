@@ -131,12 +131,17 @@ export default function SalesPerformancePage() {
       return
     }
 
-    // Get orders within date range
+    // Get orders within date range (for booking calculation)
     const { data: orders } = await supabase
       .from('orders')
       .select('id, sales_id, order_status, total_income')
       .gte('created_at', `${startDate}T00:00:00`)
       .lte('created_at', `${endDate}T23:59:59`)
+
+    // Get ALL orders to map payments to staff (not filtered by date)
+    const { data: allOrders } = await supabase
+      .from('orders')
+      .select('id, sales_id')
 
     // Get payments made within date range (by payment_date)
     const { data: payments } = await supabase
@@ -163,8 +168,9 @@ export default function SalesPerformancePage() {
       const staffOrderIds = staffOrders.map(o => o.id)
       const totalSales = staffOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
 
-      // Calculate real income from payments (by payment_date)
-      const staffPayments = payments?.filter(p => staffOrderIds.includes(p.order_id)) || []
+      // Calculate real income from payments (by payment_date) - use ALL orders for attribution
+      const allStaffOrderIds = allOrders?.filter(o => o.sales_id === s.id).map(o => o.id) || []
+      const staffPayments = payments?.filter(p => allStaffOrderIds.includes(p.order_id)) || []
       const realIncome = staffPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
 
       const completedOrders = staffOrders.filter(o => o.order_status === 'done').length
@@ -206,12 +212,17 @@ export default function SalesPerformancePage() {
   const fetchDailyData = async () => {
     if (!startDate || !endDate) return
 
-    // Get all orders within date range with payments
+    // Get all orders within date range (for booking calculation)
     const { data: orders } = await supabase
       .from('orders')
       .select('id, created_at, total_income, sales_id')
       .gte('created_at', `${startDate}T00:00:00`)
       .lte('created_at', `${endDate}T23:59:59`)
+
+    // Get ALL orders to map payments to staff (not filtered by date)
+    const { data: allOrders } = await supabase
+      .from('orders')
+      .select('id, sales_id')
 
     // Get payments within date range (by payment_date)
     const { data: payments } = await supabase
@@ -244,16 +255,27 @@ export default function SalesPerformancePage() {
       }
     })
 
-    // Sum income (payments) by payment_date - filter by order if staff selected
-    const orderIds = filteredOrders?.map(o => o.id) || []
-    payments?.forEach(payment => {
-      if (!selectedStaffId || orderIds.includes(payment.order_id)) {
+    // Sum income (payments) by payment_date - use ALL orders for staff attribution
+    if (selectedStaffId) {
+      // Get all order IDs for this staff (from all time, not just date range)
+      const allStaffOrderIds = allOrders?.filter(o => o.sales_id === parseInt(selectedStaffId)).map(o => o.id) || []
+      payments?.forEach(payment => {
+        if (allStaffOrderIds.includes(payment.order_id)) {
+          const dateStr = payment.payment_date
+          if (dailyMap[dateStr]) {
+            dailyMap[dateStr].income += payment.amount || 0
+          }
+        }
+      })
+    } else {
+      // No staff filter - sum all payments
+      payments?.forEach(payment => {
         const dateStr = payment.payment_date
         if (dailyMap[dateStr]) {
           dailyMap[dateStr].income += payment.amount || 0
         }
-      }
-    })
+      })
+    }
 
     // Convert to array and sort by date
     const daily = Object.entries(dailyMap)
