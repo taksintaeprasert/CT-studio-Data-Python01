@@ -102,7 +102,7 @@ export function formatDailyReportNotifyMessage(report: DailyReportData): string 
   // Services sold
   const serviceLines = report.servicesSold
     .filter(s => s.count > 0)
-    .map(s => `  • ${s.category}: ${s.count} pax (฿${s.amount.toLocaleString()})`)
+    .map(s => `  • ${s.category}: ${s.count} รายการ (฿${s.amount.toLocaleString()})`)
     .join('\n')
 
   return `📊 DAILY REPORT
@@ -343,7 +343,7 @@ export function createSalesReportFlex(report: SalesReportData): object {
       layout: 'horizontal',
       contents: [
         { type: 'text', text: s.category, size: 'xs', flex: 3, color: '#555555' },
-        { type: 'text', text: `${s.count} pax`, size: 'xs', flex: 2, align: 'center' },
+        { type: 'text', text: `${s.count} รายการ`, size: 'xs', flex: 2, align: 'center' },
         { type: 'text', text: `฿${s.amount.toLocaleString()}`, size: 'xs', flex: 2, align: 'end', color: '#EC4899' },
       ],
       margin: 'sm',
@@ -521,7 +521,7 @@ export function createTodaySummaryFlex(report: DailyReportData): object {
       layout: 'horizontal',
       contents: [
         { type: 'text', text: s.category, size: 'xs', flex: 3, color: '#555555' },
-        { type: 'text', text: `${s.count} pax`, size: 'xs', flex: 2, align: 'center' },
+        { type: 'text', text: `${s.count} รายการ`, size: 'xs', flex: 2, align: 'center' },
         { type: 'text', text: `฿${s.amount.toLocaleString()}`, size: 'xs', flex: 2, align: 'end', color: '#EC4899' },
       ],
       margin: 'sm',
@@ -721,7 +721,7 @@ export function createDailyReportFlex(report: DailyReportData): object {
       layout: 'horizontal',
       contents: [
         { type: 'text', text: s.category, size: 'xs', flex: 3, color: '#555555' },
-        { type: 'text', text: `${s.count} pax`, size: 'xs', flex: 2, align: 'center' },
+        { type: 'text', text: `${s.count} รายการ`, size: 'xs', flex: 2, align: 'center' },
         { type: 'text', text: `฿${s.amount.toLocaleString()}`, size: 'xs', flex: 2, align: 'end', color: '#EC4899' },
       ],
       margin: 'sm',
