@@ -191,7 +191,6 @@ export default function AppointmentPage() {
         payments(amount)
       `)
       .order('created_at', { ascending: false })
-      .limit(200)
 
     setOrders(ordersData || [])
     setLoading(false)
