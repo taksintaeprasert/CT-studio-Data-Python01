@@ -14,6 +14,9 @@ interface Customer {
   contact_channel?: string | null
   province?: string | null
   source_channel?: string | null
+  medical_condition?: string | null
+  color_allergy?: string | null
+  drug_allergy?: string | null
 }
 
 interface Staff {
@@ -54,6 +57,10 @@ export default function NewOrderPage() {
   const [customerContactChannel, setCustomerContactChannel] = useState('line')
   const [customerNickname, setCustomerNickname] = useState('')
   const [customerAge, setCustomerAge] = useState('')
+  const [customerProvince, setCustomerProvince] = useState('')
+  const [customerMedicalCondition, setCustomerMedicalCondition] = useState('')
+  const [customerColorAllergy, setCustomerColorAllergy] = useState('')
+  const [customerDrugAllergy, setCustomerDrugAllergy] = useState('')
   const [isExistingCustomer, setIsExistingCustomer] = useState(false)
 
   const [salesId, setSalesId] = useState('')
@@ -86,7 +93,7 @@ export default function NewOrderPage() {
 
   const fetchData = async () => {
     const [customersRes, staffRes, productsRes] = await Promise.all([
-      supabase.from('customers').select('id, full_name, phone, contact_channel, province, source_channel').eq('is_active', true).order('full_name'),
+      supabase.from('customers').select('id, full_name, phone, contact_channel, province, source_channel, medical_condition, color_allergy, drug_allergy').eq('is_active', true).order('full_name'),
       supabase.from('staff').select('id, staff_name, role').eq('is_active', true).order('staff_name'),
       supabase.from('products').select('id, product_code, product_name, list_price, category, is_free').eq('is_active', true).order('product_name'),
     ])
@@ -98,14 +105,17 @@ export default function NewOrderPage() {
     setLoading(false)
   }
 
-  // Search by phone and auto-fill customer data
+  // Search by phone, name, or lastname and auto-fill customer data
   const searchByPhone = (phone: string) => {
     setCustomerPhone(phone)
 
-    if (phone.length >= 3) {
-      const matches = customers.filter(c =>
-        c.phone && c.phone.includes(phone)
-      )
+    if (phone.length >= 2) {
+      const searchLower = phone.toLowerCase()
+      const matches = customers.filter(c => {
+        const phoneMatch = c.phone && c.phone.includes(phone)
+        const nameMatch = c.full_name && c.full_name.toLowerCase().includes(searchLower)
+        return phoneMatch || nameMatch
+      })
       setPhoneSuggestions(matches)
     } else {
       setPhoneSuggestions([])
@@ -133,6 +143,10 @@ export default function NewOrderPage() {
     setCustomerFirstName(nameParts[0] || '')
     setCustomerLastName(nameParts.slice(1).join(' ') || '')
     setCustomerContactChannel(customer.contact_channel || 'line')
+    setCustomerProvince(customer.province || '')
+    setCustomerMedicalCondition(customer.medical_condition || '')
+    setCustomerColorAllergy(customer.color_allergy || '')
+    setCustomerDrugAllergy(customer.drug_allergy || '')
     // Note: nickname and age might not be in the customer object from the query
   }
 
@@ -145,6 +159,10 @@ export default function NewOrderPage() {
     setCustomerContactChannel('line')
     setCustomerNickname('')
     setCustomerAge('')
+    setCustomerProvince('')
+    setCustomerMedicalCondition('')
+    setCustomerColorAllergy('')
+    setCustomerDrugAllergy('')
     setIsExistingCustomer(false)
     setPhoneSuggestions([])
   }
@@ -338,6 +356,10 @@ export default function NewOrderPage() {
             contact_channel: customerContactChannel,
             nickname: customerNickname.trim() || null,
             age: customerAge ? parseInt(customerAge) : null,
+            province: customerProvince.trim() || null,
+            medical_condition: customerMedicalCondition.trim() || null,
+            color_allergy: customerColorAllergy.trim() || null,
+            drug_allergy: customerDrugAllergy.trim() || null,
           })
           .eq('id', customerId)
       } else {
@@ -350,6 +372,10 @@ export default function NewOrderPage() {
             contact_channel: customerContactChannel,
             nickname: customerNickname.trim() || null,
             age: customerAge ? parseInt(customerAge) : null,
+            province: customerProvince.trim() || null,
+            medical_condition: customerMedicalCondition.trim() || null,
+            color_allergy: customerColorAllergy.trim() || null,
+            drug_allergy: customerDrugAllergy.trim() || null,
           })
           .select('id')
           .single()
@@ -547,14 +573,14 @@ export default function NewOrderPage() {
             {/* Phone Number - First Field */}
             <div className="md:col-span-2 relative">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                เบอร์โทร <span className="text-red-500">*</span>
+                เบอร์โทร / ชื่อ-นามสกุล <span className="text-red-500">*</span>
               </label>
               <input
-                type="tel"
+                type="text"
                 value={customerPhone}
                 onChange={(e) => searchByPhone(e.target.value)}
                 className={`input w-full text-lg ${isExistingCustomer ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : ''}`}
-                placeholder="กรอกเบอร์โทร เพื่อค้นหาลูกค้า..."
+                placeholder="กรอกเบอร์โทร, ชื่อ หรือนามสกุล เพื่อค้นหาลูกค้า..."
               />
 
               {/* Phone suggestions dropdown */}
@@ -661,6 +687,62 @@ export default function NewOrderPage() {
                 placeholder="อายุ (ไม่บังคับ)"
                 min="1"
                 max="120"
+              />
+            </div>
+
+            {/* Province */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                เดินทางมาจากจังหวัด
+              </label>
+              <input
+                type="text"
+                value={customerProvince}
+                onChange={(e) => setCustomerProvince(e.target.value)}
+                className="input"
+                placeholder="เช่น กรุงเทพฯ, เชียงใหม่"
+              />
+            </div>
+
+            {/* Medical Condition */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                มีโรคประจำตัวไหม
+              </label>
+              <textarea
+                value={customerMedicalCondition}
+                onChange={(e) => setCustomerMedicalCondition(e.target.value)}
+                className="input"
+                rows={2}
+                placeholder="ระบุโรคประจำตัว (ถ้ามี)"
+              />
+            </div>
+
+            {/* Color Allergy */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                มีประวัติแพ้สีไหม
+              </label>
+              <textarea
+                value={customerColorAllergy}
+                onChange={(e) => setCustomerColorAllergy(e.target.value)}
+                className="input"
+                rows={2}
+                placeholder="ระบุประวัติการแพ้สี (ถ้ามี)"
+              />
+            </div>
+
+            {/* Drug Allergy */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                มีประวัติแพ้ยาไหม
+              </label>
+              <textarea
+                value={customerDrugAllergy}
+                onChange={(e) => setCustomerDrugAllergy(e.target.value)}
+                className="input"
+                rows={2}
+                placeholder="ระบุประวัติการแพ้ยา (ถ้ามี)"
               />
             </div>
           </div>

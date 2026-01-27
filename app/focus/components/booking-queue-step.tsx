@@ -32,6 +32,10 @@ interface Customer {
   full_name: string
   nickname: string | null
   phone: string | null
+  age: number | null
+  medical_condition: string | null
+  color_allergy: string | null
+  drug_allergy: string | null
 }
 
 export default function BookingQueueStep({ orderId, onComplete }: BookingQueueStepProps) {
@@ -72,7 +76,7 @@ export default function BookingQueueStep({ orderId, onComplete }: BookingQueueSt
 
     const { data: order } = await supabase
       .from('orders')
-      .select('customers (id, full_name, nickname, phone)')
+      .select('customers (id, full_name, nickname, phone, age, medical_condition, color_allergy, drug_allergy)')
       .eq('id', orderId)
       .single()
 
@@ -165,7 +169,7 @@ export default function BookingQueueStep({ orderId, onComplete }: BookingQueueSt
       </div>
 
       {showBookingModal && selectedItem && customer && (
-        <BookingModal orderItem={selectedItem} customer={customer} onClose={() => setShowBookingModal(false)} onComplete={handleBookingComplete} />
+        <BookingModal orderItem={selectedItem} customer={customer} orderId={orderId} onClose={() => setShowBookingModal(false)} onComplete={handleBookingComplete} />
       )}
     </div>
   )
