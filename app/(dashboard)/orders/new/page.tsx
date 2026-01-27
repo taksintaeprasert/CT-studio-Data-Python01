@@ -98,6 +98,7 @@ export default function NewOrderPage() {
       supabase.from('products').select('id, product_code, product_name, list_price, category, is_free').eq('is_active', true).order('product_name'),
     ])
 
+    console.log('Customers loaded:', customersRes.data?.length || 0)
     console.log('Products loaded:', productsRes.data?.length || 0)
     setCustomers(customersRes.data || [])
     setStaff(staffRes.data || [])
@@ -116,8 +117,9 @@ export default function NewOrderPage() {
         const nameMatch = c.full_name && c.full_name.toLowerCase().includes(searchLower)
         return phoneMatch || nameMatch
       })
+      console.log('Customer search:', search, '- Found:', matches.length, 'customers')
       setCustomerSuggestions(matches)
-      setShowCustomerDropdown(true)
+      setShowCustomerDropdown(true) // Always show dropdown when typing >= 2 chars
     } else {
       setCustomerSuggestions([])
       setShowCustomerDropdown(false)
@@ -632,25 +634,35 @@ export default function NewOrderPage() {
               />
 
               {/* Customer search dropdown */}
-              {showCustomerDropdown && customerSuggestions.length > 0 && (
+              {showCustomerDropdown && (
                 <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                  <div className="p-2 text-xs text-gray-500 border-b dark:border-gray-700 bg-yellow-50 dark:bg-yellow-900/20">
-                    🔍 พบลูกค้าในระบบ - กดเพื่อเลือก:
-                  </div>
-                  {customerSuggestions.map(c => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => selectCustomer(c)}
-                      className="w-full px-4 py-3 text-left hover:bg-pink-50 dark:hover:bg-gray-700 border-b dark:border-gray-700 last:border-b-0"
-                    >
-                      <span className="font-medium dark:text-white">{c.full_name}</span>
-                      <span className="text-gray-500 dark:text-gray-400 ml-2">({c.phone})</span>
-                      {c.contact_channel && (
-                        <span className="text-xs text-gray-400 ml-2">[{c.contact_channel}]</span>
-                      )}
-                    </button>
-                  ))}
+                  {customerSuggestions.length > 0 ? (
+                    <>
+                      <div className="p-2 text-xs text-gray-500 border-b dark:border-gray-700 bg-yellow-50 dark:bg-yellow-900/20">
+                        🔍 พบลูกค้าในระบบ - กดเพื่อเลือก:
+                      </div>
+                      {customerSuggestions.map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => selectCustomer(c)}
+                          className="w-full px-4 py-3 text-left hover:bg-pink-50 dark:hover:bg-gray-700 border-b dark:border-gray-700 last:border-b-0"
+                        >
+                          <span className="font-medium dark:text-white">{c.full_name}</span>
+                          <span className="text-gray-500 dark:text-gray-400 ml-2">({c.phone})</span>
+                          {c.contact_channel && (
+                            <span className="text-xs text-gray-400 ml-2">[{c.contact_channel}]</span>
+                          )}
+                        </button>
+                      ))}
+                    </>
+                  ) : (
+                    <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+                      <div className="text-2xl mb-2">🔍</div>
+                      <div className="text-sm">ไม่พบลูกค้าในระบบ</div>
+                      <div className="text-xs mt-1">กรอกข้อมูลด้านล่างเพื่อสร้างลูกค้าใหม่</div>
+                    </div>
+                  )}
                 </div>
               )}
 
