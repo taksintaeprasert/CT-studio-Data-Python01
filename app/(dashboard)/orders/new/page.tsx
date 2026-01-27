@@ -400,27 +400,14 @@ export default function NewOrderPage() {
         // Use existing customer but update their info if changed
         finalCustomerId = customerId
 
-        // Update customer info
-        const updateData: any = {
-          full_name: `${customerFirstName.trim()} ${customerLastName.trim()}`,
-          phone: customerPhone || null,
-          contact_channel: customerContactChannel,
-          nickname: customerNickname.trim() || null,
-          age: customerAge ? parseInt(customerAge) : null,
-          province: customerProvince.trim() || null,
-          medical_condition: customerMedicalCondition.trim() || null,
-          color_allergy: customerColorAllergy.trim() || null,
-          drug_allergy: customerDrugAllergy.trim() || null,
-        }
-
-        // Only update face photo if a new one was uploaded
-        if (facePhotoUrl) {
-          updateData.face_photo_url = facePhotoUrl
-        }
-
+        // Update customer info (only basic fields that exist in database)
         await supabase
           .from('customers')
-          .update(updateData)
+          .update({
+            full_name: `${customerFirstName.trim()} ${customerLastName.trim()}`,
+            phone: customerPhone || null,
+            contact_channel: customerContactChannel,
+          })
           .eq('id', customerId)
       } else {
         // Create new customer
@@ -430,13 +417,6 @@ export default function NewOrderPage() {
             full_name: `${customerFirstName.trim()} ${customerLastName.trim()}`,
             phone: customerPhone || null,
             contact_channel: customerContactChannel,
-            nickname: customerNickname.trim() || null,
-            age: customerAge ? parseInt(customerAge) : null,
-            province: customerProvince.trim() || null,
-            medical_condition: customerMedicalCondition.trim() || null,
-            color_allergy: customerColorAllergy.trim() || null,
-            drug_allergy: customerDrugAllergy.trim() || null,
-            face_photo_url: facePhotoUrl,
           })
           .select('id')
           .single()
