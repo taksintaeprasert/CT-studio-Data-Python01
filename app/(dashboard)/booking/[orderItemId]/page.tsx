@@ -10,6 +10,7 @@ interface OrderItemDetails {
   id: number
   order_id: number
   appointment_date: string | null
+  appointment_time: string | null
   artist_id: number | null
   item_price: number
   booking_title: string | null
@@ -38,6 +39,10 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [totalPaid, setTotalPaid] = useState(0)
   const [remainingAmount, setRemainingAmount] = useState(0)
+  const [editingAppointment, setEditingAppointment] = useState(false)
+  const [newAppointmentDate, setNewAppointmentDate] = useState('')
+  const [newAppointmentTime, setNewAppointmentTime] = useState('')
+  const [savingAppointment, setSavingAppointment] = useState(false)
 
   useEffect(() => {
     loadOrderItemDetails()
@@ -51,6 +56,7 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
         id,
         order_id,
         appointment_date,
+        appointment_time,
         artist_id,
         item_price,
         booking_title,
@@ -93,6 +99,69 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
 
   const handlePaymentSuccess = async () => {
     await loadOrderItemDetails()
+  }
+
+  const handleEditAppointment = () => {
+    if (orderItem?.appointment_date) {
+      const date = new Date(orderItem.appointment_date)
+      setNewAppointmentDate(date.toISOString().split('T')[0])
+      setNewAppointmentTime(date.toTimeString().slice(0, 5))
+    } else {
+      setNewAppointmentDate('')
+      setNewAppointmentTime('')
+    }
+    setEditingAppointment(true)
+  }
+
+  const handleSaveAppointment = async () => {
+    if (!newAppointmentDate) {
+      alert('กรุณาเลือกวันที่นัด')
+      return
+    }
+
+    setSavingAppointment(true)
+
+    try {
+      const { error } = await supabase
+        .from('order_items')
+        .update({
+          appointment_date: newAppointmentDate || null,
+          appointment_time: newAppointmentTime || null,
+          item_status: newAppointmentDate ? 'scheduled' : 'pending',
+        })
+        .eq('id', params.orderItemId)
+
+      if (error) {
+        console.error('Update error:', error)
+        throw error
+      }
+
+      // Create system message
+      const messageText = `อัปเดตเวลานัดหมาย: ${new Date(`${newAppointmentDate}T${newAppointmentTime || '10:00'}:00`).toLocaleDateString('th-TH', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })}`
+
+      await supabase.from('booking_messages').insert({
+        order_item_id: Number(params.orderItemId),
+        sender_type: 'system',
+        message_type: 'text',
+        message_text: messageText,
+        is_read: false,
+      })
+
+      alert('✅ บันทึกการเปลี่ยนแปลงสำเร็จ!')
+      setEditingAppointment(false)
+      await loadOrderItemDetails()
+    } catch (error: any) {
+      console.error('Error updating appointment:', error)
+      alert(`เกิดข้อผิดพลาด: ${error.message || 'Unknown error'}`)
+    } finally {
+      setSavingAppointment(false)
+    }
   }
 
   const formatDateTime = (dateTime: string | null) => {
@@ -148,8 +217,17 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
 
           {/* Info Grid - Compact */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-            <div className="bg-gray-50 dark:bg-gray-800 rounded px-2 py-1.5">
-              <div className="text-gray-500 dark:text-gray-400 mb-0.5">วันนัด</div>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded px-2 py-1.5 relative">
+              <div className="text-gray-500 dark:text-gray-400 mb-0.5 flex items-center justify-between">
+                <span>วันนัด</span>
+                <button
+                  onClick={handleEditAppointment}
+                  className="text-pink-500 hover:text-pink-600 text-xs font-medium"
+                  title="แก้ไขเวลานัดหมาย"
+                >
+                  ✏️
+                </button>
+              </div>
               <div className="font-medium text-gray-900 dark:text-white text-xs">
                 {formatDateTime(orderItem.appointment_date)}
               </div>
@@ -218,6 +296,60 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
           onClose={() => setShowPaymentModal(false)}
           onSuccess={handlePaymentSuccess}
         />
+      )}
+
+      {/* Edit Appointment Modal */}
+      {editingAppointment && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+              แก้ไขเวลานัดหมาย
+            </h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  วันที่นัด
+                </label>
+                <input
+                  type="date"
+                  value={newAppointmentDate}
+                  onChange={(e) => setNewAppointmentDate(e.target.value)}
+                  className="input w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  เวลานัด
+                </label>
+                <input
+                  type="time"
+                  value={newAppointmentTime}
+                  onChange={(e) => setNewAppointmentTime(e.target.value)}
+                  className="input w-full"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button
+                onClick={() => setEditingAppointment(false)}
+                disabled={savingAppointment}
+                className="btn-secondary flex-1"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleSaveAppointment}
+                disabled={savingAppointment}
+                className="btn-primary flex-1"
+              >
+                {savingAppointment ? 'กำลังบันทึก...' : 'บันทึก'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

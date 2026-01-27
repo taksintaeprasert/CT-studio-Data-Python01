@@ -51,6 +51,7 @@ export default function NewOrderPage() {
 
   // Customer fields (unified - start with phone)
   const [customerId, setCustomerId] = useState<number | null>(null)
+  const [customerSearch, setCustomerSearch] = useState('') // Separate search field
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerFirstName, setCustomerFirstName] = useState('')
   const [customerLastName, setCustomerLastName] = useState('')
@@ -61,6 +62,7 @@ export default function NewOrderPage() {
   const [customerMedicalCondition, setCustomerMedicalCondition] = useState('')
   const [customerColorAllergy, setCustomerColorAllergy] = useState('')
   const [customerDrugAllergy, setCustomerDrugAllergy] = useState('')
+  const [customerFacePhoto, setCustomerFacePhoto] = useState<File | null>(null) // Face photo upload
   const [isExistingCustomer, setIsExistingCustomer] = useState(false)
 
   const [salesId, setSalesId] = useState('')
@@ -79,10 +81,8 @@ export default function NewOrderPage() {
   const [missingFreeProduct, setMissingFreeProduct] = useState<string | null>(null) // เก็บ code ที่แนะนำให้สร้าง
 
   // Customer search states
-  const [customerSearch, setCustomerSearch] = useState('')
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
-  const [phoneSuggestions, setPhoneSuggestions] = useState<Customer[]>([])
-  const [existingCustomerWarning, setExistingCustomerWarning] = useState<Customer | null>(null)
+  const [customerSuggestions, setCustomerSuggestions] = useState<Customer[]>([])
 
   const router = useRouter()
   const supabase = createClient()
@@ -105,29 +105,22 @@ export default function NewOrderPage() {
     setLoading(false)
   }
 
-  // Search by phone, name, or lastname and auto-fill customer data
-  const searchByPhone = (phone: string) => {
-    setCustomerPhone(phone)
+  // Search by phone or name (separate search field)
+  const handleCustomerSearch = (search: string) => {
+    setCustomerSearch(search)
 
-    if (phone.length >= 2) {
-      const searchLower = phone.toLowerCase()
+    if (search.length >= 2) {
+      const searchLower = search.toLowerCase()
       const matches = customers.filter(c => {
-        const phoneMatch = c.phone && c.phone.includes(phone)
+        const phoneMatch = c.phone && c.phone.includes(search)
         const nameMatch = c.full_name && c.full_name.toLowerCase().includes(searchLower)
         return phoneMatch || nameMatch
       })
-      setPhoneSuggestions(matches)
+      setCustomerSuggestions(matches)
+      setShowCustomerDropdown(true)
     } else {
-      setPhoneSuggestions([])
-    }
-
-    // Reset customer selection if phone changes
-    if (customerId) {
-      const existingCustomer = customers.find(c => c.id === customerId)
-      if (existingCustomer?.phone !== phone) {
-        setCustomerId(null)
-        setIsExistingCustomer(false)
-      }
+      setCustomerSuggestions([])
+      setShowCustomerDropdown(false)
     }
   }
 
@@ -136,7 +129,9 @@ export default function NewOrderPage() {
     setCustomerId(customer.id)
     setCustomerPhone(customer.phone || '')
     setIsExistingCustomer(true)
-    setPhoneSuggestions([])
+    setCustomerSuggestions([])
+    setShowCustomerDropdown(false)
+    setCustomerSearch('') // Clear search after selection
 
     // Auto-fill customer data
     const nameParts = customer.full_name.split(' ')
@@ -153,6 +148,7 @@ export default function NewOrderPage() {
   // Clear customer selection
   const clearCustomer = () => {
     setCustomerId(null)
+    setCustomerSearch('')
     setCustomerPhone('')
     setCustomerFirstName('')
     setCustomerLastName('')
@@ -163,8 +159,10 @@ export default function NewOrderPage() {
     setCustomerMedicalCondition('')
     setCustomerColorAllergy('')
     setCustomerDrugAllergy('')
+    setCustomerFacePhoto(null)
     setIsExistingCustomer(false)
-    setPhoneSuggestions([])
+    setCustomerSuggestions([])
+    setShowCustomerDropdown(false)
   }
 
   // Handle receipt file selection
@@ -185,6 +183,27 @@ export default function NewOrderPage() {
     }
 
     setReceiptFile(file)
+    e.target.value = ''
+  }
+
+  // Handle customer face photo selection
+  const handleFacePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น')
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('ขนาดไฟล์ต้องไม่เกิน 5MB')
+      return
+    }
+
+    setCustomerFacePhoto(file)
     e.target.value = ''
   }
 
@@ -342,25 +361,53 @@ export default function NewOrderPage() {
 
     try {
       let finalCustomerId: number | null = null
+      let facePhotoUrl: string | null = null
+
+      // Upload face photo if provided
+      if (customerFacePhoto) {
+        const fileName = `${Date.now()}_${customerFacePhoto.name}`
+        const filePath = `customer-face-photos/${fileName}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('service-photos')
+          .upload(filePath, customerFacePhoto)
+
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage
+            .from('service-photos')
+            .getPublicUrl(filePath)
+
+          facePhotoUrl = urlData.publicUrl
+        } else {
+          console.error('Face photo upload error:', uploadError)
+        }
+      }
 
       if (isExistingCustomer && customerId) {
         // Use existing customer but update their info if changed
         finalCustomerId = customerId
 
         // Update customer info
+        const updateData: any = {
+          full_name: `${customerFirstName.trim()} ${customerLastName.trim()}`,
+          phone: customerPhone || null,
+          contact_channel: customerContactChannel,
+          nickname: customerNickname.trim() || null,
+          age: customerAge ? parseInt(customerAge) : null,
+          province: customerProvince.trim() || null,
+          medical_condition: customerMedicalCondition.trim() || null,
+          color_allergy: customerColorAllergy.trim() || null,
+          drug_allergy: customerDrugAllergy.trim() || null,
+        }
+
+        // Only update face photo if a new one was uploaded
+        if (facePhotoUrl) {
+          updateData.face_photo_url = facePhotoUrl
+        }
+
         await supabase
           .from('customers')
-          .update({
-            full_name: `${customerFirstName.trim()} ${customerLastName.trim()}`,
-            phone: customerPhone || null,
-            contact_channel: customerContactChannel,
-            nickname: customerNickname.trim() || null,
-            age: customerAge ? parseInt(customerAge) : null,
-            province: customerProvince.trim() || null,
-            medical_condition: customerMedicalCondition.trim() || null,
-            color_allergy: customerColorAllergy.trim() || null,
-            drug_allergy: customerDrugAllergy.trim() || null,
-          })
+          .update(updateData)
           .eq('id', customerId)
       } else {
         // Create new customer
@@ -376,6 +423,7 @@ export default function NewOrderPage() {
             medical_condition: customerMedicalCondition.trim() || null,
             color_allergy: customerColorAllergy.trim() || null,
             drug_allergy: customerDrugAllergy.trim() || null,
+            face_photo_url: facePhotoUrl,
           })
           .select('id')
           .single()
@@ -549,7 +597,7 @@ export default function NewOrderPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Customer Section - Unified (Phone First) */}
+        {/* Customer Section */}
         <div className="card space-y-4">
           <div className="flex items-center justify-between border-b pb-2">
             <h2 className="font-bold text-gray-800 dark:text-white">ข้อมูลลูกค้า</h2>
@@ -570,26 +618,26 @@ export default function NewOrderPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Phone Number - First Field */}
+            {/* Search Field - At Top (Optional) */}
             <div className="md:col-span-2 relative">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                เบอร์โทร / ชื่อ-นามสกุล <span className="text-red-500">*</span>
+                🔍 ค้นหาลูกค้าในระบบ (ไม่บังคับ)
               </label>
               <input
                 type="text"
-                value={customerPhone}
-                onChange={(e) => searchByPhone(e.target.value)}
-                className={`input w-full text-lg ${isExistingCustomer ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : ''}`}
-                placeholder="กรอกเบอร์โทร, ชื่อ หรือนามสกุล เพื่อค้นหาลูกค้า..."
+                value={customerSearch}
+                onChange={(e) => handleCustomerSearch(e.target.value)}
+                className="input w-full"
+                placeholder="พิมพ์เบอร์โทร, ชื่อ หรือนามสกุล เพื่อค้นหา..."
               />
 
-              {/* Phone suggestions dropdown */}
-              {phoneSuggestions.length > 0 && !isExistingCustomer && (
+              {/* Customer search dropdown */}
+              {showCustomerDropdown && customerSuggestions.length > 0 && (
                 <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                   <div className="p-2 text-xs text-gray-500 border-b dark:border-gray-700 bg-yellow-50 dark:bg-yellow-900/20">
                     🔍 พบลูกค้าในระบบ - กดเพื่อเลือก:
                   </div>
-                  {phoneSuggestions.map(c => (
+                  {customerSuggestions.map(c => (
                     <button
                       key={c.id}
                       type="button"
@@ -606,6 +654,28 @@ export default function NewOrderPage() {
                 </div>
               )}
 
+              {/* Click outside to close dropdown */}
+              {showCustomerDropdown && (
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowCustomerDropdown(false)}
+                />
+              )}
+            </div>
+
+            {/* Phone Number Field (Separate, Required) */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                เบอร์โทร <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                className={`input w-full ${isExistingCustomer ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : ''}`}
+                placeholder="เบอร์โทรศัพท์ลูกค้า"
+                required
+              />
               {isExistingCustomer && (
                 <p className="text-xs text-green-600 dark:text-green-400 mt-1">
                   ✓ ลูกค้าเก่า - สามารถแก้ไขข้อมูลได้
@@ -744,6 +814,47 @@ export default function NewOrderPage() {
                 rows={2}
                 placeholder="ระบุประวัติการแพ้ยา (ถ้ามี)"
               />
+            </div>
+
+            {/* Customer Face Photo (Optional) */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                📸 รูปหน้าลูกค้า (ไม่บังคับ)
+              </label>
+              <div className="flex items-center gap-3">
+                <label className="flex-1 btn-secondary cursor-pointer text-center py-3">
+                  {customerFacePhoto ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span>✅</span>
+                      <span className="truncate">{customerFacePhoto.name}</span>
+                      <span className="text-xs text-gray-500">({(customerFacePhoto.size / 1024).toFixed(1)} KB)</span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
+                      <span>📷</span>
+                      <span>เลือกรูปหน้าลูกค้า</span>
+                    </span>
+                  )}
+                  <input
+                    type="file"
+                    onChange={handleFacePhotoSelect}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                </label>
+                {customerFacePhoto && (
+                  <button
+                    type="button"
+                    onClick={() => setCustomerFacePhoto(null)}
+                    className="px-4 py-3 text-red-500 hover:text-red-700 font-medium"
+                  >
+                    ลบ
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                รองรับไฟล์: JPG, PNG, GIF (ขนาดไม่เกิน 5MB) - ใช้สำหรับแสดงในหน้าแชทกับช่าง
+              </p>
             </div>
           </div>
         </div>
