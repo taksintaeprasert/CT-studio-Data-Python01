@@ -323,7 +323,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
                                item.item_status === 'cancelled' ? 'ยกเลิก' : 'รอนัด'
 
             return (
-              <div key={item.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+              <div key={item.id} className={`flex items-center justify-between p-4 ${isBooked ? 'bg-gray-50 dark:bg-gray-700/50' : 'bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 border-2 border-pink-300 dark:border-pink-700'} rounded-xl`}>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-xs text-pink-500 font-mono">[{item.products?.product_code}]</span>
@@ -344,9 +344,13 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
                 </div>
                 <button
                   onClick={() => openScheduleModal(item)}
-                  className="px-4 py-2 bg-pink-500 text-white rounded-lg font-medium hover:bg-pink-600 transition-colors"
+                  className={`px-6 py-3 text-white rounded-xl font-bold text-lg shadow-lg transition-all ${
+                    isBooked
+                      ? 'bg-pink-500 hover:bg-pink-600 hover:scale-105'
+                      : 'bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 hover:scale-110 animate-pulse hover:animate-none'
+                  }`}
                 >
-                  ลงคิวช่าง
+                  {isBooked ? '🔄 แก้ไขคิว' : '🎯 ลงคิวช่าง!'}
                 </button>
               </div>
             )

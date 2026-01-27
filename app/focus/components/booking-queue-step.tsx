@@ -36,6 +36,7 @@ interface Customer {
   medical_condition: string | null
   color_allergy: string | null
   drug_allergy: string | null
+  face_photo_url: string | null
 }
 
 export default function BookingQueueStep({ orderId, onComplete }: BookingQueueStepProps) {
@@ -76,7 +77,7 @@ export default function BookingQueueStep({ orderId, onComplete }: BookingQueueSt
 
     const { data: order } = await supabase
       .from('orders')
-      .select('customers (id, full_name, nickname, phone, age, medical_condition, color_allergy, drug_allergy)')
+      .select('customers (id, full_name, nickname, phone, age, medical_condition, color_allergy, drug_allergy, face_photo_url)')
       .eq('id', orderId)
       .single()
 

@@ -28,6 +28,7 @@ interface BookingModalProps {
     medical_condition: string | null
     color_allergy: string | null
     drug_allergy: string | null
+    face_photo_url: string | null
   }
   orderId: number
   onClose: () => void
@@ -99,7 +100,20 @@ export default function BookingModal({ orderItem, customer, orderId, onClose, on
         })
       }
 
-      // 2. Get customer photos
+      // 2. Send customer face photo (from order creation)
+      if (customer.face_photo_url) {
+        messages.push({
+          order_item_id: orderItem.id,
+          sender_type: 'system',
+          message_type: 'file',
+          message_text: '📸 รูปหน้าลูกค้า',
+          file_url: customer.face_photo_url,
+          file_name: 'รูปหน้าลูกค้า',
+          is_read: false,
+        })
+      }
+
+      // 3. Get customer photos (before photos from customer_photos table)
       const { data: photos } = await supabase
         .from('customer_photos')
         .select('photo_url, photo_type')
@@ -122,7 +136,7 @@ export default function BookingModal({ orderItem, customer, orderId, onClose, on
         }
       }
 
-      // 3. Send customer information text
+      // 4. Send customer information text
       const infoLines: string[] = []
 
       if (customer.nickname) {
