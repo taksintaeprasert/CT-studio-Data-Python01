@@ -6,6 +6,19 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import BookingModal from '@/app/focus/components/booking-modal'
+
+interface Customer {
+  id: number
+  full_name: string
+  nickname: string | null
+  phone: string | null
+  age: number | null
+  medical_condition: string | null
+  color_allergy: string | null
+  drug_allergy: string | null
+  face_photo_url: string | null
+}
 
 interface OrderDetail {
   id: number
@@ -16,15 +29,17 @@ interface OrderDetail {
   deposit: number
   payment_method: string | null
   note: string | null
-  customers: { id: number; full_name: string } | null
+  customers: Customer | null
   sales: { id: number; staff_name: string } | null
   artist: { id: number; staff_name: string } | null
 }
 
 interface OrderItem {
   id: number
+  product_id: number
   is_upsell: boolean
   item_status: string
+  item_price: number
   appointment_date: string | null
   appointment_time: string | null
   artist_id: number | null
@@ -59,6 +74,10 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   const [scheduleArtistId, setScheduleArtistId] = useState('')
   const [savingSchedule, setSavingSchedule] = useState(false)
 
+  // Booking modal state (with chat)
+  const [showBookingModal, setShowBookingModal] = useState(false)
+  const [bookingOrderItem, setBookingOrderItem] = useState<OrderItem | null>(null)
+
   const router = useRouter()
   const supabase = createClient()
 
@@ -84,7 +103,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         .from('orders')
         .select(`
           *,
-          customers (id, full_name),
+          customers (*),
           sales:staff!orders_sales_id_fkey (id, staff_name),
           artist:staff!orders_artist_id_fkey (id, staff_name)
         `)
@@ -149,6 +168,19 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
     }
 
     setSavingSchedule(false)
+  }
+
+  // Open booking modal with chat
+  const openBookingModal = (item: OrderItem) => {
+    if (!order?.customers) return
+
+    setBookingOrderItem(item)
+    setShowBookingModal(true)
+  }
+
+  const closeBookingModal = () => {
+    setShowBookingModal(false)
+    setBookingOrderItem(null)
   }
 
   const formatCurrency = (amount: number) => {
@@ -344,7 +376,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
                   </div>
                 </div>
                 <button
-                  onClick={() => openScheduleModal(item)}
+                  onClick={() => openBookingModal(item)}
                   className={`px-6 py-3 text-white rounded-xl font-bold text-lg shadow-lg transition-all ${
                     isBooked
                       ? 'bg-pink-500 hover:bg-pink-600 hover:scale-105'
@@ -439,6 +471,31 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
             </div>
           </div>
         </div>
+      )}
+
+      {/* Booking Modal with Chat */}
+      {showBookingModal && bookingOrderItem && order?.customers && (
+        <BookingModal
+          orderItem={{
+            id: bookingOrderItem.id,
+            product_id: bookingOrderItem.products?.product_code ? parseInt(bookingOrderItem.products.product_code) : 0,
+            item_price: bookingOrderItem.products?.list_price || 0,
+            appointment_date: bookingOrderItem.appointment_date,
+            artist_id: bookingOrderItem.artist_id,
+            products: bookingOrderItem.products ? {
+              product_code: bookingOrderItem.products.product_code,
+              product_name: bookingOrderItem.products.product_name,
+              list_price: bookingOrderItem.products.list_price,
+            } : null,
+          }}
+          customer={order.customers}
+          orderId={order.id}
+          onClose={closeBookingModal}
+          onComplete={async () => {
+            closeBookingModal()
+            await fetchOrder()
+          }}
+        />
       )}
     </div>
   )
