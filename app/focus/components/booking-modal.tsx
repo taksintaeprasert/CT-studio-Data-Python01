@@ -136,11 +136,44 @@ export default function BookingModal({ orderItem, customer, orderId, onClose, on
         }
       }
 
-      // 4. Send customer information text
+      // 4. Send service information
+      const serviceLines: string[] = []
+
+      if (orderItem.products?.product_name) {
+        serviceLines.push(`🎨 บริการ: ${orderItem.products.product_name}`)
+      }
+
+      if (orderItem.products?.product_code) {
+        serviceLines.push(`🔖 รหัส: ${orderItem.products.product_code}`)
+      }
+
+      if (orderItem.item_price) {
+        serviceLines.push(`💵 ราคา: ฿${orderItem.item_price.toLocaleString()}`)
+      }
+
+      if (serviceLines.length > 0) {
+        messages.push({
+          order_item_id: orderItem.id,
+          sender_type: 'system',
+          message_type: 'text',
+          message_text: '📦 ข้อมูลบริการ:\n' + serviceLines.join('\n'),
+          is_read: false,
+        })
+      }
+
+      // 5. Send customer information text
       const infoLines: string[] = []
 
+      if (customer.full_name) {
+        infoLines.push(`👤 ชื่อ: ${customer.full_name}`)
+      }
+
       if (customer.nickname) {
-        infoLines.push(`👤 ชื่อเล่น: ${customer.nickname}`)
+        infoLines.push(`😊 ชื่อเล่น: ${customer.nickname}`)
+      }
+
+      if (customer.phone) {
+        infoLines.push(`📱 เบอร์: ${customer.phone}`)
       }
 
       if (customer.age) {
