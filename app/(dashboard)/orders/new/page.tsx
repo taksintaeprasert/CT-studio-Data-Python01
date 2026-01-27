@@ -93,10 +93,21 @@ export default function NewOrderPage() {
 
   const fetchData = async () => {
     const [customersRes, staffRes, productsRes] = await Promise.all([
-      supabase.from('customers').select('id, full_name, phone, contact_channel, province, source_channel, medical_condition, color_allergy, drug_allergy').eq('is_active', true).order('full_name'),
+      supabase.from('customers').select('id, full_name, phone, contact_channel').eq('is_active', true).order('full_name'),
       supabase.from('staff').select('id, staff_name, role').eq('is_active', true).order('staff_name'),
       supabase.from('products').select('id, product_code, product_name, list_price, category, is_free').eq('is_active', true).order('product_name'),
     ])
+
+    // Log errors for debugging
+    if (customersRes.error) {
+      console.error('Error loading customers:', customersRes.error)
+    }
+    if (staffRes.error) {
+      console.error('Error loading staff:', staffRes.error)
+    }
+    if (productsRes.error) {
+      console.error('Error loading products:', productsRes.error)
+    }
 
     console.log('Customers loaded:', customersRes.data?.length || 0)
     console.log('Products loaded:', productsRes.data?.length || 0)
