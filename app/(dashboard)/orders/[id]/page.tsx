@@ -321,6 +321,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
             const statusLabel = item.item_status === 'scheduled' ? 'นัดแล้ว' :
                                item.item_status === 'completed' ? 'เสร็จแล้ว' :
                                item.item_status === 'cancelled' ? 'ยกเลิก' : 'รอนัด'
+            const isBooked = item.appointment_date !== null && item.artist_id !== null
 
             return (
               <div key={item.id} className={`flex items-center justify-between p-4 ${isBooked ? 'bg-gray-50 dark:bg-gray-700/50' : 'bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 border-2 border-pink-300 dark:border-pink-700'} rounded-xl`}>
