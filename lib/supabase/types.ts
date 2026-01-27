@@ -6,7 +6,14 @@ export type Database = {
           id: number
           full_name: string
           phone: string | null
+          nickname: string | null
+          age: number | null
           contact_channel: string | null
+          province: string | null
+          medical_condition: string | null
+          color_allergy: string | null
+          drug_allergy: string | null
+          face_photo_url: string | null
           note: string | null
           is_active: boolean
           created_at: string
@@ -15,7 +22,14 @@ export type Database = {
           id?: number
           full_name: string
           phone?: string | null
+          nickname?: string | null
+          age?: number | null
           contact_channel?: string | null
+          province?: string | null
+          medical_condition?: string | null
+          color_allergy?: string | null
+          drug_allergy?: string | null
+          face_photo_url?: string | null
           note?: string | null
           is_active?: boolean
           created_at?: string
@@ -24,7 +38,14 @@ export type Database = {
           id?: number
           full_name?: string
           phone?: string | null
+          nickname?: string | null
+          age?: number | null
           contact_channel?: string | null
+          province?: string | null
+          medical_condition?: string | null
+          color_allergy?: string | null
+          drug_allergy?: string | null
+          face_photo_url?: string | null
           note?: string | null
           is_active?: boolean
           created_at?: string

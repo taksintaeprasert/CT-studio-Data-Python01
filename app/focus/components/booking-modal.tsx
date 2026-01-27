@@ -113,9 +113,9 @@ export default function BookingModal({ orderItem, customer, orderId, onClose, on
         })
       }
 
-      // 3. Get customer photos (before photos from customer_photos table)
+      // 3. Get customer photos (before photos from service_photos table)
       const { data: photos } = await supabase
-        .from('customer_photos')
+        .from('service_photos')
         .select('photo_url, photo_type')
         .eq('customer_id', customer.id)
         .eq('photo_type', 'before')
