@@ -87,6 +87,18 @@ export default function SalesPerformancePage() {
 
   useEffect(() => {
     fetchStaffList()
+    // Load last 7 days by default
+    const end = new Date()
+    const start = new Date()
+    start.setDate(end.getDate() - 7)
+    const formatDate = (d: Date) => {
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+    setStartDate(formatDate(start))
+    setEndDate(formatDate(end))
   }, [])
 
   useEffect(() => {
@@ -283,6 +295,97 @@ export default function SalesPerformancePage() {
       .sort((a, b) => a.date.localeCompare(b.date))
 
     setDailyData(daily)
+  }
+
+  const fetchAllSalesData = async () => {
+    setLoading(true)
+    setStartDate('')
+    setEndDate('')
+
+    // Get all staff to filter
+    let staffQuery = supabase
+      .from('staff')
+      .select('id, staff_name')
+      .in('role', ['sales', 'admin'])
+      .eq('is_active', true)
+
+    if (selectedStaffId) {
+      staffQuery = staffQuery.eq('id', parseInt(selectedStaffId))
+    }
+
+    const { data: staff } = await staffQuery
+
+    if (!staff || staff.length === 0) {
+      setSalesData([])
+      setDailyData([])
+      setLoading(false)
+      return
+    }
+
+    // Get ALL orders (no date filter)
+    const { data: orders } = await supabase
+      .from('orders')
+      .select('id, sales_id, order_status, total_income, created_at')
+
+    // Get ALL payments (no date filter)
+    const { data: payments } = await supabase
+      .from('payments')
+      .select('order_id, amount, payment_date')
+
+    // Get all order items with upsell
+    const { data: orderItems } = await supabase
+      .from('order_items')
+      .select('order_id, is_upsell')
+
+    // Get ALL chat counts (no date filter)
+    const { data: chatCounts } = await supabase
+      .from('chat_counts')
+      .select('staff_id, chat_count')
+
+    // Calculate stats for each staff
+    const salesStats: SalesData[] = staff.map(s => {
+      const staffOrders = orders?.filter(o => o.sales_id === s.id) || []
+      const staffOrderIds = staffOrders.map(o => o.id)
+      const totalSales = staffOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
+
+      // Calculate real income from ALL payments
+      const staffPayments = payments?.filter(p => staffOrderIds.includes(p.order_id)) || []
+      const realIncome = staffPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
+
+      const completedOrders = staffOrders.filter(o => o.order_status === 'done').length
+
+      // Calculate upsell rate
+      const staffItems = orderItems?.filter(i => staffOrderIds.includes(i.order_id)) || []
+      const upsellItems = staffItems.filter(i => i.is_upsell).length
+      const upsellRate = staffItems.length > 0 ? (upsellItems / staffItems.length) * 100 : 0
+
+      // Count orders with upsell
+      const ordersWithUpsell = staffOrders.filter(o =>
+        orderItems?.some(i => i.order_id === o.id && i.is_upsell)
+      ).length
+
+      // Sum ALL chat counts for this staff
+      const staffChatCounts = chatCounts?.filter(c => c.staff_id === s.id) || []
+      const totalChats = staffChatCounts.reduce((sum, c) => sum + (c.chat_count || 0), 0)
+
+      return {
+        id: s.id,
+        staff_name: s.staff_name,
+        totalSales,
+        realIncome,
+        orderCount: staffOrders.length,
+        completedOrders,
+        upsellRate,
+        upsellCount: ordersWithUpsell,
+        chatCount: totalChats,
+      }
+    })
+
+    // Sort by total sales descending
+    salesStats.sort((a, b) => b.totalSales - a.totalSales)
+    setSalesData(salesStats)
+    setDailyData([]) // Clear daily data when showing all
+    setLoading(false)
   }
 
   const formatCurrency = (amount: number) => {
@@ -604,7 +707,7 @@ export default function SalesPerformancePage() {
       {/* Filters */}
       <div className="card space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <DateRangeFilter onDateChange={handleDateChange} />
+          <DateRangeFilter onDateChange={handleDateChange} onShowAll={fetchAllSalesData} />
 
           {/* Staff Filter */}
           <div className="flex items-center gap-4">
