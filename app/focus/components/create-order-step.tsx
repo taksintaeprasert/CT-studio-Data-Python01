@@ -16,6 +16,10 @@ interface CustomerForm {
   nickname: string
   age: string
   contact_channel: string
+  province: string
+  medical_condition: string
+  color_allergy: string
+  drug_allergy: string
 }
 
 interface SelectedProduct {
@@ -30,12 +34,18 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
   // Customer state
   const [searchPhone, setSearchPhone] = useState('')
   const [foundCustomer, setFoundCustomer] = useState<Customer | null>(null)
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
+  const [customerSuggestions, setCustomerSuggestions] = useState<Customer[]>([])
   const [customerForm, setCustomerForm] = useState<CustomerForm>({
     phone: '',
     full_name: '',
     nickname: '',
     age: '',
     contact_channel: 'line',
+    province: '',
+    medical_condition: '',
+    color_allergy: '',
+    drug_allergy: '',
   })
   const [photoFiles, setPhotoFiles] = useState<File[]>([])
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([])
@@ -71,34 +81,49 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
     if (data) setProducts(data)
   }
 
-  const handlePhoneSearch = async () => {
-    if (!searchPhone.trim()) return
+  // Handle customer search with dropdown
+  const handleCustomerSearch = async (searchText: string) => {
+    setSearchPhone(searchText)
 
-    setSearching(true)
-    const { data, error } = await supabase
-      .from('customers')
-      .select('*')
-      .eq('phone', searchPhone.trim())
-      .single()
+    if (searchText.length >= 2) {
+      const searchLower = searchText.toLowerCase()
+      const { data } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('is_active', true)
+        .or(`phone.ilike.%${searchText}%,full_name.ilike.%${searchText}%`)
+        .limit(10)
 
-    setSearching(false)
-
-    if (data) {
-      setFoundCustomer(data)
-      setCustomerForm({
-        phone: data.phone || '',
-        full_name: data.full_name,
-        nickname: data.nickname || '',
-        age: data.age?.toString() || '',
-        contact_channel: data.contact_channel || 'line',
-      })
+      if (data && data.length > 0) {
+        setCustomerSuggestions(data)
+        setShowCustomerDropdown(true)
+      } else {
+        setCustomerSuggestions([])
+        setShowCustomerDropdown(false)
+      }
     } else {
-      setFoundCustomer(null)
-      setCustomerForm({
-        ...customerForm,
-        phone: searchPhone.trim(),
-      })
+      setCustomerSuggestions([])
+      setShowCustomerDropdown(false)
     }
+  }
+
+  // Select customer from dropdown
+  const selectCustomerFromDropdown = (customer: Customer) => {
+    setFoundCustomer(customer)
+    setSearchPhone(customer.phone || customer.full_name)
+    setCustomerForm({
+      phone: customer.phone || '',
+      full_name: customer.full_name,
+      nickname: customer.nickname || '',
+      age: customer.age?.toString() || '',
+      contact_channel: customer.contact_channel || 'line',
+      province: customer.province || '',
+      medical_condition: customer.medical_condition || '',
+      color_allergy: customer.color_allergy || '',
+      drug_allergy: customer.drug_allergy || '',
+    })
+    setShowCustomerDropdown(false)
+    setCustomerSuggestions([])
   }
 
   const handlePhotosAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -293,6 +318,10 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
             nickname: customerForm.nickname || null,
             age: customerForm.age ? parseInt(customerForm.age) : null,
             contact_channel: customerForm.contact_channel,
+            province: customerForm.province || null,
+            medical_condition: customerForm.medical_condition || null,
+            color_allergy: customerForm.color_allergy || null,
+            drug_allergy: customerForm.drug_allergy || null,
           })
           .eq('id', foundCustomer.id)
       } else {
@@ -305,6 +334,10 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
             nickname: customerForm.nickname || null,
             age: customerForm.age ? parseInt(customerForm.age) : null,
             contact_channel: customerForm.contact_channel,
+            province: customerForm.province || null,
+            medical_condition: customerForm.medical_condition || null,
+            color_allergy: customerForm.color_allergy || null,
+            drug_allergy: customerForm.drug_allergy || null,
           })
           .select()
           .single()
@@ -425,23 +458,45 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
           1. ข้อมูลลูกค้า
         </h2>
 
-        {/* Phone Search */}
-        <div className="flex gap-2 mb-4">
+        {/* Customer Search with Dropdown */}
+        <div className="relative mb-4">
           <input
-            type="tel"
-            placeholder="ค้นหาจากเบอร์โทร"
+            type="text"
+            placeholder="🔍 พิมพ์เบอร์โทร, ชื่อ หรือนามสกุล..."
             value={searchPhone}
-            onChange={(e) => setSearchPhone(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handlePhoneSearch()}
-            className="input flex-1"
+            onChange={(e) => handleCustomerSearch(e.target.value)}
+            onFocus={() => searchPhone.length >= 2 && setShowCustomerDropdown(true)}
+            className="input w-full text-lg"
           />
-          <button
-            onClick={handlePhoneSearch}
-            disabled={searching}
-            className="btn-primary whitespace-nowrap"
-          >
-            {searching ? 'กำลังค้นหา...' : '🔍 ค้นหา'}
-          </button>
+
+          {/* Dropdown Results */}
+          {showCustomerDropdown && customerSuggestions.length > 0 && (
+            <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-2xl max-h-60 overflow-y-auto">
+              <div className="p-2 text-xs text-gray-500 border-b dark:border-gray-700 bg-yellow-50 dark:bg-yellow-900/20">
+                🔍 พบลูกค้าในระบบ - กดเพื่อเลือก:
+              </div>
+              {customerSuggestions.map(c => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => selectCustomerFromDropdown(c)}
+                  className="w-full px-4 py-3 text-left hover:bg-pink-50 dark:hover:bg-gray-700 border-b dark:border-gray-700 last:border-b-0"
+                >
+                  <span className="font-medium dark:text-white">{c.full_name}</span>
+                  {c.phone && <span className="text-gray-500 dark:text-gray-400 ml-2">({c.phone})</span>}
+                  {c.nickname && <span className="text-xs text-gray-400 ml-2">[{c.nickname}]</span>}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Click outside to close dropdown */}
+          {showCustomerDropdown && (
+            <div
+              className="fixed inset-0 z-10"
+              onClick={() => setShowCustomerDropdown(false)}
+            />
+          )}
         </div>
 
         {foundCustomer && (
@@ -509,6 +564,50 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
               <option value="phone">โทรศัพท์</option>
               <option value="walk-in">Walk-in</option>
             </select>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="label">เดินทางมาจากจังหวัด</label>
+            <input
+              type="text"
+              value={customerForm.province}
+              onChange={(e) => setCustomerForm({ ...customerForm, province: e.target.value })}
+              className="input"
+              placeholder="เช่น กรุงเทพฯ, เชียงใหม่"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="label">มีโรคประจำตัวไหม</label>
+            <textarea
+              value={customerForm.medical_condition}
+              onChange={(e) => setCustomerForm({ ...customerForm, medical_condition: e.target.value })}
+              className="input"
+              rows={2}
+              placeholder="ระบุโรคประจำตัว (ถ้ามี)"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="label">มีประวัติแพ้สีไหม</label>
+            <textarea
+              value={customerForm.color_allergy}
+              onChange={(e) => setCustomerForm({ ...customerForm, color_allergy: e.target.value })}
+              className="input"
+              rows={2}
+              placeholder="ระบุประวัติการแพ้สี (ถ้ามี)"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="label">มีประวัติแพ้ยาไหม</label>
+            <textarea
+              value={customerForm.drug_allergy}
+              onChange={(e) => setCustomerForm({ ...customerForm, drug_allergy: e.target.value })}
+              className="input"
+              rows={2}
+              placeholder="ระบุประวัติการแพ้ยา (ถ้ามี)"
+            />
           </div>
 
           {/* Photo Upload - Multiple Photos */}

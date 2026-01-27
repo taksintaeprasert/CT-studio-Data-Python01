@@ -24,7 +24,12 @@ interface BookingModalProps {
     full_name: string
     nickname: string | null
     phone: string | null
+    age: number | null
+    medical_condition: string | null
+    color_allergy: string | null
+    drug_allergy: string | null
   }
+  orderId: number
   onClose: () => void
   onComplete: () => void
 }
@@ -35,7 +40,7 @@ interface Artist {
   email: string
 }
 
-export default function BookingModal({ orderItem, customer, onClose, onComplete }: BookingModalProps) {
+export default function BookingModal({ orderItem, customer, orderId, onClose, onComplete }: BookingModalProps) {
   const router = useRouter()
   const supabase = createClient()
   const { user } = useUser()
@@ -67,6 +72,102 @@ export default function BookingModal({ orderItem, customer, onClose, onComplete 
       .order('staff_name')
 
     setArtists(data || [])
+  }
+
+  const sendCustomerInfoToChat = async () => {
+    try {
+      const messages: any[] = []
+
+      // 1. Get payment receipt (slip)
+      const { data: payments } = await supabase
+        .from('payments')
+        .select('receipt_url, receipt_path, amount, payment_method')
+        .eq('order_id', orderId)
+        .not('receipt_url', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (payments && payments.length > 0 && payments[0].receipt_url) {
+        messages.push({
+          order_item_id: orderItem.id,
+          sender_type: 'system',
+          message_type: 'file',
+          message_text: `💰 สลิปโอนเงิน: ${payments[0].payment_method} ฿${payments[0].amount.toLocaleString()}`,
+          file_url: payments[0].receipt_url,
+          file_name: 'สลิปโอนเงิน',
+          is_read: false,
+        })
+      }
+
+      // 2. Get customer photos
+      const { data: photos } = await supabase
+        .from('customer_photos')
+        .select('photo_url, photo_type')
+        .eq('customer_id', customer.id)
+        .eq('photo_type', 'before')
+        .order('created_at', { ascending: false })
+        .limit(3)
+
+      if (photos && photos.length > 0) {
+        for (const photo of photos) {
+          messages.push({
+            order_item_id: orderItem.id,
+            sender_type: 'system',
+            message_type: 'file',
+            message_text: '',
+            file_url: photo.photo_url,
+            file_name: 'รูปหน้าลูกค้า',
+            is_read: false,
+          })
+        }
+      }
+
+      // 3. Send customer information text
+      const infoLines: string[] = []
+
+      if (customer.nickname) {
+        infoLines.push(`👤 ชื่อเล่น: ${customer.nickname}`)
+      }
+
+      if (customer.age) {
+        infoLines.push(`🎂 อายุ: ${customer.age} ปี`)
+      }
+
+      if (customer.color_allergy && customer.color_allergy.trim()) {
+        infoLines.push(`⚠️ ประวัติแพ้สี: ${customer.color_allergy}`)
+      }
+
+      if (customer.drug_allergy && customer.drug_allergy.trim()) {
+        infoLines.push(`⚠️ ประวัติแพ้ยา: ${customer.drug_allergy}`)
+      }
+
+      if (customer.medical_condition && customer.medical_condition.trim()) {
+        infoLines.push(`🏥 โรคประจำตัว: ${customer.medical_condition}`)
+      }
+
+      if (infoLines.length > 0) {
+        messages.push({
+          order_item_id: orderItem.id,
+          sender_type: 'system',
+          message_type: 'text',
+          message_text: '📋 ข้อมูลลูกค้า:\n' + infoLines.join('\n'),
+          is_read: false,
+        })
+      }
+
+      // Insert all messages
+      if (messages.length > 0) {
+        const { error } = await supabase
+          .from('booking_messages')
+          .insert(messages)
+
+        if (error) {
+          console.error('Error sending customer info to chat:', error)
+        }
+      }
+    } catch (error) {
+      console.error('Error in sendCustomerInfoToChat:', error)
+    }
   }
 
   const handleSave = async () => {
@@ -132,6 +233,9 @@ export default function BookingModal({ orderItem, customer, onClose, onComplete 
       if (msgError) {
         console.error('Message insert error:', msgError)
       }
+
+      // Send customer information to chat
+      await sendCustomerInfoToChat()
 
       if (appointmentDate) {
         alert('✅ บันทึกการจองสำเร็จ!')

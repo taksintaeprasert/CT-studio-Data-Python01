@@ -144,14 +144,6 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
             <h1 className="text-lg font-semibold text-gray-900 dark:text-white truncate flex-1">
               {bookingTitle}
             </h1>
-            {/* Payment Button */}
-            <button
-              onClick={() => setShowPaymentModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium text-sm transition-colors"
-            >
-              <span>💰</span>
-              <span className="hidden md:inline">รับชำระเงิน</span>
-            </button>
           </div>
 
           {/* Info Grid - Compact */}
