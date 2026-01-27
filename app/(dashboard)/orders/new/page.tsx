@@ -400,23 +400,43 @@ export default function NewOrderPage() {
         // Use existing customer but update their info if changed
         finalCustomerId = customerId
 
-        // Update customer info (only basic fields that exist in database)
+        // Update customer info with all fields including health information
+        const updateData: any = {
+          full_name: `${customerFirstName.trim()} ${customerLastName.trim()}`,
+          phone: customerPhone || null,
+          contact_channel: customerContactChannel,
+          nickname: customerNickname || null,
+          age: customerAge ? parseInt(customerAge) : null,
+          province: customerProvince || null,
+          medical_condition: customerMedicalCondition || null,
+          color_allergy: customerColorAllergy || null,
+          drug_allergy: customerDrugAllergy || null,
+        }
+
+        // Only update face_photo_url if a new photo was uploaded
+        if (facePhotoUrl) {
+          updateData.face_photo_url = facePhotoUrl
+        }
+
         await supabase
           .from('customers')
-          .update({
-            full_name: `${customerFirstName.trim()} ${customerLastName.trim()}`,
-            phone: customerPhone || null,
-            contact_channel: customerContactChannel,
-          })
+          .update(updateData)
           .eq('id', customerId)
       } else {
-        // Create new customer
+        // Create new customer with all fields including health information
         const { data: newCustomer, error: customerError } = await supabase
           .from('customers')
           .insert({
             full_name: `${customerFirstName.trim()} ${customerLastName.trim()}`,
             phone: customerPhone || null,
             contact_channel: customerContactChannel,
+            nickname: customerNickname || null,
+            age: customerAge ? parseInt(customerAge) : null,
+            province: customerProvince || null,
+            medical_condition: customerMedicalCondition || null,
+            color_allergy: customerColorAllergy || null,
+            drug_allergy: customerDrugAllergy || null,
+            face_photo_url: facePhotoUrl || null,
           })
           .select('id')
           .single()
