@@ -216,12 +216,43 @@ export async function GET(request: NextRequest) {
     })
 
     // Calculate 50% customers (orders containing "50%" in product name)
-    const halfPriceCustomers = orders?.filter((order) => {
+    const halfPriceOrders = orders?.filter((order) => {
       return order.order_items?.some((item: { products: { product_name: string } | null }) => {
         const productName = item.products?.product_name || ''
         return productName.toUpperCase().includes('50%')
       })
-    }).length || 0
+    }) || []
+
+    const halfPriceCustomers = halfPriceOrders.length
+    const halfPriceCustomersAmount = halfPriceOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
+
+    // Calculate high value customers (>10k, or >5k for 50% services, exclude FREE)
+    const highValueOrders = orders?.filter((order) => {
+      // Check if order contains 50% service
+      const has50Percent = order.order_items?.some((item: { products: { product_name: string; product_code: string } | null }) => {
+        const productName = item.products?.product_name?.toUpperCase() || ''
+        const productCode = item.products?.product_code?.toUpperCase() || ''
+        return productName.includes('50%') || productCode.includes('50%')
+      })
+
+      // Check if order contains FREE service
+      const hasFree = order.order_items?.some((item: { products: { product_name: string; product_code: string; is_free: boolean | null } | null }) => {
+        const productName = item.products?.product_name?.toUpperCase() || ''
+        const productCode = item.products?.product_code?.toUpperCase() || ''
+        const isFree = item.products?.is_free || false
+        return isFree || productName.includes('FREE') || productCode.includes('FREE')
+      })
+
+      // If has FREE, don't count
+      if (hasFree) return false
+
+      // If has 50%, threshold is 5k, otherwise 10k
+      const threshold = has50Percent ? 5000 : 10000
+      return (order.total_income || 0) > threshold
+    }) || []
+
+    const highValueCustomers = highValueOrders.length
+    const highValueAmount = highValueOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
 
     // Build overall report data
     const reportData: DailyReportData = {
@@ -242,6 +273,9 @@ export async function GET(request: NextRequest) {
       followUpClosed,
       masterBookingAmount,
       halfPriceCustomers,
+      halfPriceCustomersAmount,
+      highValueCustomers,
+      highValueAmount,
       servicesSold,
     }
 
@@ -450,12 +484,43 @@ export async function GET(request: NextRequest) {
     })
 
     // Calculate today's 50% customers
-    const todayHalfPriceCustomers = todayOrders?.filter((order) => {
+    const todayHalfPriceOrders = todayOrders?.filter((order) => {
       return order.order_items?.some((item: { products: { product_name: string } | null }) => {
         const productName = item.products?.product_name || ''
         return productName.toUpperCase().includes('50%')
       })
-    }).length || 0
+    }) || []
+
+    const todayHalfPriceCustomers = todayHalfPriceOrders.length
+    const todayHalfPriceCustomersAmount = todayHalfPriceOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
+
+    // Calculate today's high value customers (>10k, or >5k for 50% services, exclude FREE)
+    const todayHighValueOrders = todayOrders?.filter((order) => {
+      // Check if order contains 50% service
+      const has50Percent = order.order_items?.some((item: { products: { product_name: string; product_code: string } | null }) => {
+        const productName = item.products?.product_name?.toUpperCase() || ''
+        const productCode = item.products?.product_code?.toUpperCase() || ''
+        return productName.includes('50%') || productCode.includes('50%')
+      })
+
+      // Check if order contains FREE service
+      const hasFree = order.order_items?.some((item: { products: { product_name: string; product_code: string; is_free: boolean | null } | null }) => {
+        const productName = item.products?.product_name?.toUpperCase() || ''
+        const productCode = item.products?.product_code?.toUpperCase() || ''
+        const isFree = item.products?.is_free || false
+        return isFree || productName.includes('FREE') || productCode.includes('FREE')
+      })
+
+      // If has FREE, don't count
+      if (hasFree) return false
+
+      // If has 50%, threshold is 5k, otherwise 10k
+      const threshold = has50Percent ? 5000 : 10000
+      return (order.total_income || 0) > threshold
+    }) || []
+
+    const todayHighValueCustomers = todayHighValueOrders.length
+    const todayHighValueAmount = todayHighValueOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
 
     // Build today's report data
     const todayReportData: DailyReportData = {
@@ -475,6 +540,9 @@ export async function GET(request: NextRequest) {
       followUpClosed: todayFollowUpClosed,
       masterBookingAmount: todayMasterBookingAmount,
       halfPriceCustomers: todayHalfPriceCustomers,
+      halfPriceCustomersAmount: todayHalfPriceCustomersAmount,
+      highValueCustomers: todayHighValueCustomers,
+      highValueAmount: todayHighValueAmount,
       servicesSold: todayServicesSold,
     }
 
