@@ -16,6 +16,12 @@ interface MessageWithSender extends BookingMessage {
   } | null
 }
 
+interface OrderItemInfo {
+  artist_id: number | null
+  artist_completed_at: string | null
+  sales_completed_at: string | null
+}
+
 export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
   const supabase = createClient()
   const { user } = useUser()
@@ -25,9 +31,12 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
   const [newMessage, setNewMessage] = useState('')
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [orderItemInfo, setOrderItemInfo] = useState<OrderItemInfo | null>(null)
+  const [completingService, setCompletingService] = useState(false)
 
   useEffect(() => {
     loadMessages()
+    loadOrderItemInfo()
   }, [orderItemId])
 
   useEffect(() => {
@@ -55,6 +64,58 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
       setMessages(data || [])
     }
     setLoading(false)
+  }
+
+  const loadOrderItemInfo = async () => {
+    const { data, error } = await supabase
+      .from('order_items')
+      .select('artist_id, artist_completed_at, sales_completed_at')
+      .eq('id', orderItemId)
+      .single()
+
+    if (error) {
+      console.error('Error loading order item info:', error)
+    } else {
+      setOrderItemInfo(data)
+    }
+  }
+
+  const handleArtistComplete = async () => {
+    if (!user || user.role !== 'artist') return
+    if (!orderItemInfo || orderItemInfo.artist_id !== user.id) return
+
+    if (window.confirm('ยืนยันว่าบริการเสร็จสิ้นแล้ว?')) {
+      setCompletingService(true)
+      try {
+        const { error } = await supabase
+          .from('order_items')
+          .update({ artist_completed_at: new Date().toISOString() })
+          .eq('id', orderItemId)
+
+        if (error) throw error
+
+        // Add system message
+        await supabase
+          .from('booking_messages')
+          .insert({
+            order_item_id: orderItemId,
+            sender_id: null,
+            sender_type: 'system',
+            message_type: 'text',
+            message_text: `✅ ${user.staffName} ยืนยันว่าบริการเสร็จสิ้นแล้ว`,
+            is_read: false,
+          })
+
+        await loadOrderItemInfo()
+        await loadMessages()
+        alert('ยืนยันการเสร็จสิ้นเรียบร้อยแล้ว')
+      } catch (error) {
+        console.error('Error completing service:', error)
+        alert('เกิดข้อผิดพลาดในการยืนยัน')
+      } finally {
+        setCompletingService(false)
+      }
+    }
   }
 
   const handleSendMessage = async () => {
@@ -163,8 +224,53 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
     )
   }
 
+  // Check if current user is the assigned artist
+  const isAssignedArtist = user?.role === 'artist' && orderItemInfo?.artist_id === user?.id
+  const artistHasCompleted = !!orderItemInfo?.artist_completed_at
+  const salesHasCompleted = !!orderItemInfo?.sales_completed_at
+
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-900">
+      {/* Artist Completion Button - Visible only to assigned artist */}
+      {isAssignedArtist && !artistHasCompleted && (
+        <div className="p-3 bg-gradient-to-r from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-b-2 border-green-200 dark:border-green-700">
+          <button
+            onClick={handleArtistComplete}
+            disabled={completingService}
+            className="w-full px-4 py-3 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {completingService ? 'กำลังบันทึก...' : 'ยืนยันเสร็จสิ้น (ฝั่งช่าง)'}
+          </button>
+        </div>
+      )}
+
+      {/* Completion Status Display */}
+      {(artistHasCompleted || salesHasCompleted) && (
+        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-700">
+          <div className="space-y-1 text-sm">
+            {artistHasCompleted && (
+              <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span>ช่างยืนยันเสร็จสิ้นแล้ว</span>
+              </div>
+            )}
+            {salesHasCompleted && (
+              <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span>Sales ยืนยันเสร็จสิ้นแล้ว</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Messages List - Takes up available space */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-950">
         {messages.length === 0 ? (

@@ -175,6 +175,8 @@ export type Database = {
           artist_id: number | null
           booking_title: string | null
           check_in_time: string | null
+          artist_completed_at: string | null
+          sales_completed_at: string | null
           created_at: string
         }
         Insert: {
@@ -189,6 +191,8 @@ export type Database = {
           artist_id?: number | null
           booking_title?: string | null
           check_in_time?: string | null
+          artist_completed_at?: string | null
+          sales_completed_at?: string | null
           created_at?: string
         }
         Update: {
@@ -203,6 +207,8 @@ export type Database = {
           artist_id?: number | null
           booking_title?: string | null
           check_in_time?: string | null
+          artist_completed_at?: string | null
+          sales_completed_at?: string | null
           created_at?: string
         }
       }
@@ -357,6 +363,35 @@ export type Database = {
           created_at?: string
         }
       }
+      artist_notifications: {
+        Row: {
+          id: number
+          artist_id: number
+          notification_type: 'new_queue' | 'schedule_change'
+          order_item_id: number
+          message: string
+          is_read: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          artist_id: number
+          notification_type: 'new_queue' | 'schedule_change'
+          order_item_id: number
+          message: string
+          is_read?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          artist_id?: number
+          notification_type?: 'new_queue' | 'schedule_change'
+          order_item_id?: number
+          message?: string
+          is_read?: boolean
+          created_at?: string
+        }
+      }
     }
   }
 }
@@ -372,6 +407,7 @@ export type Chat = Database['public']['Tables']['chats']['Row']
 export type AdsBudget = Database['public']['Tables']['ads_budget']['Row']
 export type ServicePhoto = Database['public']['Tables']['service_photos']['Row']
 export type BookingMessage = Database['public']['Tables']['booking_messages']['Row']
+export type ArtistNotification = Database['public']['Tables']['artist_notifications']['Row']
 
 // Staff role type
 export type StaffRole = 'super_admin' | 'admin' | 'sales' | 'artist' | 'marketer'
