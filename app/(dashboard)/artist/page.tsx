@@ -5,164 +5,187 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useUser } from '@/lib/user-context'
-import PhotoUploadModal from '@/components/photo-upload-modal'
+import { useRouter } from 'next/navigation'
+import type { ArtistNotification } from '@/lib/supabase/types'
 
-interface Appointment {
-  id: number
-  order_id: number
-  appointment_date: string
-  appointment_time: string | null
-  item_status: 'pending' | 'scheduled' | 'completed' | 'cancelled'
-  product: {
-    product_name: string
-    product_code: string
-  }
-  order: {
-    id: number
-    customers: {
-      full_name: string
-      phone: string | null
-    } | null
-  }
+interface PerformanceMetrics {
+  totalCustomers: number
+  completedServices: number
+  totalBookingAmount: number
+  periodMonth: string
+}
+
+interface Notification extends ArtistNotification {
+  order_item?: {
+    booking_title: string | null
+  } | null
 }
 
 export default function ArtistHomePage() {
   const { user, loading: userLoading } = useUser()
-  const [appointments, setAppointments] = useState<Appointment[]>([])
+  const router = useRouter()
+  const [metrics, setMetrics] = useState<PerformanceMetrics>({
+    totalCustomers: 0,
+    completedServices: 0,
+    totalBookingAmount: 0,
+    periodMonth: ''
+  })
+  const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedMonth, setSelectedMonth] = useState(new Date())
-  const [showPhotoModal, setShowPhotoModal] = useState(false)
-  const [completingItem, setCompletingItem] = useState<Appointment | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
     if (user?.id) {
-      fetchAppointments()
+      fetchPerformanceMetrics()
+      fetchNotifications()
     }
-  }, [user?.id, selectedMonth])
+  }, [user?.id])
 
-  const fetchAppointments = async () => {
-    if (!user?.id) return
+  // Calculate period dates (26th of last month to today)
+  const getPeriodDates = () => {
+    const today = new Date()
+    const currentDay = today.getDate()
 
-    setLoading(true)
+    // If today is before 26th, period started on 26th of previous month
+    // If today is 26th or after, period started on 26th of current month
+    let periodStartMonth = currentDay < 26
+      ? new Date(today.getFullYear(), today.getMonth() - 1, 26)
+      : new Date(today.getFullYear(), today.getMonth(), 26)
 
-    // Get first and last day of selected month
-    const firstDay = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), 1)
-    const lastDay = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0)
+    // Display month is always the next month from period start
+    const displayMonth = new Date(periodStartMonth.getFullYear(), periodStartMonth.getMonth() + 1, 1)
 
     const formatDate = (d: Date) => {
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     }
 
-    const { data } = await supabase
-      .from('order_items')
-      .select(`
-        id,
-        order_id,
-        appointment_date,
-        appointment_time,
-        item_status,
-        product:products(product_name, product_code),
-        order:orders(id, customers(full_name, phone))
-      `)
-      .eq('artist_id', user.id)
-      .gte('appointment_date', formatDate(firstDay))
-      .lte('appointment_date', formatDate(lastDay))
-      .order('appointment_date', { ascending: true })
-      .order('appointment_time', { ascending: true })
-
-    setAppointments(data || [])
-    setLoading(false)
-  }
-
-  const getTodayDate = () => {
-    const today = new Date()
-    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-  }
-
-  // Filter appointments for different views
-  const todayStr = getTodayDate()
-  const todayAppointments = appointments.filter(a => a.appointment_date === todayStr)
-  const scheduledAppointments = appointments.filter(a => a.item_status === 'scheduled')
-  const completedAppointments = appointments.filter(a => a.item_status === 'completed')
-
-  // Handle complete button click
-  const handleCompleteClick = (appointment: Appointment) => {
-    setCompletingItem(appointment)
-    setShowPhotoModal(true)
-  }
-
-  // Handle photo upload complete
-  const handlePhotoUploadComplete = async () => {
-    if (!completingItem) return
-
-    // Update item status to completed
-    await supabase
-      .from('order_items')
-      .update({ item_status: 'completed' })
-      .eq('id', completingItem.id)
-
-    setShowPhotoModal(false)
-    setCompletingItem(null)
-    fetchAppointments()
-  }
-
-  // Handle skip photo (complete without photo)
-  const handleSkipPhoto = async () => {
-    if (!completingItem) return
-
-    await supabase
-      .from('order_items')
-      .update({ item_status: 'completed' })
-      .eq('id', completingItem.id)
-
-    setShowPhotoModal(false)
-    setCompletingItem(null)
-    fetchAppointments()
-  }
-
-  // Month navigation
-  const prevMonth = () => {
-    setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1, 1))
-  }
-
-  const nextMonth = () => {
-    setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 1))
-  }
-
-  // Generate calendar days
-  const generateCalendarDays = () => {
-    const year = selectedMonth.getFullYear()
-    const month = selectedMonth.getMonth()
-    const firstDay = new Date(year, month, 1)
-    const lastDay = new Date(year, month + 1, 0)
-    const startPadding = firstDay.getDay()
-    const days: (number | null)[] = []
-
-    // Add padding for days before month starts
-    for (let i = 0; i < startPadding; i++) {
-      days.push(null)
+    return {
+      startDate: formatDate(periodStartMonth),
+      endDate: formatDate(today),
+      displayMonth: displayMonth.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })
     }
-
-    // Add days of month
-    for (let i = 1; i <= lastDay.getDate(); i++) {
-      days.push(i)
-    }
-
-    return days
   }
 
-  // Get appointments for a specific day
-  const getAppointmentsForDay = (day: number) => {
-    const dateStr = `${selectedMonth.getFullYear()}-${String(selectedMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    return appointments.filter(a => a.appointment_date === dateStr)
+  const fetchPerformanceMetrics = async () => {
+    if (!user?.id) return
+
+    setLoading(true)
+    const { startDate, endDate, displayMonth } = getPeriodDates()
+
+    try {
+      // Get all order_items for this artist in the period
+      const { data: orderItems } = await supabase
+        .from('order_items')
+        .select(`
+          id,
+          order_id,
+          item_price,
+          artist_completed_at,
+          sales_completed_at,
+          appointment_date
+        `)
+        .eq('artist_id', user.id)
+        .gte('appointment_date', startDate)
+        .lte('appointment_date', endDate)
+
+      if (!orderItems) {
+        setLoading(false)
+        return
+      }
+
+      // Count unique orders (customers)
+      const uniqueOrders = new Set(orderItems.map(item => item.order_id))
+      const totalCustomers = uniqueOrders.size
+
+      // Count completed services (both artist AND sales marked complete)
+      const completedServices = orderItems.filter(item =>
+        item.artist_completed_at && item.sales_completed_at
+      ).length
+
+      // Calculate total booking amount
+      const totalBookingAmount = orderItems.reduce((sum, item) => sum + (item.item_price || 0), 0)
+
+      setMetrics({
+        totalCustomers,
+        completedServices,
+        totalBookingAmount,
+        periodMonth: displayMonth
+      })
+    } catch (error) {
+      console.error('Error fetching performance metrics:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchNotifications = async () => {
+    if (!user?.id) return
+
+    try {
+      const { data } = await supabase
+        .from('artist_notifications')
+        .select(`
+          *,
+          order_item:order_items(booking_title)
+        `)
+        .eq('artist_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(10)
+
+      setNotifications(data || [])
+    } catch (error) {
+      console.error('Error fetching notifications:', error)
+    }
+  }
+
+  const markNotificationAsRead = async (notificationId: number) => {
+    try {
+      await supabase
+        .from('artist_notifications')
+        .update({ is_read: true })
+        .eq('id', notificationId)
+
+      // Update local state
+      setNotifications(prev =>
+        prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
+      )
+    } catch (error) {
+      console.error('Error marking notification as read:', error)
+    }
+  }
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'new_queue':
+        return '🔔'
+      case 'schedule_change':
+        return '📅'
+      default:
+        return '📢'
+    }
+  }
+
+  const formatNotificationTime = (timestamp: string) => {
+    const date = new Date(timestamp)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMins / 60)
+    const diffDays = Math.floor(diffHours / 24)
+
+    if (diffMins < 1) return 'เมื่อสักครู่'
+    if (diffMins < 60) return `${diffMins} นาทีที่แล้ว`
+    if (diffHours < 24) return `${diffHours} ชั่วโมงที่แล้ว`
+    if (diffDays < 7) return `${diffDays} วันที่แล้ว`
+
+    return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
   }
 
   // Check if user is artist
   if (userLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-500">Loading...</div>
+        <div className="text-gray-500">กำลังโหลด...</div>
       </div>
     )
   }
@@ -170,232 +193,153 @@ export default function ArtistHomePage() {
   if (!user || user.role !== 'artist') {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
-        <div className="text-2xl font-bold text-red-500 mb-2">Access Denied</div>
+        <div className="text-2xl font-bold text-red-500 mb-2">ไม่มีสิทธิ์เข้าถึง</div>
         <div className="text-gray-500">หน้านี้สำหรับ Artist เท่านั้น</div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
+    <div className="space-y-4 pb-6 max-w-2xl mx-auto px-4">
+      {/* Header - Mobile Optimized */}
+      <div className="pt-4">
         <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Artist Home</h1>
-        <p className="text-gray-500 dark:text-gray-400">สวัสดี {user.staffName} - ดูคิวและนัดหมายของคุณ</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">สวัสดี {user.staffName}</p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card p-6">
+      {/* Performance Period Banner */}
+      <div className="card p-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white">
+        <div className="text-center">
+          <p className="text-sm opacity-90">ผลงานของคุณ</p>
+          <p className="text-2xl font-bold">{metrics.periodMonth}</p>
+          <p className="text-xs opacity-75 mt-1">
+            (นับตั้งแต่วันที่ 26 เดือนที่แล้ว)
+          </p>
+        </div>
+      </div>
+
+      {/* Performance Metrics - Mobile Cards */}
+      <div className="grid grid-cols-1 gap-4">
+        {/* Total Customers */}
+        <div className="card p-5 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-2 border-blue-200 dark:border-blue-700">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">นัดวันนี้</p>
-              <p className="text-3xl font-bold text-pink-500">{todayAppointments.length}</p>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">
+                จำนวนลูกค้า
+              </p>
+              <p className="text-4xl font-bold text-blue-700 dark:text-blue-300">
+                {loading ? '...' : metrics.totalCustomers}
+              </p>
+              <p className="text-xs text-blue-500 dark:text-blue-400 mt-1">
+                orders ทั้งหมด
+              </p>
             </div>
-            <div className="w-12 h-12 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center">
-              <svg className="w-6 h-6 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <div className="w-16 h-16 rounded-full bg-blue-200 dark:bg-blue-700 flex items-center justify-center">
+              <svg className="w-8 h-8 text-blue-600 dark:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
           </div>
         </div>
 
-        <div className="card p-6">
+        {/* Completed Services */}
+        <div className="card p-5 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-2 border-green-200 dark:border-green-700">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">รอดำเนินการ (เดือนนี้)</p>
-              <p className="text-3xl font-bold text-blue-500">{scheduledAppointments.length}</p>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-green-600 dark:text-green-400 mb-1">
+                ทำเสร็จแล้ว
+              </p>
+              <p className="text-4xl font-bold text-green-700 dark:text-green-300">
+                {loading ? '...' : metrics.completedServices}
+              </p>
+              <p className="text-xs text-green-500 dark:text-green-400 mt-1">
+                บริการที่ยืนยันแล้วทั้ง 2 ฝ่าย
+              </p>
             </div>
-            <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-              <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        <div className="card p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">เสร็จแล้ว (เดือนนี้)</p>
-              <p className="text-3xl font-bold text-green-500">{completedAppointments.length}</p>
-            </div>
-            <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-              <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-16 h-16 rounded-full bg-green-200 dark:bg-green-700 flex items-center justify-center">
+              <svg className="w-8 h-8 text-green-600 dark:text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Today's Queue */}
-      <div className="card">
-        <div className="p-4 border-b dark:border-gray-700">
-          <h2 className="text-lg font-bold text-gray-800 dark:text-white">คิววันนี้ ({todayAppointments.length})</h2>
-        </div>
-        <div className="divide-y dark:divide-gray-700">
-          {loading ? (
-            <div className="p-8 text-center text-gray-500">Loading...</div>
-          ) : todayAppointments.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">ไม่มีนัดหมายวันนี้</div>
-          ) : (
-            todayAppointments.map(apt => (
-              <div key={apt.id} className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-pink-500">
-                      {apt.appointment_time?.slice(0, 5) || '--:--'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-800 dark:text-white">
-                      {apt.order?.customers?.full_name || '-'}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      <span className="text-pink-500 font-mono">[{apt.product?.product_code}]</span> {apt.product?.product_name}
-                    </p>
-                    {apt.order?.customers?.phone && (
-                      <p className="text-xs text-gray-400">Tel: {apt.order.customers.phone}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {apt.item_status === 'completed' ? (
-                    <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full text-sm font-medium">
-                      เสร็จแล้ว
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => handleCompleteClick(apt)}
-                      className="px-4 py-2 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
-                    >
-                      เสร็จสิ้น
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
+        {/* Total Booking Amount */}
+        <div className="card p-5 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-2 border-purple-200 dark:border-purple-700">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-purple-600 dark:text-purple-400 mb-1">
+                มูลค่า Booking
+              </p>
+              <p className="text-4xl font-bold text-purple-700 dark:text-purple-300">
+                {loading ? '...' : metrics.totalBookingAmount.toLocaleString()}
+              </p>
+              <p className="text-xs text-purple-500 dark:text-purple-400 mt-1">
+                บาท
+              </p>
+            </div>
+            <div className="w-16 h-16 rounded-full bg-purple-200 dark:bg-purple-700 flex items-center justify-center">
+              <svg className="w-8 h-8 text-purple-600 dark:text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Monthly Calendar */}
+      {/* Notifications Section */}
       <div className="card">
         <div className="p-4 border-b dark:border-gray-700 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-800 dark:text-white">ปฏิทินเดือน</h2>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={prevMonth}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <span className="font-medium text-gray-800 dark:text-white min-w-[150px] text-center">
-              {selectedMonth.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}
-            </span>
-            <button
-              onClick={nextMonth}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold text-gray-800 dark:text-white">การแจ้งเตือน</h2>
+            {notifications.filter(n => !n.is_read).length > 0 && (
+              <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">
+                {notifications.filter(n => !n.is_read).length}
+              </span>
+            )}
           </div>
+          <button
+            onClick={() => router.push('/calendar')}
+            className="text-sm text-pink-500 hover:text-pink-600 font-medium"
+          >
+            ดูปฏิทิน →
+          </button>
         </div>
-        <div className="p-4">
-          {/* Calendar Header */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
-            {['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map(day => (
-              <div key={day} className="text-center text-sm font-medium text-gray-500 dark:text-gray-400 py-2">
-                {day}
-              </div>
-            ))}
-          </div>
-          {/* Calendar Days */}
-          <div className="grid grid-cols-7 gap-1">
-            {generateCalendarDays().map((day, index) => {
-              if (day === null) {
-                return <div key={index} className="aspect-square" />
-              }
 
-              const dayAppointments = getAppointmentsForDay(day)
-              const isToday = `${selectedMonth.getFullYear()}-${String(selectedMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` === todayStr
-              const hasAppointments = dayAppointments.length > 0
-
-              return (
-                <div
-                  key={index}
-                  className={`aspect-square p-1 rounded-lg ${
-                    isToday
-                      ? 'bg-pink-500 text-white'
-                      : hasAppointments
-                      ? 'bg-blue-50 dark:bg-blue-900/20'
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  <div className="text-center">
-                    <span className={`text-sm ${isToday ? 'font-bold' : ''}`}>{day}</span>
-                  </div>
-                  {hasAppointments && (
-                    <div className="text-center">
-                      <span className={`text-xs font-bold ${isToday ? 'text-white' : 'text-blue-500'}`}>
-                        {dayAppointments.length} นัด
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* All Appointments This Month */}
-      <div className="card">
-        <div className="p-4 border-b dark:border-gray-700">
-          <h2 className="text-lg font-bold text-gray-800 dark:text-white">นัดหมายทั้งหมดในเดือนนี้ ({appointments.length})</h2>
-        </div>
-        <div className="divide-y dark:divide-gray-700 max-h-96 overflow-y-auto">
-          {appointments.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">ไม่มีนัดหมาย</div>
+        <div className="divide-y dark:divide-gray-700 max-h-[500px] overflow-y-auto">
+          {notifications.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              <p className="text-gray-400">ไม่มีการแจ้งเตือน</p>
+            </div>
           ) : (
-            appointments.map(apt => (
-              <div key={apt.id} className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="text-center min-w-[80px]">
-                    <p className="text-sm font-medium text-gray-800 dark:text-white">
-                      {new Date(apt.appointment_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
+            notifications.map(notif => (
+              <div
+                key={notif.id}
+                onClick={() => !notif.is_read && markNotificationAsRead(notif.id)}
+                className={`p-4 transition-colors cursor-pointer ${
+                  notif.is_read
+                    ? 'bg-white dark:bg-gray-900'
+                    : 'bg-pink-50 dark:bg-pink-900/10 hover:bg-pink-100 dark:hover:bg-pink-900/20'
+                }`}
+              >
+                <div className="flex gap-3">
+                  <div className="text-2xl flex-shrink-0">
+                    {getNotificationIcon(notif.notification_type)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm ${
+                      notif.is_read
+                        ? 'text-gray-700 dark:text-gray-300'
+                        : 'text-gray-900 dark:text-white font-medium'
+                    }`}>
+                      {notif.message}
                     </p>
-                    <p className="text-xs text-gray-500">
-                      {apt.appointment_time?.slice(0, 5) || '--:--'}
+                    <p className="text-xs text-gray-400 mt-1">
+                      {formatNotificationTime(notif.created_at)}
                     </p>
                   </div>
-                  <div>
-                    <p className="font-medium text-gray-800 dark:text-white">
-                      {apt.order?.customers?.full_name || '-'}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      <span className="text-pink-500 font-mono">[{apt.product?.product_code}]</span> {apt.product?.product_name}
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  {apt.item_status === 'completed' ? (
-                    <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full text-sm font-medium">
-                      เสร็จแล้ว
-                    </span>
-                  ) : apt.item_status === 'scheduled' ? (
-                    <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-sm font-medium">
-                      รอดำเนินการ
-                    </span>
-                  ) : (
-                    <span className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full text-sm font-medium">
-                      {apt.item_status}
-                    </span>
+                  {!notif.is_read && (
+                    <div className="w-2 h-2 bg-pink-500 rounded-full flex-shrink-0 mt-2"></div>
                   )}
                 </div>
               </div>
@@ -404,20 +348,32 @@ export default function ArtistHomePage() {
         </div>
       </div>
 
-      {/* Photo Upload Modal */}
-      {showPhotoModal && completingItem && (
-        <PhotoUploadModal
-          orderItemId={completingItem.id}
-          customerName={completingItem.order?.customers?.full_name || '-'}
-          productName={completingItem.product?.product_name || '-'}
-          onClose={() => {
-            setShowPhotoModal(false)
-            setCompletingItem(null)
-          }}
-          onComplete={handlePhotoUploadComplete}
-          onSkip={handleSkipPhoto}
-        />
-      )}
+      {/* Quick Actions - Mobile Optimized */}
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={() => router.push('/calendar')}
+          className="card p-4 hover:shadow-lg transition-shadow text-center bg-gradient-to-br from-pink-500 to-pink-600 text-white"
+        >
+          <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-white/20 flex items-center justify-center">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <p className="font-medium text-sm">ปฏิทินนัดหมาย</p>
+        </button>
+
+        <button
+          onClick={() => router.push('/service')}
+          className="card p-4 hover:shadow-lg transition-shadow text-center bg-gradient-to-br from-blue-500 to-blue-600 text-white"
+        >
+          <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-white/20 flex items-center justify-center">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+          </div>
+          <p className="font-medium text-sm">รายการบริการ</p>
+        </button>
+      </div>
     </div>
   )
 }
