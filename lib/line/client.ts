@@ -83,7 +83,7 @@ ${productList}
 
 // Format daily report for LINE Notify
 export function formatDailyReportNotifyMessage(report: DailyReportData): string {
-  const dateObj = new Date(report.date)
+  const dateObj = new Date(report.startDate)
   const dateStr = dateObj.toLocaleDateString('th-TH', {
     weekday: 'long',
     day: 'numeric',
@@ -303,7 +303,10 @@ export interface DailyReportData {
   googleReviewCount: number
   followUpClosed: number
   masterBookingAmount: number  // Services 20,000+
-  halfPriceCustomers: number   // Orders containing "50%"
+  halfPriceCustomers: number   // Orders containing "50%" (count)
+  halfPriceCustomersAmount: number  // Total amount from 50% orders
+  highValueCustomers: number   // Customers with orders >10k (>5k for 50% services)
+  highValueAmount: number      // Total amount from high value orders
   servicesSold: {
     category: string
     count: number
@@ -634,6 +637,55 @@ export function createTodaySummaryFlex(report: DailyReportData): object {
 
         { type: 'separator', margin: 'lg' },
 
+        // Additional Metrics
+        {
+          type: 'text',
+          text: '📊 Additional Metrics',
+          weight: 'bold',
+          size: 'sm',
+          color: '#1f2937',
+          margin: 'lg',
+        },
+        {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'box',
+              layout: 'horizontal',
+              contents: [
+                { type: 'text', text: '🚶 รับลูกค้าหน้าร้าน', size: 'xs', flex: 3, color: '#555555' },
+                { type: 'text', text: `${report.walkInCount || 0} คน`, size: 'xs', flex: 2, align: 'end', color: '#3B82F6', weight: 'bold' },
+              ],
+              margin: 'sm',
+            },
+            {
+              type: 'box',
+              layout: 'horizontal',
+              contents: [
+                { type: 'text', text: '💰 ลูกค้าซื้อ 50%', size: 'xs', flex: 3, color: '#555555' },
+                { type: 'text', text: `${report.halfPriceCustomers || 0} คน / ฿${(report.halfPriceCustomersAmount || 0).toLocaleString()}`, size: 'xs', flex: 2, align: 'end', color: '#F59E0B', weight: 'bold' },
+              ],
+              margin: 'sm',
+            },
+            {
+              type: 'box',
+              layout: 'horizontal',
+              contents: [
+                { type: 'text', text: '⭐ ลูกค้าซื้อ >10k', size: 'xs', flex: 3, color: '#555555' },
+                { type: 'text', text: `${report.highValueCustomers || 0} คน / ฿${(report.highValueAmount || 0).toLocaleString()}`, size: 'xs', flex: 2, align: 'end', color: '#10B981', weight: 'bold' },
+              ],
+              margin: 'sm',
+            },
+          ],
+          margin: 'md',
+          paddingAll: 'sm',
+          backgroundColor: '#f9fafb',
+          cornerRadius: 'md',
+        },
+
+        { type: 'separator', margin: 'lg' },
+
         // Sales Performance
         {
           type: 'text',
@@ -824,6 +876,55 @@ export function createDailyReportFlex(report: DailyReportData): object {
                 { type: 'text', text: `฿${report.totalRealIncome.toLocaleString()}`, size: 'sm', weight: 'bold', align: 'center', color: '#10B981' },
               ],
               flex: 1,
+            },
+          ],
+          margin: 'md',
+          paddingAll: 'sm',
+          backgroundColor: '#f9fafb',
+          cornerRadius: 'md',
+        },
+
+        { type: 'separator', margin: 'lg' },
+
+        // Additional Metrics
+        {
+          type: 'text',
+          text: '📊 Additional Metrics',
+          weight: 'bold',
+          size: 'sm',
+          color: '#1f2937',
+          margin: 'lg',
+        },
+        {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'box',
+              layout: 'horizontal',
+              contents: [
+                { type: 'text', text: '🚶 รับลูกค้าหน้าร้าน', size: 'xs', flex: 3, color: '#555555' },
+                { type: 'text', text: `${report.walkInCount || 0} คน`, size: 'xs', flex: 2, align: 'end', color: '#3B82F6', weight: 'bold' },
+              ],
+              margin: 'sm',
+            },
+            {
+              type: 'box',
+              layout: 'horizontal',
+              contents: [
+                { type: 'text', text: '💰 ลูกค้าซื้อ 50%', size: 'xs', flex: 3, color: '#555555' },
+                { type: 'text', text: `${report.halfPriceCustomers || 0} คน / ฿${(report.halfPriceCustomersAmount || 0).toLocaleString()}`, size: 'xs', flex: 2, align: 'end', color: '#F59E0B', weight: 'bold' },
+              ],
+              margin: 'sm',
+            },
+            {
+              type: 'box',
+              layout: 'horizontal',
+              contents: [
+                { type: 'text', text: '⭐ ลูกค้าซื้อ >10k', size: 'xs', flex: 3, color: '#555555' },
+                { type: 'text', text: `${report.highValueCustomers || 0} คน / ฿${(report.highValueAmount || 0).toLocaleString()}`, size: 'xs', flex: 2, align: 'end', color: '#10B981', weight: 'bold' },
+              ],
+              margin: 'sm',
             },
           ],
           margin: 'md',

@@ -1016,7 +1016,7 @@ export default function SalesPerformancePage() {
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">ข้อมูลรายวัน</p>
 
               <div className="flex items-center justify-between gap-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <span className="font-medium text-gray-800 dark:text-white">🚶 Walk-in customers</span>
+                <span className="font-medium text-gray-800 dark:text-white">🚶 รับลูกค้าหน้าร้าน</span>
                 <input
                   type="number"
                   min="0"
