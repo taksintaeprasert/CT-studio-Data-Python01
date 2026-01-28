@@ -64,10 +64,10 @@ export default function SalesPerformancePage() {
   const [chatDate, setChatDate] = useState('')
   const [chatInputs, setChatInputs] = useState<Record<number, number>>({})
   const [savingChat, setSavingChat] = useState(false)
-  // New daily metrics
-  const [walkInCount, setWalkInCount] = useState(0)
-  const [googleReviewCount, setGoogleReviewCount] = useState(0)
-  const [followUpClosed, setFollowUpClosed] = useState(0)
+  // Per-staff daily metrics
+  const [walkInCounts, setWalkInCounts] = useState<Record<number, number>>({})
+  const [googleReviewCounts, setGoogleReviewCounts] = useState<Record<number, number>>({})
+  const [followUpClosedCounts, setFollowUpClosedCounts] = useState<Record<number, number>>({})
 
   // Daily report
   const [sendingReport, setSendingReport] = useState(false)
@@ -500,9 +500,9 @@ export default function SalesPerformancePage() {
     const today = formatLocalDate(new Date())
     setChatDate(today)
     setChatInputs({})
-    setWalkInCount(0)
-    setGoogleReviewCount(0)
-    setFollowUpClosed(0)
+    setWalkInCounts({})
+    setGoogleReviewCounts({})
+    setFollowUpClosedCounts({})
     setShowChatModal(true)
     loadChatCountsForDate(today)
   }
@@ -515,22 +515,21 @@ export default function SalesPerformancePage() {
       .eq('date', date)
 
     const inputs: Record<number, number> = {}
-    data?.forEach(c => {
-      inputs[c.staff_id] = c.chat_count
-    })
-    setChatInputs(inputs)
+    const walkIns: Record<number, number> = {}
+    const googleReviews: Record<number, number> = {}
+    const followUps: Record<number, number> = {}
 
-    // Load daily metrics (from first record with data)
-    const metricsRecord = data?.find(c => c.walk_in_count !== null || c.google_review_count !== null || c.follow_up_closed !== null)
-    if (metricsRecord) {
-      setWalkInCount(metricsRecord.walk_in_count || 0)
-      setGoogleReviewCount(metricsRecord.google_review_count || 0)
-      setFollowUpClosed(metricsRecord.follow_up_closed || 0)
-    } else {
-      setWalkInCount(0)
-      setGoogleReviewCount(0)
-      setFollowUpClosed(0)
-    }
+    data?.forEach(c => {
+      inputs[c.staff_id] = c.chat_count || 0
+      walkIns[c.staff_id] = c.walk_in_count || 0
+      googleReviews[c.staff_id] = c.google_review_count || 0
+      followUps[c.staff_id] = c.follow_up_closed || 0
+    })
+
+    setChatInputs(inputs)
+    setWalkInCounts(walkIns)
+    setGoogleReviewCounts(googleReviews)
+    setFollowUpClosedCounts(followUps)
   }
 
   // Save chat counts
@@ -547,6 +546,9 @@ export default function SalesPerformancePage() {
       // Upsert chat counts for each staff
       for (const staffId of salesStaffIds) {
         const chatCount = chatInputs[staffId] || 0
+        const walkInCount = walkInCounts[staffId] || 0
+        const googleReviewCount = googleReviewCounts[staffId] || 0
+        const followUpClosed = followUpClosedCounts[staffId] || 0
 
         // First try to check if record exists
         const { data: existing } = await supabase
@@ -557,15 +559,14 @@ export default function SalesPerformancePage() {
           .maybeSingle()
 
         let error
-        // Include daily metrics in first staff's record
-        const isFirstStaff = staffId === salesStaffIds[0]
         if (existing) {
           // Update existing record
-          const updateData: any = { chat_count: chatCount, updated_at: new Date().toISOString() }
-          if (isFirstStaff) {
-            updateData.walk_in_count = walkInCount
-            updateData.google_review_count = googleReviewCount
-            updateData.follow_up_closed = followUpClosed
+          const updateData: any = {
+            chat_count: chatCount,
+            walk_in_count: walkInCount,
+            google_review_count: googleReviewCount,
+            follow_up_closed: followUpClosed,
+            updated_at: new Date().toISOString()
           }
           const result = await supabase
             .from('chat_counts')
@@ -578,11 +579,9 @@ export default function SalesPerformancePage() {
             staff_id: staffId,
             date: chatDate,
             chat_count: chatCount,
-          }
-          if (isFirstStaff) {
-            insertData.walk_in_count = walkInCount
-            insertData.google_review_count = googleReviewCount
-            insertData.follow_up_closed = followUpClosed
+            walk_in_count: walkInCount,
+            google_review_count: googleReviewCount,
+            follow_up_closed: followUpClosed,
           }
           const result = await supabase
             .from('chat_counts')
@@ -990,66 +989,78 @@ export default function SalesPerformancePage() {
               />
             </div>
 
-            {/* Staff Chat Counts */}
-            <div className="space-y-3 mb-4">
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">จำนวนแชทต่อ Sales</p>
+            {/* Staff Data Entry */}
+            <div className="space-y-4 mb-4">
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">ข้อมูลแต่ละคน Sales</p>
               {allStaff.map(staff => (
-                <div key={staff.id} className="flex items-center justify-between gap-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <span className="font-medium text-gray-800 dark:text-white">{staff.staff_name}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={chatInputs[staff.id] || ''}
-                    onChange={(e) => setChatInputs({
-                      ...chatInputs,
-                      [staff.id]: parseInt(e.target.value) || 0
-                    })}
-                    placeholder="0"
-                    className="input w-24 text-center"
-                  />
+                <div key={staff.id} className="border dark:border-gray-600 rounded-lg p-4 space-y-3">
+                  <div className="font-bold text-gray-800 dark:text-white mb-3">{staff.staff_name}</div>
+
+                  {/* Chat Count */}
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm text-gray-600 dark:text-gray-300">💬 แชท</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={chatInputs[staff.id] || ''}
+                      onChange={(e) => setChatInputs({
+                        ...chatInputs,
+                        [staff.id]: parseInt(e.target.value) || 0
+                      })}
+                      placeholder="0"
+                      className="input w-20 text-center"
+                    />
+                  </div>
+
+                  {/* Walk-in */}
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm text-gray-600 dark:text-gray-300">🚶 รับลูกค้าหน้าร้าน</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={walkInCounts[staff.id] || ''}
+                      onChange={(e) => setWalkInCounts({
+                        ...walkInCounts,
+                        [staff.id]: parseInt(e.target.value) || 0
+                      })}
+                      placeholder="0"
+                      className="input w-20 text-center"
+                    />
+                  </div>
+
+                  {/* Google Reviews */}
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm text-gray-600 dark:text-gray-300">⭐ Google reviews</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={googleReviewCounts[staff.id] || ''}
+                      onChange={(e) => setGoogleReviewCounts({
+                        ...googleReviewCounts,
+                        [staff.id]: parseInt(e.target.value) || 0
+                      })}
+                      placeholder="0"
+                      className="input w-20 text-center"
+                    />
+                  </div>
+
+                  {/* Follow-up Closed */}
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm text-gray-600 dark:text-gray-300">📞 Closed from follow-up</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={followUpClosedCounts[staff.id] || ''}
+                      onChange={(e) => setFollowUpClosedCounts({
+                        ...followUpClosedCounts,
+                        [staff.id]: parseInt(e.target.value) || 0
+                      })}
+                      placeholder="0"
+                      className="input w-20 text-center"
+                    />
+                  </div>
                 </div>
               ))}
-            </div>
-
-            {/* Daily Metrics */}
-            <div className="border-t dark:border-gray-700 pt-4 mb-6 space-y-3">
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">ข้อมูลรายวัน</p>
-
-              <div className="flex items-center justify-between gap-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <span className="font-medium text-gray-800 dark:text-white">🚶 รับลูกค้าหน้าร้าน</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={walkInCount || ''}
-                  onChange={(e) => setWalkInCount(parseInt(e.target.value) || 0)}
-                  placeholder="0"
-                  className="input w-24 text-center"
-                />
-              </div>
-
-              <div className="flex items-center justify-between gap-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                <span className="font-medium text-gray-800 dark:text-white">⭐️ Google reviews</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={googleReviewCount || ''}
-                  onChange={(e) => setGoogleReviewCount(parseInt(e.target.value) || 0)}
-                  placeholder="0"
-                  className="input w-24 text-center"
-                />
-              </div>
-
-              <div className="flex items-center justify-between gap-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <span className="font-medium text-gray-800 dark:text-white">📞 Closed from follow-up</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={followUpClosed || ''}
-                  onChange={(e) => setFollowUpClosed(parseInt(e.target.value) || 0)}
-                  placeholder="0"
-                  className="input w-24 text-center"
-                />
-              </div>
             </div>
 
             <div className="flex gap-3">
