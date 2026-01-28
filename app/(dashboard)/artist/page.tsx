@@ -405,26 +405,38 @@ export default function ArtistHomePage() {
       <div className="grid grid-cols-2 gap-3">
         <button
           onClick={() => router.push('/calendar')}
-          className="card p-4 hover:shadow-lg transition-shadow text-center bg-gradient-to-br from-pink-500 to-pink-600 text-white"
+          className="card p-5 hover:shadow-lg active:scale-95 transition-all text-center bg-gradient-to-br from-pink-500 to-pink-600 text-white"
         >
-          <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-white/20 flex items-center justify-center">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-14 h-14 mx-auto mb-2 rounded-full bg-white/20 flex items-center justify-center">
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </div>
-          <p className="font-medium text-sm">ปฏิทินนัดหมาย</p>
+          <p className="font-semibold text-sm">ปฏิทินนัดหมาย</p>
         </button>
 
         <button
           onClick={() => router.push('/service')}
-          className="card p-4 hover:shadow-lg transition-shadow text-center bg-gradient-to-br from-blue-500 to-blue-600 text-white"
+          className="card p-5 hover:shadow-lg active:scale-95 transition-all text-center bg-gradient-to-br from-blue-500 to-blue-600 text-white"
         >
-          <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-white/20 flex items-center justify-center">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-14 h-14 mx-auto mb-2 rounded-full bg-white/20 flex items-center justify-center">
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
           </div>
-          <p className="font-medium text-sm">รายการบริการ</p>
+          <p className="font-semibold text-sm">รายการบริการ</p>
+        </button>
+
+        <button
+          onClick={() => router.push('/artist-performance')}
+          className="card p-5 hover:shadow-lg active:scale-95 transition-all text-center bg-gradient-to-br from-purple-500 to-purple-600 text-white col-span-2"
+        >
+          <div className="w-14 h-14 mx-auto mb-2 rounded-full bg-white/20 flex items-center justify-center">
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <p className="font-semibold text-sm">📊 ดูสถิติเชิงลึก (Performance)</p>
         </button>
       </div>
     </div>

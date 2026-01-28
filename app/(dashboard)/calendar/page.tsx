@@ -280,30 +280,30 @@ export default function CalendarPage() {
   const totalCount = artists.length + 1
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 pb-6 px-4 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div className="pt-4 flex flex-col gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 dark:text-white">{t('calendar.title')}</h1>
-          <p className="text-gray-500 dark:text-gray-400">{t('calendar.subtitle')}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('calendar.subtitle')}</p>
         </div>
 
-        {/* Artist Filter - Checkbox Style */}
-        <div className="relative">
+        {/* Artist Filter - Checkbox Style - Mobile Optimized */}
+        <div className="relative w-full">
           <button
             onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            className="w-full flex items-center gap-2 px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-98 transition-all shadow-sm"
           >
-            <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
             </svg>
-            <span className="font-medium text-gray-700 dark:text-gray-200">
+            <span className="font-semibold text-gray-700 dark:text-gray-200 flex-1 text-left">
               {language === 'th' ? 'กรอง Artist' : 'Filter Artists'}
             </span>
-            <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-pink-100 dark:bg-pink-900 text-pink-600 dark:text-pink-300">
+            <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-pink-100 dark:bg-pink-900 text-pink-600 dark:text-pink-300">
               {selectedCount}/{totalCount}
             </span>
-            <svg className={`w-4 h-4 text-gray-500 transition-transform ${showFilterDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className={`w-5 h-5 text-gray-500 transition-transform flex-shrink-0 ${showFilterDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
@@ -366,27 +366,27 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="space-y-4">
         {/* Calendar Grid */}
-        <div className="lg:col-span-2 card">
-          {/* Month Navigation */}
-          <div className="flex items-center justify-between mb-6">
+        <div className="card p-4">
+          {/* Month Navigation - Mobile Optimized */}
+          <div className="flex items-center justify-between mb-4">
             <button
               onClick={prevMonth}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              className="p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all"
             >
-              <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
 
-            <div className="flex items-center gap-4">
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white">
+            <div className="flex flex-col items-center gap-1">
+              <h2 className="text-lg font-bold text-gray-800 dark:text-white">
                 {monthNames[currentDate.getMonth()]} {currentDate.getFullYear() + (language === 'th' ? 543 : 0)}
               </h2>
               <button
                 onClick={goToToday}
-                className="px-3 py-1 text-sm bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition-colors"
+                className="px-3 py-1 text-xs bg-pink-500 text-white rounded-lg hover:bg-pink-600 active:scale-95 transition-all"
               >
                 {t('calendar.today')}
               </button>
@@ -394,20 +394,20 @@ export default function CalendarPage() {
 
             <button
               onClick={nextMonth}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              className="p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all"
             >
-              <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
           </div>
 
           {/* Days Header */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
+          <div className="grid grid-cols-7 gap-0.5 mb-2">
             {daysOfWeek.map((day, i) => (
               <div
                 key={day}
-                className={`text-center text-sm font-medium py-2 ${
+                className={`text-center text-xs font-semibold py-2 ${
                   i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-500 dark:text-gray-400'
                 }`}
               >
@@ -418,14 +418,15 @@ export default function CalendarPage() {
 
           {/* Calendar Grid */}
           {loading ? (
-            <div className="flex items-center justify-center py-20">
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-pink-500 border-t-transparent mb-3"></div>
               <p className="text-gray-500 dark:text-gray-400">{t('common.loading')}</p>
             </div>
           ) : (
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-0.5">
               {days.map((day, index) => {
                 if (day.date === null) {
-                  return <div key={`empty-${index}`} className="h-24 lg:h-28" />
+                  return <div key={`empty-${index}`} className="h-20 sm:h-24" />
                 }
 
                 const filteredDayAppts = getAppointmentsForDay(day.dateStr)
@@ -437,7 +438,7 @@ export default function CalendarPage() {
                   <button
                     key={day.dateStr}
                     onClick={() => handleDayClick(day.dateStr)}
-                    className={`h-24 lg:h-28 p-1 border rounded-lg transition-all text-left overflow-hidden
+                    className={`h-20 sm:h-24 p-1 border rounded-lg transition-all text-left overflow-hidden active:scale-95
                       ${isToday(day.dateStr)
                         ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/20'
                         : 'border-gray-200 dark:border-gray-700 hover:border-pink-300 dark:hover:border-pink-700'
@@ -445,7 +446,7 @@ export default function CalendarPage() {
                       ${selectedDay === day.dateStr ? 'ring-2 ring-pink-500' : ''}
                     `}
                   >
-                    <div className={`text-sm font-medium mb-1 ${
+                    <div className={`text-xs font-bold mb-0.5 ${
                       isToday(day.dateStr)
                         ? 'text-pink-600 dark:text-pink-400'
                         : isSunday
@@ -459,17 +460,17 @@ export default function CalendarPage() {
 
                     {/* Appointments preview */}
                     <div className="space-y-0.5 overflow-hidden">
-                      {filteredDayAppts.slice(0, 3).map(apt => (
+                      {filteredDayAppts.slice(0, 2).map(apt => (
                         <div
                           key={apt.id}
-                          className={`text-xs px-1 py-0.5 rounded truncate text-white ${getArtistColor(apt.artist_id)}`}
+                          className={`text-[10px] px-0.5 py-0.5 rounded truncate text-white ${getArtistColor(apt.artist_id)}`}
                         >
                           {apt.product_name}
                         </div>
                       ))}
-                      {filteredDayAppts.length > 3 && (
-                        <div className="text-xs text-gray-500 dark:text-gray-400 px-1">
-                          +{filteredDayAppts.length - 3} more
+                      {filteredDayAppts.length > 2 && (
+                        <div className="text-[9px] text-gray-500 dark:text-gray-400 px-0.5 font-medium">
+                          +{filteredDayAppts.length - 2}
                         </div>
                       )}
                     </div>
@@ -480,15 +481,14 @@ export default function CalendarPage() {
           )}
         </div>
 
-        {/* Day Detail Panel */}
-        <div className="card">
-          <h3 className="font-bold text-gray-800 dark:text-white mb-4 pb-3 border-b dark:border-gray-700">
+        {/* Day Detail Panel - Mobile Optimized */}
+        <div className="card p-4">
+          <h3 className="font-bold text-gray-800 dark:text-white mb-3 pb-3 border-b dark:border-gray-700 text-base">
             {selectedDay ? (
               <>
                 {t('calendar.appointments')} - {new Date(selectedDay).toLocaleDateString(language === 'th' ? 'th-TH' : 'en-US', {
                   day: 'numeric',
-                  month: 'long',
-                  year: 'numeric'
+                  month: 'short'
                 })}
               </>
             ) : (
@@ -498,61 +498,66 @@ export default function CalendarPage() {
 
           {!selectedDay ? (
             <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-              {language === 'th' ? 'เลือกวันเพื่อดูรายละเอียด' : 'Select a day to view details'}
+              <svg className="w-16 h-16 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="text-sm">{language === 'th' ? 'เลือกวันเพื่อดูรายละเอียด' : 'Select a day to view details'}</p>
             </div>
           ) : dayAppointments.length === 0 ? (
             <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-              {t('calendar.noAppointments')}
+              <svg className="w-16 h-16 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <p className="text-sm">{t('calendar.noAppointments')}</p>
             </div>
           ) : (
-            <div className="space-y-4 max-h-[calc(100vh-350px)] overflow-y-auto">
+            <div className="space-y-3 max-h-[500px] overflow-y-auto">
               {dayAppointments.map(apt => (
                 <div
                   key={apt.id}
-                  className={`rounded-xl overflow-hidden border-2 ${getArtistBorderColor(apt.artist_id)} bg-white dark:bg-gray-800 shadow-lg`}
+                  className={`rounded-xl overflow-hidden border-2 ${getArtistBorderColor(apt.artist_id)} bg-white dark:bg-gray-800 shadow-md`}
                 >
-                  {/* Header - Product + Time + Artist in one line */}
-                  <div className={`px-4 py-4 ${getArtistColor(apt.artist_id)} text-white`}>
-                    <div className="flex items-center gap-3 flex-wrap">
+                  {/* Header - Product + Time + Artist - Mobile Optimized */}
+                  <div className={`px-3 py-3 ${getArtistColor(apt.artist_id)} text-white`}>
+                    <div className="space-y-2">
                       {/* Product Name */}
-                      <h4 className="font-bold text-xl">{apt.product_name}</h4>
+                      <h4 className="font-bold text-base">{apt.product_name}</h4>
 
-                      {/* Time Badge with Gradient */}
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 shadow-lg">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        {formatTime(apt.appointment_time)}
-                      </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Time Badge */}
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {formatTime(apt.appointment_time)}
+                        </span>
 
-                      {/* Artist Badge */}
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold bg-white/25 backdrop-blur-sm">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        {apt.artist_name || 'No Artist'}
-                      </span>
+                        {/* Artist Badge */}
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-white/25">
+                          {apt.artist_name || 'No Artist'}
+                        </span>
 
-                      {/* Status Badge */}
-                      <span className={`ml-auto px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
-                        apt.item_status === 'completed' ? 'bg-green-400/30 text-green-100' : 'bg-black/20'
-                      }`}>
-                        {apt.item_status}
-                      </span>
+                        {/* Status Badge */}
+                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
+                          apt.item_status === 'completed' ? 'bg-green-400/30' : 'bg-black/20'
+                        }`}>
+                          {apt.item_status}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Body - Customer & Order Details */}
-                  <div className="px-4 py-3 space-y-2">
-                    <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {/* Body - Customer & Order Details - Mobile Optimized */}
+                  <div className="px-3 py-2.5 space-y-2">
+                    <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm">
+                      <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                       </svg>
-                      <span className="font-medium">{apt.customer_name}</span>
+                      <span className="font-medium truncate">{apt.customer_name}</span>
                     </div>
 
-                    <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs">
+                      <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                       </svg>
                       <span>Order #{apt.order_id}</span>
@@ -560,25 +565,25 @@ export default function CalendarPage() {
 
                     {apt.note && (
                       <div className="pt-2 mt-2 border-t dark:border-gray-700">
-                        <div className="flex items-start gap-2 text-gray-500 dark:text-gray-400 text-sm">
-                          <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="flex items-start gap-2 text-gray-500 dark:text-gray-400 text-xs">
+                          <svg className="w-3 h-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                           </svg>
-                          <span>{apt.note}</span>
+                          <span className="break-words">{apt.note}</span>
                         </div>
                       </div>
                     )}
 
-                    {/* Chat Button */}
-                    <div className="pt-3 mt-3 border-t dark:border-gray-700">
+                    {/* Chat Button - Mobile Optimized */}
+                    <div className="pt-2 mt-2 border-t dark:border-gray-700">
                       <button
                         onClick={() => handleOpenChat(apt)}
-                        className="w-full px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                        className="w-full px-3 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 active:scale-95 text-white rounded-lg font-medium transition-all shadow-md text-sm flex items-center justify-center gap-2"
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
-                        💬 เปิดแชท Booking
+                        💬 เปิดแชท
                       </button>
                     </div>
                   </div>
@@ -589,19 +594,19 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="card">
-        <h4 className="font-medium text-gray-800 dark:text-white mb-3">Artist Legend</h4>
-        <div className="flex flex-wrap gap-3">
+      {/* Legend - Mobile Optimized */}
+      <div className="card p-4">
+        <h4 className="font-semibold text-gray-800 dark:text-white mb-3 text-sm">Artist Legend</h4>
+        <div className="flex flex-wrap gap-2">
           {artists.map(artist => (
-            <div key={artist.id} className="flex items-center gap-2">
-              <div className={`w-4 h-4 rounded ${getArtistColor(artist.id)}`} />
-              <span className="text-sm text-gray-600 dark:text-gray-300">{artist.staff_name}</span>
+            <div key={artist.id} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className={`w-3 h-3 rounded ${getArtistColor(artist.id)}`} />
+              <span className="text-xs text-gray-700 dark:text-gray-300 font-medium">{artist.staff_name}</span>
             </div>
           ))}
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gray-400" />
-            <span className="text-sm text-gray-600 dark:text-gray-300">No Artist</span>
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div className="w-3 h-3 rounded bg-gray-400" />
+            <span className="text-xs text-gray-700 dark:text-gray-300 font-medium">No Artist</span>
           </div>
         </div>
       </div>

@@ -45,6 +45,7 @@ export default function ArtistPerformancePage() {
   const [selectedArtistId, setSelectedArtistId] = useState<number | null>(null)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [selectedRange, setSelectedRange] = useState<'7' | '14' | '28' | 'custom'>('28')
   const [loading, setLoading] = useState(false)
   const [performanceData, setPerformanceData] = useState<PerformanceData>({
     totalCustomers: 0,
@@ -57,10 +58,11 @@ export default function ArtistPerformancePage() {
   const supabase = createClient()
 
   useEffect(() => {
-    // Set default date range (current month)
+    // Set default date range (28 days)
     const today = new Date()
-    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
-    setStartDate(firstDay.toISOString().split('T')[0])
+    const pastDate = new Date()
+    pastDate.setDate(today.getDate() - 28)
+    setStartDate(pastDate.toISOString().split('T')[0])
     setEndDate(today.toISOString().split('T')[0])
 
     if (user) {
@@ -90,6 +92,25 @@ export default function ArtistPerformancePage() {
       setArtists(data)
       setSelectedArtistId(data[0].id)
     }
+  }
+
+  const handleRangeSelect = (days: '7' | '14' | '28' | 'custom') => {
+    setSelectedRange(days)
+
+    if (days !== 'custom') {
+      const today = new Date()
+      const pastDate = new Date()
+      pastDate.setDate(today.getDate() - parseInt(days))
+
+      setStartDate(pastDate.toISOString().split('T')[0])
+      setEndDate(today.toISOString().split('T')[0])
+    }
+  }
+
+  const handleDateChange = (start: string, end: string) => {
+    setStartDate(start)
+    setEndDate(end)
+    setSelectedRange('custom')
   }
 
   const fetchPerformanceData = async () => {
@@ -297,81 +318,146 @@ export default function ArtistPerformancePage() {
   }
 
   return (
-    <div className="p-4 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div>
+    <div className="space-y-4 pb-6 max-w-2xl mx-auto px-4">
+      {/* Header - Mobile Optimized */}
+      <div className="pt-4">
         <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Artist Performance</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           สถิติและผลงานเชิงลึก
         </p>
       </div>
 
-      {/* Filters */}
-      <div className="card p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Artist Selector (Super Admin only) */}
-          {user.role === 'super_admin' && (
-            <div>
-              <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                เลือกช่าง
-              </label>
-              <select
-                value={selectedArtistId || ''}
-                onChange={(e) => setSelectedArtistId(Number(e.target.value))}
-                className="input w-full"
-              >
-                {artists.map(artist => (
-                  <option key={artist.id} value={artist.id}>
-                    {artist.staff_name}
-                  </option>
-                ))}
-              </select>
+      {/* Artist Selector (Super Admin only) - Mobile First */}
+      {user.role === 'super_admin' && (
+        <div className="card p-4">
+          <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+            เลือกช่าง
+          </label>
+          <select
+            value={selectedArtistId || ''}
+            onChange={(e) => setSelectedArtistId(Number(e.target.value))}
+            className="input w-full"
+          >
+            {artists.map(artist => (
+              <option key={artist.id} value={artist.id}>
+                {artist.staff_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Date Range Filter - Mobile First */}
+      <div className="card p-4 space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-3 text-gray-700 dark:text-gray-300">
+            ช่วงเวลา
+          </label>
+
+          {/* Quick Select Buttons */}
+          <div className="grid grid-cols-4 gap-2 mb-4">
+            <button
+              onClick={() => handleRangeSelect('7')}
+              className={`px-3 py-2.5 rounded-lg font-medium transition-all text-sm ${
+                selectedRange === '7'
+                  ? 'bg-pink-500 text-white shadow-lg'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              7 วัน
+            </button>
+            <button
+              onClick={() => handleRangeSelect('14')}
+              className={`px-3 py-2.5 rounded-lg font-medium transition-all text-sm ${
+                selectedRange === '14'
+                  ? 'bg-pink-500 text-white shadow-lg'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              14 วัน
+            </button>
+            <button
+              onClick={() => handleRangeSelect('28')}
+              className={`px-3 py-2.5 rounded-lg font-medium transition-all text-sm ${
+                selectedRange === '28'
+                  ? 'bg-pink-500 text-white shadow-lg'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              28 วัน
+            </button>
+            <button
+              onClick={() => handleRangeSelect('custom')}
+              className={`px-3 py-2.5 rounded-lg font-medium transition-all text-sm ${
+                selectedRange === 'custom'
+                  ? 'bg-pink-500 text-white shadow-lg'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              Custom
+            </button>
+          </div>
+
+          {/* Custom Date Inputs - Show when custom is selected */}
+          {selectedRange === 'custom' && (
+            <div className="space-y-3 pt-3 border-t dark:border-gray-700">
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-gray-600 dark:text-gray-400">
+                  วันที่เริ่มต้น
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => handleDateChange(e.target.value, endDate)}
+                  className="input w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-gray-600 dark:text-gray-400">
+                  วันที่สิ้นสุด
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => handleDateChange(startDate, e.target.value)}
+                  className="input w-full"
+                />
+              </div>
             </div>
           )}
 
-          {/* Start Date */}
-          <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-              วันที่เริ่มต้น
-            </label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="input w-full"
-            />
-          </div>
-
-          {/* End Date */}
-          <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-              วันที่สิ้นสุด
-            </label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="input w-full"
-            />
+          {/* Date Range Display */}
+          <div className="mt-3 pt-3 border-t dark:border-gray-700">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              แสดงข้อมูลตั้งแต่: <span className="font-medium text-gray-700 dark:text-gray-300">{new Date(startDate).toLocaleDateString('th-TH')}</span>
+              {' ถึง '}
+              <span className="font-medium text-gray-700 dark:text-gray-300">{new Date(endDate).toLocaleDateString('th-TH')}</span>
+            </p>
           </div>
         </div>
       </div>
 
       {loading ? (
-        <div className="text-center py-10">กำลังโหลดข้อมูล...</div>
+        <div className="card p-8 text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-pink-500 border-t-transparent"></div>
+          <p className="mt-3 text-gray-600 dark:text-gray-400">กำลังโหลดข้อมูล...</p>
+        </div>
       ) : (
         <>
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Summary Cards - Mobile Optimized */}
+          <div className="grid grid-cols-1 gap-4">
             {/* Total Customers Card */}
-            <div className="card p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-2 border-blue-200 dark:border-blue-700">
+            <div className="card p-5 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-2 border-blue-200 dark:border-blue-700">
               <div className="flex items-center justify-between">
-                <div>
+                <div className="flex-1">
                   <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">
                     จำนวนลูกค้าทั้งหมด
                   </p>
-                  <p className="text-5xl font-bold text-blue-700 dark:text-blue-300">
+                  <p className="text-4xl font-bold text-blue-700 dark:text-blue-300">
                     {performanceData.totalCustomers}
+                  </p>
+                  <p className="text-xs text-blue-500 dark:text-blue-400 mt-1">
+                    orders ในช่วงเวลาที่เลือก
                   </p>
                 </div>
                 <div className="w-16 h-16 rounded-full bg-blue-200 dark:bg-blue-700 flex items-center justify-center">
@@ -383,14 +469,17 @@ export default function ArtistPerformancePage() {
             </div>
 
             {/* Completed Services Card */}
-            <div className="card p-6 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-2 border-green-200 dark:border-green-700">
+            <div className="card p-5 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-2 border-green-200 dark:border-green-700">
               <div className="flex items-center justify-between">
-                <div>
+                <div className="flex-1">
                   <p className="text-sm font-medium text-green-600 dark:text-green-400 mb-1">
                     บริการที่ทำเสร็จแล้ว
                   </p>
-                  <p className="text-5xl font-bold text-green-700 dark:text-green-300">
+                  <p className="text-4xl font-bold text-green-700 dark:text-green-300">
                     {performanceData.completedServices}
+                  </p>
+                  <p className="text-xs text-green-500 dark:text-green-400 mt-1">
+                    บริการที่ยืนยันแล้วทั้ง 2 ฝ่าย
                   </p>
                 </div>
                 <div className="w-16 h-16 rounded-full bg-green-200 dark:bg-green-700 flex items-center justify-center">
@@ -402,35 +491,35 @@ export default function ArtistPerformancePage() {
             </div>
           </div>
 
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Charts - Mobile Optimized */}
+          <div className="space-y-4">
             {/* Booking Line Chart */}
-            <div className="card p-6">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">
-                มูลค่า Booking ตามวันที่
+            <div className="card p-4">
+              <h3 className="text-base font-bold text-gray-800 dark:text-white mb-3">
+                📊 มูลค่า Booking ตามวันที่
               </h3>
-              <div className="h-64">
+              <div className="h-56">
                 <Line data={bookingLineData} options={lineChartOptions} />
               </div>
             </div>
 
             {/* Commission Line Chart */}
-            <div className="card p-6">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">
-                ค่าคอมมิชชั่นตามวันที่
+            <div className="card p-4">
+              <h3 className="text-base font-bold text-gray-800 dark:text-white mb-3">
+                💰 ค่าคอมมิชชั่นตามวันที่
               </h3>
-              <div className="h-64">
+              <div className="h-56">
                 <Line data={commissionLineData} options={lineChartOptions} />
               </div>
             </div>
 
             {/* Customers Pie Chart */}
-            <div className="card p-6 lg:col-span-2">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">
-                จำนวนลูกค้าแยกตามประเภทบริการ
+            <div className="card p-4">
+              <h3 className="text-base font-bold text-gray-800 dark:text-white mb-3">
+                🎯 จำนวนลูกค้าแยกตามประเภทบริการ
               </h3>
-              <div className="h-80 flex items-center justify-center">
-                <div className="w-full max-w-md">
+              <div className="h-64 flex items-center justify-center">
+                <div className="w-full max-w-xs">
                   <Pie data={pieData} />
                 </div>
               </div>
