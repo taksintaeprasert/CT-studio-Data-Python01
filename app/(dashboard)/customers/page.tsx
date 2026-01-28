@@ -6,8 +6,35 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import CustomerHistoryModal from '@/components/customer-history-modal'
-import { User, Phone, MapPin, TrendingUp, Eye, Edit2, Trash2, Plus, Search } from 'lucide-react'
+import DateRangeFilter from '@/components/date-range-filter'
+import { User, Phone, MapPin, TrendingUp, Eye, Edit2, Trash2, Plus, Search, Package } from 'lucide-react'
 import Image from 'next/image'
+
+interface Product {
+  id: number
+  product_code: string
+  product_name: string
+  is_free: boolean
+  validity_months: number
+  list_price: number
+}
+
+interface OrderItem {
+  id: number
+  item_status: string
+  appointment_date: string | null
+  created_at: string
+  products: Product
+}
+
+interface Order {
+  id: number
+  order_date: string
+  total_income: number
+  order_status: string
+  created_at: string
+  order_items: OrderItem[]
+}
 
 interface Customer {
   id: number
@@ -20,12 +47,16 @@ interface Customer {
   source_channel: string | null
   face_photo_url: string | null
   created_at: string
+  orders?: Order[]
 }
 
 interface CustomerWithStats extends Customer {
   totalOrders: number
   totalSpent: number
   lastVisit: string | null
+  remainingServices: number
+  freeServicesRemaining: number
+  halfPriceServicesRemaining: number
 }
 
 export default function CustomersPage() {
@@ -33,8 +64,10 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<CustomerWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [filterMonth, setFilterMonth] = useState<string>('')
-  const [filterYear, setFilterYear] = useState<string>('')
+  const [startDate, setStartDate] = useState<string>('')
+  const [endDate, setEndDate] = useState<string>('')
+  const [showAllDates, setShowAllDates] = useState(true)
+  const [filterRemainingServices, setFilterRemainingServices] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null)
@@ -87,10 +120,33 @@ export default function CustomersPage() {
 
   const fetchCustomers = async () => {
     try {
-      // Fetch customers
+      // Fetch customers with nested orders, order_items, and products
       const { data: customersData } = await supabase
         .from('customers')
-        .select('*')
+        .select(`
+          *,
+          orders (
+            id,
+            order_date,
+            total_income,
+            order_status,
+            created_at,
+            order_items (
+              id,
+              item_status,
+              appointment_date,
+              created_at,
+              products (
+                id,
+                product_code,
+                product_name,
+                is_free,
+                validity_months,
+                list_price
+              )
+            )
+          )
+        `)
         .eq('is_active', true)
         .order('created_at', { ascending: false })
 
@@ -100,14 +156,9 @@ export default function CustomersPage() {
         return
       }
 
-      // Fetch orders for all customers to calculate stats
-      const { data: ordersData } = await supabase
-        .from('orders')
-        .select('customer_id, order_date, total_income, order_status')
-
       // Calculate stats for each customer
       const customersWithStats = customersData.map(customer => {
-        const customerOrders = ordersData?.filter(o => o.customer_id === customer.id) || []
+        const customerOrders = customer.orders || []
         const totalOrders = customerOrders.length
         const totalSpent = customerOrders.reduce((sum, order) => sum + Number(order.total_income || 0), 0)
         const sortedOrders = [...customerOrders].sort((a, b) =>
@@ -115,11 +166,44 @@ export default function CustomersPage() {
         )
         const lastVisit = sortedOrders[0]?.order_date || null
 
+        // Calculate remaining services
+        let remainingServices = 0
+        let freeServicesRemaining = 0
+        let halfPriceServicesRemaining = 0
+
+        customerOrders.forEach(order => {
+          order.order_items?.forEach(item => {
+            if (item.item_status !== 'completed' && item.item_status !== 'cancelled') {
+              // Check if service is not expired
+              if (item.products?.validity_months && item.products.validity_months > 0) {
+                const createdDate = new Date(item.created_at)
+                const expiryDate = new Date(createdDate)
+                expiryDate.setMonth(expiryDate.getMonth() + item.products.validity_months)
+
+                if (expiryDate > new Date()) {
+                  remainingServices++
+                  if (item.products.is_free || item.products.validity_months === 3) {
+                    freeServicesRemaining++
+                  } else if (item.products.validity_months === 12) {
+                    halfPriceServicesRemaining++
+                  }
+                }
+              } else {
+                // No expiry (validity_months = 0 or null)
+                remainingServices++
+              }
+            }
+          })
+        })
+
         return {
           ...customer,
           totalOrders,
           totalSpent,
-          lastVisit
+          lastVisit,
+          remainingServices,
+          freeServicesRemaining,
+          halfPriceServicesRemaining
         }
       })
 
@@ -203,19 +287,17 @@ export default function CustomersPage() {
     const matchesSearch = c.full_name.toLowerCase().includes(search.toLowerCase()) ||
       c.phone?.includes(search)
 
-    // Month/Year filter
-    if (filterMonth || filterYear) {
-      const createdDate = new Date(c.created_at)
-      const createdMonth = createdDate.getMonth() + 1 // 1-12
-      const createdYear = createdDate.getFullYear()
-
-      const matchesMonth = filterMonth ? createdMonth === parseInt(filterMonth) : true
-      const matchesYear = filterYear ? createdYear === parseInt(filterYear) : true
-
-      return matchesSearch && matchesMonth && matchesYear
+    // Date range filter (filter by customer registration date)
+    let matchesDateRange = true
+    if (!showAllDates && startDate && endDate) {
+      const createdDate = new Date(c.created_at).toISOString().split('T')[0]
+      matchesDateRange = createdDate >= startDate && createdDate <= endDate
     }
 
-    return matchesSearch
+    // Remaining services filter
+    const matchesRemainingServices = !filterRemainingServices || c.remainingServices > 0
+
+    return matchesSearch && matchesDateRange && matchesRemainingServices
   })
 
   if (loading) {
@@ -305,56 +387,46 @@ export default function CustomersPage() {
           />
         </div>
 
-        {/* Month/Year Filter */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-400 mb-2">กรองตามเดือน</label>
-            <select
-              value={filterMonth}
-              onChange={(e) => setFilterMonth(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl text-white focus:outline-none focus:border-purple-500/50 transition-colors"
-            >
-              <option value="">ทุกเดือน</option>
-              <option value="1">มกราคม</option>
-              <option value="2">กุมภาพันธ์</option>
-              <option value="3">มีนาคม</option>
-              <option value="4">เมษายน</option>
-              <option value="5">พฤษภาคม</option>
-              <option value="6">มิถุนายน</option>
-              <option value="7">กรกฎาคม</option>
-              <option value="8">สิงหาคม</option>
-              <option value="9">กันยายน</option>
-              <option value="10">ตุลาคม</option>
-              <option value="11">พฤศจิกายน</option>
-              <option value="12">ธันวาคม</option>
-            </select>
+        {/* Filters */}
+        <div className="space-y-4">
+          {/* Date Range Filter */}
+          <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-4">
+            <label className="block text-sm font-medium text-gray-400 mb-3">กรองตามวันที่ลงทะเบียน</label>
+            <DateRangeFilter
+              onDateChange={(start, end) => {
+                setStartDate(start)
+                setEndDate(end)
+                setShowAllDates(false)
+              }}
+              onShowAll={() => {
+                setShowAllDates(true)
+                setStartDate('')
+                setEndDate('')
+              }}
+              className="flex-wrap"
+            />
           </div>
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-400 mb-2">กรองตามปี</label>
-            <select
-              value={filterYear}
-              onChange={(e) => setFilterYear(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl text-white focus:outline-none focus:border-purple-500/50 transition-colors"
-            >
-              <option value="">ทุกปี</option>
-              {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
-                <option key={year} value={year}>{year + 543}</option>
-              ))}
-            </select>
-          </div>
-          {(filterMonth || filterYear) && (
-            <div className="flex items-end">
-              <button
-                onClick={() => {
-                  setFilterMonth('')
-                  setFilterYear('')
-                }}
-                className="px-6 py-3 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 rounded-xl text-white transition-colors"
-              >
-                ล้างตัวกรอง
-              </button>
+
+          {/* Service Filter */}
+          <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-4">
+            <label className="block text-sm font-medium text-gray-400 mb-3">กรองตามบริการ</label>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filterRemainingServices}
+                  onChange={(e) => setFilterRemainingServices(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-purple-500 focus:ring-purple-500 focus:ring-offset-slate-900"
+                />
+                <span className="text-sm text-gray-300">แสดงเฉพาะลูกค้าที่มีบริการค้างใช้</span>
+              </label>
+              {filterRemainingServices && (
+                <span className="px-2 py-1 text-xs rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  {filteredCustomers.filter(c => c.remainingServices > 0).length} คน
+                </span>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         {/* Customers Grid */}
@@ -416,6 +488,34 @@ export default function CustomersPage() {
                   </p>
                 </div>
               </div>
+
+              {/* Service Details */}
+              {customer.remainingServices > 0 && (
+                <div className="mb-4 p-3 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Package className="w-4 h-4 text-purple-400" />
+                    <span className="text-sm font-medium text-purple-300">บริการค้างใช้</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <p className="text-xs text-gray-400">ทั้งหมด</p>
+                      <p className="text-lg font-bold text-white">{customer.remainingServices}</p>
+                    </div>
+                    {customer.freeServicesRemaining > 0 && (
+                      <div>
+                        <p className="text-xs text-gray-400">ฟรี</p>
+                        <p className="text-lg font-bold text-green-400">{customer.freeServicesRemaining}</p>
+                      </div>
+                    )}
+                    {customer.halfPriceServicesRemaining > 0 && (
+                      <div>
+                        <p className="text-xs text-gray-400">50%</p>
+                        <p className="text-lg font-bold text-blue-400">{customer.halfPriceServicesRemaining}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Tags */}
               <div className="flex flex-wrap gap-2 mb-4">
