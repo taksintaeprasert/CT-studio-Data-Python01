@@ -12,6 +12,7 @@
     "@supabase/ssr": "^0.1.0",
     "@supabase/supabase-js": "^2.39.0",
     "chart.js": "^4.5.1",
+    "lucide-react": "^0.563.0",
     "next": "14.0.4",
     "react": "^18",
     "react-chartjs-2": "^5.3.1",
