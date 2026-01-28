@@ -12,6 +12,7 @@ interface PerformanceMetrics {
   totalCustomers: number
   completedServices: number
   totalBookingAmount: number
+  totalCommission: number
   periodMonth: string
 }
 
@@ -28,6 +29,7 @@ export default function ArtistHomePage() {
     totalCustomers: 0,
     completedServices: 0,
     totalBookingAmount: 0,
+    totalCommission: 0,
     periodMonth: ''
   })
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -41,28 +43,26 @@ export default function ArtistHomePage() {
     }
   }, [user?.id])
 
-  // Calculate period dates (26th of last month to today)
+  // Calculate current month dates (1st to last day of current month)
   const getPeriodDates = () => {
     const today = new Date()
-    const currentDay = today.getDate()
+    const year = today.getFullYear()
+    const month = today.getMonth()
 
-    // If today is before 26th, period started on 26th of previous month
-    // If today is 26th or after, period started on 26th of current month
-    let periodStartMonth = currentDay < 26
-      ? new Date(today.getFullYear(), today.getMonth() - 1, 26)
-      : new Date(today.getFullYear(), today.getMonth(), 26)
+    // First day of current month
+    const firstDay = new Date(year, month, 1)
 
-    // Display month is always the next month from period start
-    const displayMonth = new Date(periodStartMonth.getFullYear(), periodStartMonth.getMonth() + 1, 1)
+    // Last day of current month
+    const lastDay = new Date(year, month + 1, 0)
 
     const formatDate = (d: Date) => {
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     }
 
     return {
-      startDate: formatDate(periodStartMonth),
-      endDate: formatDate(today),
-      displayMonth: displayMonth.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })
+      startDate: formatDate(firstDay),
+      endDate: formatDate(lastDay),
+      displayMonth: today.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })
     }
   }
 
@@ -73,7 +73,17 @@ export default function ArtistHomePage() {
     const { startDate, endDate, displayMonth } = getPeriodDates()
 
     try {
-      // Get all order_items for this artist in the period
+      // Get commission settings for this artist
+      const { data: commissionData } = await supabase
+        .from('commission_settings')
+        .select('commission_normal_percent, commission_50_percent')
+        .eq('artist_id', user.id)
+        .single()
+
+      const commissionNormal = commissionData?.commission_normal_percent || 0
+      const commission50 = commissionData?.commission_50_percent || 0
+
+      // Get all order_items for this artist where order_date is in current month
       const { data: orderItems } = await supabase
         .from('order_items')
         .select(`
@@ -82,11 +92,12 @@ export default function ArtistHomePage() {
           item_price,
           artist_completed_at,
           sales_completed_at,
-          appointment_date
+          orders!inner(order_date),
+          product:products(validity_months)
         `)
         .eq('artist_id', user.id)
-        .gte('appointment_date', startDate)
-        .lte('appointment_date', endDate)
+        .gte('orders.order_date', startDate)
+        .lte('orders.order_date', endDate)
 
       if (!orderItems) {
         setLoading(false)
@@ -105,10 +116,30 @@ export default function ArtistHomePage() {
       // Calculate total booking amount
       const totalBookingAmount = orderItems.reduce((sum, item) => sum + (item.item_price || 0), 0)
 
+      // Calculate commission from completed services only
+      const completedItems = orderItems.filter(item =>
+        item.artist_completed_at && item.sales_completed_at
+      )
+
+      let totalCommission = 0
+      completedItems.forEach(item => {
+        const itemPrice = item.item_price || 0
+        const validityMonths = item.product?.validity_months || 0
+
+        // Check if it's a 50% service (validity_months = 12)
+        if (validityMonths === 12) {
+          totalCommission += itemPrice * (commission50 / 100)
+        } else {
+          // Normal service (including FREE services)
+          totalCommission += itemPrice * (commissionNormal / 100)
+        }
+      })
+
       setMetrics({
         totalCustomers,
         completedServices,
         totalBookingAmount,
+        totalCommission: Math.round(totalCommission), // Round to nearest baht
         periodMonth: displayMonth
       })
     } catch (error) {
@@ -213,7 +244,7 @@ export default function ArtistHomePage() {
           <p className="text-sm opacity-90">ผลงานของคุณ</p>
           <p className="text-2xl font-bold">{metrics.periodMonth}</p>
           <p className="text-xs opacity-75 mt-1">
-            (นับตั้งแต่วันที่ 26 เดือนที่แล้ว)
+            (คำนวณจาก Booking ในเดือนนี้)
           </p>
         </div>
       </div>
@@ -281,6 +312,28 @@ export default function ArtistHomePage() {
             <div className="w-16 h-16 rounded-full bg-purple-200 dark:bg-purple-700 flex items-center justify-center">
               <svg className="w-8 h-8 text-purple-600 dark:text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Total Commission */}
+        <div className="card p-5 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border-2 border-orange-200 dark:border-orange-700">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-orange-600 dark:text-orange-400 mb-1">
+                ค่าคอมมิชชั่น
+              </p>
+              <p className="text-4xl font-bold text-orange-700 dark:text-orange-300">
+                {loading ? '...' : metrics.totalCommission.toLocaleString()}
+              </p>
+              <p className="text-xs text-orange-500 dark:text-orange-400 mt-1">
+                บาท (จากบริการที่เสร็จแล้ว)
+              </p>
+            </div>
+            <div className="w-16 h-16 rounded-full bg-orange-200 dark:bg-orange-700 flex items-center justify-center">
+              <svg className="w-8 h-8 text-orange-600 dark:text-orange-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
           </div>
