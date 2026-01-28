@@ -491,12 +491,10 @@ export async function GET(request: NextRequest) {
     const todayHalfPriceCustomers = todayHalfPriceOrders.length
     const todayHalfPriceCustomersAmount = todayHalfPriceOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
 
-    // Calculate today's Master customers (orders with any service >= 10k)
+    // Calculate today's Master customers (orders with total_income >= 10,000)
+    // NOTE: Orders with 50% discount are counted in BOTH "50% customers" AND "Master customers" if total >= 10k
     const todayHighValueOrders = todayOrders?.filter((order) => {
-      // Check if order has any service with list_price >= 10000
-      return order.order_items?.some((item: { products: { list_price: number } | null }) => {
-        return item.products && item.products.list_price >= 10000
-      })
+      return (order.total_income || 0) >= 10000
     }) || []
 
     const todayHighValueCustomers = todayHighValueOrders.length

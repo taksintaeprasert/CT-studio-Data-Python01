@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
           product_id,
           products (
             product_name,
+            product_code,
             category,
             list_price
           )
@@ -151,16 +152,30 @@ export async function POST(request: NextRequest) {
     })
 
     // Calculate 50% customers (orders containing "50%" in product name/code)
-    const halfPriceCustomers = orders?.filter((order) => {
-      return order.order_items?.some((item: { products: { product_name: string } | null }) => {
-        const productName = item.products?.product_name || ''
-        return productName.toUpperCase().includes('50%')
+    const halfPriceOrders = orders?.filter((order) => {
+      return order.order_items?.some((item: { products: { product_name: string; product_code: string } | null }) => {
+        const productName = item.products?.product_name?.toUpperCase() || ''
+        const productCode = item.products?.product_code?.toUpperCase() || ''
+        return productName.includes('50%') || productCode.includes('50%')
       })
-    }).length || 0
+    }) || []
+
+    const halfPriceCustomers = halfPriceOrders.length
+    const halfPriceCustomersAmount = halfPriceOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
+
+    // Calculate Master customers (orders with total_income >= 10,000)
+    // NOTE: Orders with 50% discount are counted in BOTH "50% customers" AND "Master customers" if total >= 10k
+    const highValueOrders = orders?.filter((order) => {
+      return (order.total_income || 0) >= 10000
+    }) || []
+
+    const highValueCustomers = highValueOrders.length
+    const highValueAmount = highValueOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
 
     // Build report data
     const reportData: DailyReportData = {
-      date: reportDate,
+      startDate: reportDate,
+      endDate: reportDate,
       salesReports,
       totalChats,
       totalOrders,
@@ -176,6 +191,9 @@ export async function POST(request: NextRequest) {
       followUpClosed,
       masterBookingAmount,
       halfPriceCustomers,
+      halfPriceCustomersAmount,
+      highValueCustomers,
+      highValueAmount,
       servicesSold,
     }
 
