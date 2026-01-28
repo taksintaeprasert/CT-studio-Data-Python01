@@ -303,16 +303,14 @@ export async function GET(request: NextRequest) {
             const productCode = product.product_code?.toUpperCase() || ''
             const productName = product.product_name?.toUpperCase() || ''
 
-            // Filter out free items
-            const isFreeOrDiscount =
+            // Filter out free items and validity months only
+            const isFreeOrValidity =
               product.is_free ||
               productCode.includes('FREE') ||
-              productCode.includes('50%') ||
               productName.includes('FREE') ||
-              productName.includes('50%') ||
               (product.validity_months && product.validity_months > 0)
 
-            if (!isFreeOrDiscount) {
+            if (!isFreeOrValidity) {
               const category = product.category || 'Other'
               const existing = staffServiceMap.get(category) || { count: 0, amount: 0 }
               staffServiceMap.set(category, {
@@ -435,7 +433,7 @@ export async function GET(request: NextRequest) {
     const todayTotalPaidAmount = todaySalesReports.reduce((sum, s) => sum + s.paidAmount, 0)
     const todayTotalDoneAmount = todaySalesReports.reduce((sum, s) => sum + s.doneAmount, 0)
 
-    // Calculate today's services sold (exclude free items)
+    // Calculate today's services sold (exclude free items and validity months)
     const todayServiceMap = new Map<string, { count: number; amount: number }>()
     todayOrders?.forEach((order) => {
       order.order_items?.forEach((item: { products: { category: string | null; product_code: string | null; product_name: string | null; list_price: number; is_free: boolean | null; validity_months: number | null } | null }) => {
@@ -444,16 +442,14 @@ export async function GET(request: NextRequest) {
           const productCode = product.product_code?.toUpperCase() || ''
           const productName = product.product_name?.toUpperCase() || ''
 
-          // Filter out free items
-          const isFreeOrDiscount =
+          // Filter out free items and validity months only
+          const isFreeOrValidity =
             product.is_free ||
             productCode.includes('FREE') ||
-            productCode.includes('50%') ||
             productName.includes('FREE') ||
-            productName.includes('50%') ||
             (product.validity_months && product.validity_months > 0)
 
-          if (!isFreeOrDiscount) {
+          if (!isFreeOrValidity) {
             const category = product.category || 'Other'
             const existing = todayServiceMap.get(category) || { count: 0, amount: 0 }
             todayServiceMap.set(category, {
@@ -483,40 +479,24 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    // Calculate today's 50% customers
+    // Calculate today's 50% customers (check both product_name and product_code)
     const todayHalfPriceOrders = todayOrders?.filter((order) => {
-      return order.order_items?.some((item: { products: { product_name: string } | null }) => {
-        const productName = item.products?.product_name || ''
-        return productName.toUpperCase().includes('50%')
+      return order.order_items?.some((item: { products: { product_name: string; product_code: string } | null }) => {
+        const productName = item.products?.product_name?.toUpperCase() || ''
+        const productCode = item.products?.product_code?.toUpperCase() || ''
+        return productName.includes('50%') || productCode.includes('50%')
       })
     }) || []
 
     const todayHalfPriceCustomers = todayHalfPriceOrders.length
     const todayHalfPriceCustomersAmount = todayHalfPriceOrders.reduce((sum, o) => sum + (o.total_income || 0), 0)
 
-    // Calculate today's high value customers (>10k, or >5k for 50% services, exclude FREE)
+    // Calculate today's Master customers (orders with any service >= 10k)
     const todayHighValueOrders = todayOrders?.filter((order) => {
-      // Check if order contains 50% service
-      const has50Percent = order.order_items?.some((item: { products: { product_name: string; product_code: string } | null }) => {
-        const productName = item.products?.product_name?.toUpperCase() || ''
-        const productCode = item.products?.product_code?.toUpperCase() || ''
-        return productName.includes('50%') || productCode.includes('50%')
+      // Check if order has any service with list_price >= 10000
+      return order.order_items?.some((item: { products: { list_price: number } | null }) => {
+        return item.products && item.products.list_price >= 10000
       })
-
-      // Check if order contains FREE service
-      const hasFree = order.order_items?.some((item: { products: { product_name: string; product_code: string; is_free: boolean | null } | null }) => {
-        const productName = item.products?.product_name?.toUpperCase() || ''
-        const productCode = item.products?.product_code?.toUpperCase() || ''
-        const isFree = item.products?.is_free || false
-        return isFree || productName.includes('FREE') || productCode.includes('FREE')
-      })
-
-      // If has FREE, don't count
-      if (hasFree) return false
-
-      // If has 50%, threshold is 5k, otherwise 10k
-      const threshold = has50Percent ? 5000 : 10000
-      return (order.total_income || 0) > threshold
     }) || []
 
     const todayHighValueCustomers = todayHighValueOrders.length

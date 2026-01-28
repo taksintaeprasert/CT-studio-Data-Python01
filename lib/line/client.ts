@@ -672,7 +672,7 @@ export function createTodaySummaryFlex(report: DailyReportData): object {
               type: 'box',
               layout: 'horizontal',
               contents: [
-                { type: 'text', text: '⭐ ลูกค้าซื้อ >10k', size: 'xs', flex: 3, color: '#555555' },
+                { type: 'text', text: '⭐ ลูกค้า Master', size: 'xs', flex: 3, color: '#555555' },
                 { type: 'text', text: `${report.highValueCustomers || 0} คน / ฿${(report.highValueAmount || 0).toLocaleString()}`, size: 'xs', flex: 2, align: 'end', color: '#10B981', weight: 'bold' },
               ],
               margin: 'sm',
@@ -921,7 +921,7 @@ export function createDailyReportFlex(report: DailyReportData): object {
               type: 'box',
               layout: 'horizontal',
               contents: [
-                { type: 'text', text: '⭐ ลูกค้าซื้อ >10k', size: 'xs', flex: 3, color: '#555555' },
+                { type: 'text', text: '⭐ ลูกค้า Master', size: 'xs', flex: 3, color: '#555555' },
                 { type: 'text', text: `${report.highValueCustomers || 0} คน / ฿${(report.highValueAmount || 0).toLocaleString()}`, size: 'xs', flex: 2, align: 'end', color: '#10B981', weight: 'bold' },
               ],
               margin: 'sm',
