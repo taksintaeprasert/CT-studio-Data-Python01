@@ -741,6 +741,13 @@ export default function SalesPerformancePage() {
             >
               📊 ส่ง Daily Report
             </button>
+            <button
+              type="button"
+              onClick={() => window.open('/satisfaction', '_blank')}
+              className="btn bg-purple-500 hover:bg-purple-600 text-white"
+            >
+              ⭐ ประเมินความพึงพอใจ
+            </button>
           </div>
         </div>
       </div>
