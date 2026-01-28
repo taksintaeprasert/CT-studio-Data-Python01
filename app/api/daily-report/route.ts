@@ -331,7 +331,7 @@ export async function POST(request: NextRequest) {
     const todayTotalPaidAmount = todaySalesReports.reduce((sum, s) => sum + s.paidAmount, 0)
     const todayTotalDoneAmount = todaySalesReports.reduce((sum, s) => sum + s.doneAmount, 0)
 
-    // Calculate today's services sold (exclude free items and validity months)
+    // Calculate today's services sold (exclude only FREE items and validity months, COUNT 50% and upsell)
     const todayServiceMap = new Map<string, { count: number; amount: number }>()
     todayOrders?.forEach((order) => {
       order.order_items?.forEach((item: { products: { category: string | null; product_code: string | null; product_name: string | null; list_price: number; is_free: boolean | null; validity_months: number | null } | null }) => {
@@ -340,6 +340,7 @@ export async function POST(request: NextRequest) {
           const productCode = product.product_code?.toUpperCase() || ''
           const productName = product.product_name?.toUpperCase() || ''
 
+          // Only exclude FREE items and validity months (count 50% and upsell)
           const isFreeOrValidity =
             product.is_free ||
             productCode.includes('FREE') ||
