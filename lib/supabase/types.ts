@@ -447,6 +447,6 @@ export const ROLE_ACCESS: Record<StaffRole, string[]> = {
   super_admin: ['*'], // All pages
   admin: ['/', '/orders', '/service', '/calendar', '/customers', '/products', '/sales', '/staff'],
   marketer: ['/', '/orders', '/service', '/calendar', '/customers', '/products', '/sales', '/staff'],
-  sales: ['/', '/orders', '/service', '/calendar', '/customers', '/products'],
+  sales: ['/', '/orders', '/service', '/calendar', '/customers', '/products', '/artist-score', '/satisfaction'],
   artist: ['/artist', '/calendar'],
 }
