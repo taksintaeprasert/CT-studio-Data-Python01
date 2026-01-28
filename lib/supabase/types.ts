@@ -392,6 +392,32 @@ export type Database = {
           created_at?: string
         }
       }
+      commission_settings: {
+        Row: {
+          id: number
+          artist_id: number
+          commission_normal_percent: number
+          commission_50_percent: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          artist_id: number
+          commission_normal_percent?: number
+          commission_50_percent?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          artist_id?: number
+          commission_normal_percent?: number
+          commission_50_percent?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
   }
 }
@@ -408,6 +434,7 @@ export type AdsBudget = Database['public']['Tables']['ads_budget']['Row']
 export type ServicePhoto = Database['public']['Tables']['service_photos']['Row']
 export type BookingMessage = Database['public']['Tables']['booking_messages']['Row']
 export type ArtistNotification = Database['public']['Tables']['artist_notifications']['Row']
+export type CommissionSetting = Database['public']['Tables']['commission_settings']['Row']
 
 // Staff role type
 export type StaffRole = 'super_admin' | 'admin' | 'sales' | 'artist' | 'marketer'
