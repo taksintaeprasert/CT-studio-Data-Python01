@@ -53,6 +53,7 @@ interface Payment {
   amount: number
   payment_method: string | null
   note: string | null
+  receipt_url: string | null
 }
 
 interface Staff {
@@ -367,15 +368,27 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         <div className="space-y-2">
           {payments.length > 0 ? (
             payments.map(payment => (
-              <div key={payment.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                <div>
-                  <span className="font-medium text-gray-800 dark:text-white">{formatDate(payment.payment_date)}</span>
-                  {payment.note && <span className="text-gray-500 dark:text-gray-400 ml-2">({payment.note})</span>}
+              <div key={payment.id} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <span className="font-medium text-gray-800 dark:text-white">{formatDate(payment.payment_date)}</span>
+                    {payment.note && <span className="text-gray-500 dark:text-gray-400 ml-2">({payment.note})</span>}
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium text-green-600">{formatCurrency(payment.amount)}</span>
+                    <span className="text-gray-500 dark:text-gray-400 text-sm ml-2">{payment.payment_method}</span>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className="font-medium text-green-600">{formatCurrency(payment.amount)}</span>
-                  <span className="text-gray-500 dark:text-gray-400 text-sm ml-2">{payment.payment_method}</span>
-                </div>
+                {payment.receipt_url && (
+                  <a
+                    href={payment.receipt_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline transition-colors"
+                  >
+                    📎 ดูสลิปการโอนเงิน
+                  </a>
+                )}
               </div>
             ))
           ) : (
