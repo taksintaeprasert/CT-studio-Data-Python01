@@ -33,6 +33,8 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<CustomerWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [filterMonth, setFilterMonth] = useState<string>('')
+  const [filterYear, setFilterYear] = useState<string>('')
   const [showModal, setShowModal] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null)
@@ -196,10 +198,25 @@ export default function CustomersPage() {
     fetchCustomers()
   }
 
-  const filteredCustomers = customers.filter(c =>
-    c.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone?.includes(search)
-  )
+  const filteredCustomers = customers.filter(c => {
+    // Search filter
+    const matchesSearch = c.full_name.toLowerCase().includes(search.toLowerCase()) ||
+      c.phone?.includes(search)
+
+    // Month/Year filter
+    if (filterMonth || filterYear) {
+      const createdDate = new Date(c.created_at)
+      const createdMonth = createdDate.getMonth() + 1 // 1-12
+      const createdYear = createdDate.getFullYear()
+
+      const matchesMonth = filterMonth ? createdMonth === parseInt(filterMonth) : true
+      const matchesYear = filterYear ? createdYear === parseInt(filterYear) : true
+
+      return matchesSearch && matchesMonth && matchesYear
+    }
+
+    return matchesSearch
+  })
 
   if (loading) {
     return (
@@ -286,6 +303,58 @@ export default function CustomersPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-12 pr-4 py-3 bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 transition-colors"
           />
+        </div>
+
+        {/* Month/Year Filter */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-400 mb-2">กรองตามเดือน</label>
+            <select
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl text-white focus:outline-none focus:border-purple-500/50 transition-colors"
+            >
+              <option value="">ทุกเดือน</option>
+              <option value="1">มกราคม</option>
+              <option value="2">กุมภาพันธ์</option>
+              <option value="3">มีนาคม</option>
+              <option value="4">เมษายน</option>
+              <option value="5">พฤษภาคม</option>
+              <option value="6">มิถุนายน</option>
+              <option value="7">กรกฎาคม</option>
+              <option value="8">สิงหาคม</option>
+              <option value="9">กันยายน</option>
+              <option value="10">ตุลาคม</option>
+              <option value="11">พฤศจิกายน</option>
+              <option value="12">ธันวาคม</option>
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-400 mb-2">กรองตามปี</label>
+            <select
+              value={filterYear}
+              onChange={(e) => setFilterYear(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl text-white focus:outline-none focus:border-purple-500/50 transition-colors"
+            >
+              <option value="">ทุกปี</option>
+              {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                <option key={year} value={year}>{year + 543}</option>
+              ))}
+            </select>
+          </div>
+          {(filterMonth || filterYear) && (
+            <div className="flex items-end">
+              <button
+                onClick={() => {
+                  setFilterMonth('')
+                  setFilterYear('')
+                }}
+                className="px-6 py-3 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 rounded-xl text-white transition-colors"
+              >
+                ล้างตัวกรอง
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Customers Grid */}
