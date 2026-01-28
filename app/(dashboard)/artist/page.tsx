@@ -402,7 +402,7 @@ export default function ArtistHomePage() {
       </div>
 
       {/* Quick Actions - Mobile Optimized */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <button
           onClick={() => router.push('/calendar')}
           className="card p-5 hover:shadow-lg active:scale-95 transition-all text-center bg-gradient-to-br from-pink-500 to-pink-600 text-white"
@@ -416,20 +416,8 @@ export default function ArtistHomePage() {
         </button>
 
         <button
-          onClick={() => router.push('/service')}
-          className="card p-5 hover:shadow-lg active:scale-95 transition-all text-center bg-gradient-to-br from-blue-500 to-blue-600 text-white"
-        >
-          <div className="w-14 h-14 mx-auto mb-2 rounded-full bg-white/20 flex items-center justify-center">
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-          </div>
-          <p className="font-semibold text-sm">รายการบริการ</p>
-        </button>
-
-        <button
           onClick={() => router.push('/artist-performance')}
-          className="card p-5 hover:shadow-lg active:scale-95 transition-all text-center bg-gradient-to-br from-purple-500 to-purple-600 text-white col-span-2"
+          className="card p-5 hover:shadow-lg active:scale-95 transition-all text-center bg-gradient-to-br from-purple-500 to-purple-600 text-white"
         >
           <div className="w-14 h-14 mx-auto mb-2 rounded-full bg-white/20 flex items-center justify-center">
             <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
