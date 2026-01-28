@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import DateRangeFilter from '@/components/date-range-filter'
 import { useLanguage } from '@/lib/language-context'
+import { useUser } from '@/lib/user-context'
 import BookingModal from '@/app/focus/components/booking-modal'
 import PaymentModal from '@/app/focus/components/payment-modal'
 import PaymentHistoryModal from '@/app/focus/components/payment-history-modal'
@@ -61,6 +62,7 @@ interface Order {
 }
 
 export default function AppointmentPage() {
+  const { user, loading: userLoading } = useUser()
   const [orders, setOrders] = useState<Order[]>([])
   const [artists, setArtists] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
@@ -606,6 +608,26 @@ export default function AppointmentPage() {
       return activeFilters.some(result => result === true)
     }
   })
+
+  // Check if user is loading
+  if (userLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-gray-500">กำลังโหลด...</div>
+      </div>
+    )
+  }
+
+  // Check if user is artist - artists don't have access to this page
+  if (user?.role === 'artist') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="text-2xl font-bold text-red-500 mb-2">ไม่มีสิทธิ์เข้าถึง</div>
+        <div className="text-gray-500">Artist ไม่สามารถเข้าถึงหน้านี้ได้</div>
+        <div className="text-sm text-gray-400 mt-2">กรุณาใช้ปฏิทินนัดหมายและ Booking Chat แทน</div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
