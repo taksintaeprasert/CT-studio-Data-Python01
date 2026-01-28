@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import CustomerPhotosManager from '@/components/customer-photos-manager'
+import Image from 'next/image'
 
 interface Staff {
   id: number
@@ -29,12 +29,30 @@ interface OrderItem {
   products: { product_code: string; product_name: string; list_price: number } | null
 }
 
+interface Payment {
+  id: number
+  receipt_url: string | null
+  receipt_path: string | null
+  amount: number
+  payment_method: string | null
+}
+
+interface Customer {
+  id: number
+  full_name: string
+  nickname: string | null
+  phone: string | null
+  face_photo_url: string | null
+}
+
 export default function EditOrderPage({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [staff, setStaff] = useState<Staff[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
+  const [customer, setCustomer] = useState<Customer | null>(null)
+  const [payments, setPayments] = useState<Payment[]>([])
 
   // Order fields
   const [customerId, setCustomerId] = useState<number | null>(null)
@@ -57,7 +75,7 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
   }, [params.id])
 
   const fetchData = async () => {
-    const [orderRes, itemsRes, staffRes, productsRes] = await Promise.all([
+    const [orderRes, itemsRes, staffRes, productsRes, customerRes, paymentsRes] = await Promise.all([
       supabase
         .from('orders')
         .select(`
@@ -78,6 +96,17 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
         .eq('order_id', params.id),
       supabase.from('staff').select('id, staff_name, role').eq('is_active', true).order('staff_name'),
       supabase.from('products').select('id, product_code, product_name, list_price, is_free').eq('is_active', true).order('product_name'),
+      supabase
+        .from('customers')
+        .select('id, full_name, nickname, phone, face_photo_url')
+        .eq('id', orderRes.data?.customer_id || 0)
+        .single(),
+      supabase
+        .from('payments')
+        .select('id, receipt_url, receipt_path, amount, payment_method')
+        .eq('order_id', params.id)
+        .not('receipt_url', 'is', null)
+        .order('created_at', { ascending: false }),
     ])
 
     if (orderRes.data) {
@@ -97,6 +126,8 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
     setOrderItems(itemsRes.data || [])
     setStaff(staffRes.data || [])
     setProducts(productsRes.data || [])
+    setCustomer(customerRes.data || null)
+    setPayments(paymentsRes.data || [])
     setLoading(false)
   }
 
@@ -408,12 +439,75 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
         </div>
       </form>
 
-      {/* Customer Photos Manager */}
+      {/* Customer Photos */}
+      {(customer?.face_photo_url || payments.length > 0) && (
+        <div className="card space-y-4">
+          <h2 className="font-bold text-gray-800 dark:text-white border-b pb-2">รูปภาพและสลิปโอนเงิน</h2>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {/* Face Photo from Order Creation */}
+            {customer?.face_photo_url && (
+              <div className="relative group">
+                <div className="aspect-square relative rounded-lg overflow-hidden border-2 border-blue-500 dark:border-blue-400">
+                  <Image
+                    src={customer.face_photo_url}
+                    alt="รูปหน้าลูกค้า"
+                    fill
+                    className="object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-end justify-center pb-2">
+                    <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                      รูปหน้าลูกค้า
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-center mt-1 text-gray-600 dark:text-gray-400">รูปหน้าลูกค้า</p>
+              </div>
+            )}
+
+            {/* Payment Receipts */}
+            {payments.map((payment) => (
+              <div key={payment.id} className="relative group">
+                <div className="aspect-square relative rounded-lg overflow-hidden border-2 border-green-500 dark:border-green-400">
+                  <Image
+                    src={payment.receipt_url || ''}
+                    alt={`สลิปโอนเงิน ฿${payment.amount.toLocaleString()}`}
+                    fill
+                    className="object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-end justify-center pb-2">
+                    <span className="bg-green-500 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                      ฿{payment.amount.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-center mt-1 text-gray-600 dark:text-gray-400">
+                  สลิป ฿{payment.amount.toLocaleString()}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Customer Button */}
       {customerId && (
-        <CustomerPhotosManager
-          customerId={customerId}
-          customerName={customerName}
-        />
+        <div className="card">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-gray-800 dark:text-white">แก้ไขข้อมูลลูกค้า</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                แก้ไขชื่อ, เบอร์โทร, อายุ, และข้อมูลสุขภาพของลูกค้า
+              </p>
+            </div>
+            <Link
+              href={`/customers/${customerId}`}
+              className="btn btn-primary"
+            >
+              แก้ไขข้อมูลลูกค้า →
+            </Link>
+          </div>
+        </div>
       )}
     </div>
   )

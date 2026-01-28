@@ -44,6 +44,7 @@ interface OrderItem {
   appointment_time: string | null
   artist_id: number | null
   products: { product_name: string; list_price: number; is_free: boolean; product_code: string } | null
+  artist: { id: number; staff_name: string } | null
 }
 
 interface Payment {
@@ -118,7 +119,8 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
           appointment_date,
           appointment_time,
           artist_id,
-          products (product_name, list_price, is_free, product_code)
+          products (product_name, list_price, is_free, product_code),
+          artist:staff!order_items_artist_id_fkey (id, staff_name)
         `)
         .eq('order_id', params.id),
       supabase
@@ -276,6 +278,45 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         </div>
 
         <div className="card space-y-4">
+          <h2 className="font-bold text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2">ข้อมูลลูกค้า</h2>
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-gray-500 dark:text-gray-400">ชื่อเล่น</span>
+              <span className="font-medium text-gray-800 dark:text-white">{order.customers?.nickname || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500 dark:text-gray-400">เบอร์โทร</span>
+              <span className="font-medium text-gray-800 dark:text-white">{order.customers?.phone || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500 dark:text-gray-400">อายุ</span>
+              <span className="font-medium text-gray-800 dark:text-white">{order.customers?.age ? `${order.customers.age} ปี` : '-'}</span>
+            </div>
+            {order.customers?.medical_condition && (
+              <div className="pt-2 border-t dark:border-gray-700">
+                <span className="text-gray-500 dark:text-gray-400">โรคประจำตัว:</span>
+                <p className="mt-1 text-gray-800 dark:text-white">{order.customers.medical_condition}</p>
+              </div>
+            )}
+            {order.customers?.color_allergy && (
+              <div className="pt-2 border-t dark:border-gray-700">
+                <span className="text-gray-500 dark:text-gray-400">ประวัติแพ้สี:</span>
+                <p className="mt-1 text-gray-800 dark:text-white">{order.customers.color_allergy}</p>
+              </div>
+            )}
+            {order.customers?.drug_allergy && (
+              <div className="pt-2 border-t dark:border-gray-700">
+                <span className="text-gray-500 dark:text-gray-400">ประวัติแพ้ยา:</span>
+                <p className="mt-1 text-gray-800 dark:text-white">{order.customers.drug_allergy}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Financial Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="card space-y-4">
           <h2 className="font-bold text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2">สรุปการชำระเงิน</h2>
           <div className="space-y-3">
             <div className="flex justify-between">
@@ -294,6 +335,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
             </div>
           </div>
         </div>
+
       </div>
 
       {/* Order Items */}
@@ -365,13 +407,20 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
                       <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">ฟรี</span>
                     )}
                   </div>
-                  <div className="text-sm">
-                    <span className={`font-medium ${statusColor}`}>{statusLabel}</span>
-                    {item.appointment_date && (
-                      <span className="text-gray-500 dark:text-gray-400 ml-2">
-                        {new Date(item.appointment_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        {item.appointment_time && ` ${item.appointment_time}`}
-                      </span>
+                  <div className="text-sm space-y-1">
+                    <div>
+                      <span className={`font-medium ${statusColor}`}>{statusLabel}</span>
+                      {item.appointment_date && (
+                        <span className="text-gray-500 dark:text-gray-400 ml-2">
+                          {new Date(item.appointment_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {item.appointment_time && ` ${item.appointment_time}`}
+                        </span>
+                      )}
+                    </div>
+                    {item.artist && (
+                      <div className="text-gray-600 dark:text-gray-300">
+                        👨‍🎨 ช่าง: <span className="font-medium">{item.artist.staff_name}</span>
+                      </div>
                     )}
                   </div>
                 </div>

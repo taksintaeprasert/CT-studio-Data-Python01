@@ -172,10 +172,6 @@ export default function BookingModal({ orderItem, customer, orderId, onClose, on
         infoLines.push(`😊 ชื่อเล่น: ${customer.nickname}`)
       }
 
-      if (customer.phone) {
-        infoLines.push(`📱 เบอร์: ${customer.phone}`)
-      }
-
       if (customer.age) {
         infoLines.push(`🎂 อายุ: ${customer.age} ปี`)
       }
