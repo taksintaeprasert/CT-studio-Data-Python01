@@ -187,12 +187,12 @@ export default function Sidebar() {
 
       {/* Sidebar */}
       <aside className={`
-        fixed top-0 left-0 z-50 h-full w-64 bg-white dark:bg-gray-800 shadow-xl transform transition-transform duration-300
+        fixed top-0 left-0 z-50 h-full w-64 bg-white dark:bg-gray-800 shadow-xl transform transition-transform duration-300 flex flex-col
         lg:translate-x-0 lg:static lg:z-auto
         ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Logo & User Info */}
-        <div className="p-6 border-b dark:border-gray-700">
+        <div className="p-6 border-b dark:border-gray-700 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg gradient-primary flex items-center justify-center">
               <span className="text-white font-bold">CT</span>
@@ -218,8 +218,8 @@ export default function Sidebar() {
           )}
         </div>
 
-        {/* Menu */}
-        <nav className="p-4 space-y-1 pb-48">
+        {/* Menu - Scrollable */}
+        <nav className="flex-1 overflow-y-auto p-4 space-y-1">
           {filteredMenuItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
             const label = item.label || t(item.labelKey)
@@ -246,7 +246,7 @@ export default function Sidebar() {
         </nav>
 
         {/* Bottom Section: Language, Theme Toggle + Logout */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-800 space-y-2">
+        <div className="flex-shrink-0 p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-800 space-y-2">
           {/* Language Toggle */}
           <button
             onClick={toggleLanguage}
