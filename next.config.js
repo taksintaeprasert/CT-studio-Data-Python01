@@ -9,7 +9,13 @@ const nextConfig = {
 
   // Optimize images
   images: {
-    domains: [],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**.supabase.co',
+        pathname: '/storage/**',
+      },
+    ],
     unoptimized: false,
   },
 
