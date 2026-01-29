@@ -306,23 +306,52 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
     setLoading(true)
 
     try {
+      // Upload customer face photo if provided (first photo)
+      let facePhotoUrl: string | null = null
+      if (photoFiles.length > 0) {
+        const facePhoto = photoFiles[0]
+        const fileName = `${Date.now()}_${facePhoto.name}`
+        const filePath = `customer-face-photos/${fileName}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('service-photos')
+          .upload(filePath, facePhoto)
+
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage
+            .from('service-photos')
+            .getPublicUrl(filePath)
+
+          facePhotoUrl = urlData.publicUrl
+        } else {
+          console.error('Face photo upload error:', uploadError)
+        }
+      }
+
       // 1. Create or update customer
       let customerId = foundCustomer?.id
 
       if (foundCustomer) {
         // Update existing customer
+        const updateData: any = {
+          full_name: customerForm.full_name,
+          nickname: customerForm.nickname || null,
+          age: customerForm.age ? parseInt(customerForm.age) : null,
+          contact_channel: customerForm.contact_channel,
+          province: customerForm.province || null,
+          medical_condition: customerForm.medical_condition || null,
+          color_allergy: customerForm.color_allergy || null,
+          drug_allergy: customerForm.drug_allergy || null,
+        }
+
+        // Only update face_photo_url if a new photo was uploaded
+        if (facePhotoUrl) {
+          updateData.face_photo_url = facePhotoUrl
+        }
+
         await supabase
           .from('customers')
-          .update({
-            full_name: customerForm.full_name,
-            nickname: customerForm.nickname || null,
-            age: customerForm.age ? parseInt(customerForm.age) : null,
-            contact_channel: customerForm.contact_channel,
-            province: customerForm.province || null,
-            medical_condition: customerForm.medical_condition || null,
-            color_allergy: customerForm.color_allergy || null,
-            drug_allergy: customerForm.drug_allergy || null,
-          })
+          .update(updateData)
           .eq('id', foundCustomer.id)
       } else {
         // Create new customer
@@ -338,6 +367,7 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
             medical_condition: customerForm.medical_condition || null,
             color_allergy: customerForm.color_allergy || null,
             drug_allergy: customerForm.drug_allergy || null,
+            face_photo_url: facePhotoUrl || null,
           })
           .select()
           .single()
@@ -421,12 +451,14 @@ export default function CreateOrderStep({ onOrderCreated }: CreateOrderStepProps
           })
       }
 
-      // 5. Upload customer photos if any
-      if (photoFiles.length > 0 && customerId) {
+      // 5. Upload remaining customer photos (after first one used for face photo)
+      // First photo is already uploaded as face_photo_url, upload remaining as before photos
+      const remainingPhotos = photoFiles.slice(1) // Skip first photo
+      if (remainingPhotos.length > 0 && customerId) {
         const { uploadMultipleServicePhotos } = await import('@/lib/storage/photos')
 
         const uploadResult = await uploadMultipleServicePhotos({
-          files: photoFiles,
+          files: remainingPhotos,
           customerId,
           photoType: 'before',
           uploadedBy: user?.id,
