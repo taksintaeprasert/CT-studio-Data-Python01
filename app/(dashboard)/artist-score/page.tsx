@@ -7,9 +7,6 @@ import { createClient } from '@/lib/supabase/client'
 import DateRangeFilter from '@/components/date-range-filter'
 import {
   Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
   Title,
   Tooltip,
   Legend,
@@ -19,12 +16,9 @@ import {
   LineElement,
   Filler,
 } from 'chart.js'
-import { Bar, Radar } from 'react-chartjs-2'
+import { Radar } from 'react-chartjs-2'
 
 ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
   Title,
   Tooltip,
   Legend,
@@ -80,6 +74,8 @@ export default function ArtistScorePage() {
   const [endDate, setEndDate] = useState('')
   const [selectedArtist, setSelectedArtist] = useState<string>('')
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
+  const [overallSalesScore, setOverallSalesScore] = useState<number>(0)
+  const [overallChatScore, setOverallChatScore] = useState<number>(0)
 
   const supabase = createClient()
 
@@ -196,6 +192,19 @@ export default function ArtistScorePage() {
     // Calculate stats for each artist
     const stats: ArtistStats[] = []
 
+    // Calculate overall Sales and Chat scores (not per artist)
+    let totalFrontDesk = 0
+    let totalChatQuality = 0
+    let totalRatingsCount = ratingsData.length
+
+    ratingsData.forEach(rating => {
+      totalFrontDesk += rating.front_desk_service || 0
+      totalChatQuality += rating.chat_response_quality || 0
+    })
+
+    const overallSalesScore = totalRatingsCount > 0 ? totalFrontDesk / totalRatingsCount : 0
+    const overallChatScore = totalRatingsCount > 0 ? totalChatQuality / totalRatingsCount : 0
+
     artistMap.forEach((artistRatings, artistId) => {
       const artistName = artistRatings[0]?.artist?.staff_name || 'Unknown'
       const count = artistRatings.length
@@ -207,8 +216,8 @@ export default function ArtistScorePage() {
       const avgFrontDesk = artistRatings.reduce((sum, r) => sum + (r.front_desk_service || 0), 0) / count
       const avgChatQuality = artistRatings.reduce((sum, r) => sum + (r.chat_response_quality || 0), 0) / count
 
-      // Overall average (excluding pain level, only quality metrics)
-      const overallAvg = (avgArtistQuality + avgResultSatisfaction + avgFrontDesk + avgChatQuality) / 4
+      // Overall average - only 3 metrics: pain_level, artist_quality, result_satisfaction
+      const overallAvg = (avgPainLevel + avgArtistQuality + avgResultSatisfaction) / 3
 
       // Calculate stats by category
       const categoryStats: Record<string, { count: number; avg_score: number }> = {}
@@ -219,12 +228,12 @@ export default function ArtistScorePage() {
           categoryStats[category] = { count: 0, avg_score: 0 }
         }
 
+        // Category average also uses only 3 metrics
         const categoryAvg = (
+          (rating.pain_level || 0) +
           (rating.artist_service_quality || 0) +
-          (rating.result_satisfaction || 0) +
-          (rating.front_desk_service || 0) +
-          (rating.chat_response_quality || 0)
-        ) / 4
+          (rating.result_satisfaction || 0)
+        ) / 3
 
         categoryStats[category].count++
         categoryStats[category].avg_score += categoryAvg
@@ -252,62 +261,12 @@ export default function ArtistScorePage() {
     // Sort by overall average descending
     stats.sort((a, b) => b.overall_avg - a.overall_avg)
     setArtistStats(stats)
+    setOverallSalesScore(overallSalesScore)
+    setOverallChatScore(overallChatScore)
   }
 
   const formatScore = (score: number) => {
     return score.toFixed(2)
-  }
-
-  // Bar Chart - Overall Scores
-  const overallBarData = {
-    labels: artistStats.map(a => a.artist_name),
-    datasets: [
-      {
-        label: 'คะแนนเฉลี่ยรวม',
-        data: artistStats.map(a => a.overall_avg),
-        backgroundColor: artistStats.map((_, i) => {
-          const colors = [
-            'rgba(236, 72, 153, 0.8)',  // pink (1st)
-            'rgba(139, 92, 246, 0.8)',  // purple (2nd)
-            'rgba(59, 130, 246, 0.8)',  // blue (3rd)
-            'rgba(34, 197, 94, 0.8)',   // green
-            'rgba(249, 115, 22, 0.8)',  // orange
-            'rgba(236, 201, 75, 0.8)',  // yellow
-            'rgba(20, 184, 166, 0.8)',  // teal
-            'rgba(239, 68, 68, 0.8)',   // red
-          ]
-          return colors[i % colors.length]
-        }),
-        borderWidth: 2,
-        borderColor: '#fff',
-      },
-    ],
-  }
-
-  const barChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: false,
-      },
-      tooltip: {
-        callbacks: {
-          label: (context: any) => {
-            return `คะแนน: ${formatScore(context.raw)}/5.00`
-          },
-        },
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 5,
-        ticks: {
-          stepSize: 1,
-        },
-      },
-    },
   }
 
   // Radar Chart for individual artist (if selected)
@@ -318,19 +277,17 @@ export default function ArtistScorePage() {
   const radarData = selectedArtistData
     ? {
         labels: [
-          'การให้บริการของช่าง',
+          'ระดับความเจ็บ',
+          'การบริการของช่าง',
           'ความพึงพอใจหลังทำ',
-          'การบริการหน้าร้าน',
-          'การตอบแชท',
         ],
         datasets: [
           {
             label: selectedArtistData.artist_name,
             data: [
+              selectedArtistData.avg_pain_level,
               selectedArtistData.avg_artist_quality,
               selectedArtistData.avg_result_satisfaction,
-              selectedArtistData.avg_front_desk,
-              selectedArtistData.avg_chat_quality,
             ],
             backgroundColor: 'rgba(236, 72, 153, 0.2)',
             borderColor: 'rgba(236, 72, 153, 1)',
@@ -423,7 +380,7 @@ export default function ArtistScorePage() {
       ) : (
         <>
           {/* Summary Stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="card">
               <p className="text-sm text-gray-500 dark:text-gray-400">จำนวนช่าง</p>
               <p className="text-2xl font-bold text-pink-600 mt-1">
@@ -437,15 +394,6 @@ export default function ArtistScorePage() {
               </p>
             </div>
             <div className="card">
-              <p className="text-sm text-gray-500 dark:text-gray-400">คะแนนเฉลี่ยรวม</p>
-              <p className="text-2xl font-bold text-blue-600 mt-1">
-                {artistStats.length > 0
-                  ? formatScore(artistStats.reduce((sum, a) => sum + a.overall_avg, 0) / artistStats.length)
-                  : '0.00'}
-                /5.00
-              </p>
-            </div>
-            <div className="card">
               <p className="text-sm text-gray-500 dark:text-gray-400">ช่างที่ดีที่สุด</p>
               <p className="text-lg font-bold text-green-600 mt-1">
                 {artistStats[0]?.artist_name || '-'}
@@ -453,19 +401,39 @@ export default function ArtistScorePage() {
             </div>
           </div>
 
-          {/* Overall Bar Chart */}
-          <div className="card">
-            <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-4">
-              คะแนนเฉลี่ยรวมของช่างทั้งหมด
-            </h2>
-            <div className="h-96">
-              {artistStats.length > 0 ? (
-                <Bar data={overallBarData} options={barChartOptions} />
-              ) : (
-                <div className="flex items-center justify-center h-full text-gray-400">
-                  ไม่มีข้อมูล
+          {/* Sales & Chat Scores */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="card">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">คะแนนการบริการหน้าร้าน (Sales)</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    คะแนนรวมทั้งหมดจากการให้บริการหน้าร้าน
+                  </p>
                 </div>
-              )}
+                <div className="text-right">
+                  <p className="text-3xl font-bold text-blue-600">
+                    {formatScore(overallSalesScore)}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">/ 5.00</p>
+                </div>
+              </div>
+            </div>
+            <div className="card">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">คะแนนการตอบแชท</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    คะแนนรวมทั้งหมดจากการตอบแชท
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-3xl font-bold text-teal-600">
+                    {formatScore(overallChatScore)}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">/ 5.00</p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -532,29 +500,23 @@ export default function ArtistScorePage() {
                   </div>
 
                   {/* Detailed Scores */}
-                  <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="mt-4 grid grid-cols-3 gap-3">
                     <div className="text-center p-2 bg-white dark:bg-gray-800 rounded-lg">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">ช่าง</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">ระดับความเจ็บ</p>
+                      <p className="font-bold text-gray-800 dark:text-white">
+                        {formatScore(artist.avg_pain_level)}
+                      </p>
+                    </div>
+                    <div className="text-center p-2 bg-white dark:bg-gray-800 rounded-lg">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">การบริการของช่าง</p>
                       <p className="font-bold text-gray-800 dark:text-white">
                         {formatScore(artist.avg_artist_quality)}
                       </p>
                     </div>
                     <div className="text-center p-2 bg-white dark:bg-gray-800 rounded-lg">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">ผลลัพธ์</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">ความพึงพอใจหลังทำ</p>
                       <p className="font-bold text-gray-800 dark:text-white">
                         {formatScore(artist.avg_result_satisfaction)}
-                      </p>
-                    </div>
-                    <div className="text-center p-2 bg-white dark:bg-gray-800 rounded-lg">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">หน้าร้าน</p>
-                      <p className="font-bold text-gray-800 dark:text-white">
-                        {formatScore(artist.avg_front_desk)}
-                      </p>
-                    </div>
-                    <div className="text-center p-2 bg-white dark:bg-gray-800 rounded-lg">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">แชท</p>
-                      <p className="font-bold text-gray-800 dark:text-white">
-                        {formatScore(artist.avg_chat_quality)}
                       </p>
                     </div>
                   </div>
