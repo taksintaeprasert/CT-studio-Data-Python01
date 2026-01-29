@@ -75,16 +75,24 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
   }, [params.id])
 
   const fetchData = async () => {
-    const [orderRes, itemsRes, staffRes, productsRes, customerRes, paymentsRes] = await Promise.all([
-      supabase
-        .from('orders')
-        .select(`
-          *,
-          customers (full_name),
-          sales:staff!orders_sales_id_fkey (id, staff_name)
-        `)
-        .eq('id', params.id)
-        .single(),
+    // First, fetch the order to get customer_id
+    const orderRes = await supabase
+      .from('orders')
+      .select(`
+        *,
+        customers (full_name),
+        sales:staff!orders_sales_id_fkey (id, staff_name)
+      `)
+      .eq('id', params.id)
+      .single()
+
+    if (!orderRes.data) {
+      setLoading(false)
+      return
+    }
+
+    // Now fetch everything else in parallel, using the customer_id from order
+    const [itemsRes, staffRes, productsRes, customerRes, paymentsRes] = await Promise.all([
       supabase
         .from('order_items')
         .select(`
@@ -99,7 +107,7 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
       supabase
         .from('customers')
         .select('id, full_name, nickname, phone, face_photo_url')
-        .eq('id', orderRes.data?.customer_id || 0)
+        .eq('id', orderRes.data.customer_id)
         .single(),
       supabase
         .from('payments')
@@ -109,18 +117,17 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
         .order('created_at', { ascending: false }),
     ])
 
-    if (orderRes.data) {
-      setCustomerId(orderRes.data.customer_id)
-      setSalesId(orderRes.data.sales?.id?.toString() || '')
-      setOrderStatus(orderRes.data.order_status || 'booking')
-      setNote(orderRes.data.note || '')
-      setCustomerName(orderRes.data.customers?.full_name || '')
-      setDeposit(orderRes.data.deposit?.toString() || '0')
-      // Set created_at date (format: YYYY-MM-DD)
-      if (orderRes.data.created_at) {
-        const date = new Date(orderRes.data.created_at)
-        setCreatedAt(date.toISOString().split('T')[0])
-      }
+    // Set order data
+    setCustomerId(orderRes.data.customer_id)
+    setSalesId(orderRes.data.sales?.id?.toString() || '')
+    setOrderStatus(orderRes.data.order_status || 'booking')
+    setNote(orderRes.data.note || '')
+    setCustomerName(orderRes.data.customers?.full_name || '')
+    setDeposit(orderRes.data.deposit?.toString() || '0')
+    // Set created_at date (format: YYYY-MM-DD)
+    if (orderRes.data.created_at) {
+      const date = new Date(orderRes.data.created_at)
+      setCreatedAt(date.toISOString().split('T')[0])
     }
 
     setOrderItems(itemsRes.data || [])
