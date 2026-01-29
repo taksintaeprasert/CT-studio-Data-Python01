@@ -410,9 +410,21 @@ export default function AppointmentPage() {
       }
     }
 
+    // Prepare update data
+    const updateData: any = { item_status: newStatus }
+
+    // If changing to completed, set sales_completed_at timestamp
+    if (newStatus === 'completed') {
+      updateData.sales_completed_at = new Date().toISOString()
+    }
+    // If changing FROM completed to another status, clear sales_completed_at
+    else if (statusChangeItem.item_status === 'completed') {
+      updateData.sales_completed_at = null
+    }
+
     await supabase
       .from('order_items')
-      .update({ item_status: newStatus })
+      .update(updateData)
       .eq('id', statusChangeItem.id)
 
     setStatusChangeItem(null)
