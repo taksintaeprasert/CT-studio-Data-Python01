@@ -97,7 +97,10 @@ export default function ArtistHomePage() {
           artist_completed_at,
           sales_completed_at,
           product:products(validity_months),
-          orders!inner(customer_id, created_at)
+          orders!inner(
+            customer_id,
+            created_at
+          )
         `)
         .eq('artist_id', user.id)
 
@@ -116,11 +119,25 @@ export default function ArtistHomePage() {
       }
 
       // Filter items for booking value by order created_at
+      // ตัวเลือก C: นับทุก order_items ที่อยู่ใน orders ที่สร้างในช่วงเวลา
       const bookingItems = orderItems.filter((item: any) => {
         const orderCreatedAt = item.orders?.created_at
         if (!orderCreatedAt) return false
         const createdDate = new Date(orderCreatedAt).toISOString().split('T')[0]
         return createdDate >= startDate && createdDate <= endDate
+      })
+
+      console.log('Booking Calculation Debug:', {
+        totalOrderItems: orderItems?.length || 0,
+        bookingItemsCount: bookingItems.length,
+        startDate,
+        endDate,
+        sampleOrderItem: orderItems?.[0],
+        bookingItems: bookingItems.map((item: any) => ({
+          order_id: item.order_id,
+          item_price: item.item_price,
+          order_created_at: item.orders?.created_at
+        }))
       })
 
       // Count unique customers from booking period
