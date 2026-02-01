@@ -28,14 +28,14 @@ WHERE item_status = 'completed';
 -- =============================================
 -- FIX 1: Set artist_completed_at for completed items
 -- =============================================
--- Use the earlier of: updated_at or sales_completed_at
+-- Use the earlier of: created_at or sales_completed_at
 -- (Artist usually completes before sales confirms)
 UPDATE order_items
 SET artist_completed_at = COALESCE(
   -- Use sales_completed_at - 1 hour if it exists (artist likely finished before)
   sales_completed_at - INTERVAL '1 hour',
-  -- Otherwise use updated_at as fallback
-  updated_at,
+  -- Otherwise use created_at + 1 day as estimated completion time
+  created_at + INTERVAL '1 day',
   -- Last resort: use current time
   CURRENT_TIMESTAMP
 )
@@ -45,10 +45,10 @@ WHERE item_status = 'completed'
 -- =============================================
 -- FIX 2: Set sales_completed_at for completed items
 -- =============================================
--- Use updated_at or current timestamp
+-- Use created_at + 1 day as estimated completion time, or current timestamp
 UPDATE order_items
 SET sales_completed_at = COALESCE(
-  updated_at,
+  created_at + INTERVAL '1 day',
   CURRENT_TIMESTAMP
 )
 WHERE item_status = 'completed'
@@ -62,8 +62,8 @@ WHERE item_status = 'completed'
 UPDATE order_items
 SET
   item_status = 'completed',
-  artist_completed_at = COALESCE(updated_at, CURRENT_TIMESTAMP),
-  sales_completed_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+  artist_completed_at = COALESCE(appointment_date + INTERVAL '2 hours', created_at + INTERVAL '1 day', CURRENT_TIMESTAMP),
+  sales_completed_at = COALESCE(appointment_date + INTERVAL '2 hours', created_at + INTERVAL '1 day', CURRENT_TIMESTAMP)
 WHERE item_status = 'scheduled'
   AND artist_id IS NOT NULL
   AND appointment_date < CURRENT_DATE - INTERVAL '7 days'
@@ -89,11 +89,11 @@ SELECT
   oi.booking_title,
   oi.item_status,
   oi.artist_id,
-  s.name as artist_name,
+  s.staff_name as artist_name,
   oi.appointment_date,
   oi.artist_completed_at,
   oi.sales_completed_at,
-  oi.updated_at,
+  oi.created_at,
   o.order_date
 FROM order_items oi
 LEFT JOIN staff s ON s.id = oi.artist_id
@@ -114,14 +114,14 @@ SELECT
   COUNT(*) FILTER (WHERE oi.item_status = 'completed'
                    AND oi.artist_completed_at IS NOT NULL
                    AND oi.sales_completed_at IS NOT NULL) as completed_items,
-  c.name as customer_name,
-  s.name as sales_name
+  c.full_name as customer_name,
+  s.staff_name as sales_name
 FROM orders o
 LEFT JOIN order_items oi ON oi.order_id = o.id
 LEFT JOIN customers c ON c.id = o.customer_id
 LEFT JOIN staff s ON s.id = o.sales_id
 WHERE o.order_status IN ('booking', 'active', 'paid')
-GROUP BY o.id, c.name, s.name
+GROUP BY o.id, c.full_name, s.staff_name
 HAVING COUNT(oi.id) > 0
    AND COUNT(oi.id) = COUNT(*) FILTER (WHERE oi.item_status = 'completed'
                                        AND oi.artist_completed_at IS NOT NULL
