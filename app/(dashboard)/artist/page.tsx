@@ -148,23 +148,22 @@ export default function ArtistHomePage() {
       )
       const totalCustomers = uniqueCustomers.size
 
-      // Count completed services (both artist AND sales marked complete) - all time for comparison
-      const completedServices = orderItems.filter(item =>
-        item.artist_completed_at && item.sales_completed_at
-      ).length
-
-      // Calculate total booking amount from orders created in the period
-      const totalBookingAmount = bookingItems.reduce((sum, item) => sum + (item.item_price || 0), 0)
-
-      // Calculate commission from completed services in the period (by artist_completed_at)
-      const completedItems = orderItems.filter(item => {
+      // Filter completed items by artist_completed_at in the date range
+      const completedInPeriod = orderItems.filter(item => {
         if (!item.artist_completed_at || !item.sales_completed_at) return false
         const completedDate = new Date(item.artist_completed_at).toISOString().split('T')[0]
         return completedDate >= startDate && completedDate <= endDate
       })
 
+      // Count completed services in the period
+      const completedServices = completedInPeriod.length
+
+      // Calculate total booking amount from orders created in the period
+      const totalBookingAmount = bookingItems.reduce((sum, item) => sum + (item.item_price || 0), 0)
+
+      // Calculate commission from completed services in the period (use completedInPeriod)
       let totalCommission = 0
-      completedItems.forEach(item => {
+      completedInPeriod.forEach(item => {
         const itemPrice = item.item_price || 0
         const validityMonths = item.product?.validity_months || 0
 
