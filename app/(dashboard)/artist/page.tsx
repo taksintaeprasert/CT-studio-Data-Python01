@@ -83,8 +83,8 @@ export default function ArtistHomePage() {
       const commissionNormal = commissionData?.commission_normal_percent || 0
       const commission50 = commissionData?.commission_50_percent || 0
 
-      // Get all order_items for this artist where order_date is in current month
-      const { data: orderItems } = await supabase
+      // Get all order_items for this artist created in current month
+      const { data: orderItems, error: itemsError } = await supabase
         .from('order_items')
         .select(`
           id,
@@ -92,12 +92,20 @@ export default function ArtistHomePage() {
           item_price,
           artist_completed_at,
           sales_completed_at,
-          orders!inner(order_date),
           product:products(validity_months)
         `)
         .eq('artist_id', user.id)
-        .gte('orders.order_date', startDate)
-        .lte('orders.order_date', endDate)
+        .gte('created_at', `${startDate}T00:00:00`)
+        .lte('created_at', `${endDate}T23:59:59`)
+
+      console.log('Artist Performance Query:', {
+        artistId: user.id,
+        startDate,
+        endDate,
+        itemsCount: orderItems?.length || 0,
+        error: itemsError,
+        sampleItem: orderItems?.[0]
+      })
 
       if (!orderItems) {
         setLoading(false)
