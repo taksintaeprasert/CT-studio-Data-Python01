@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import BookingModal from '@/app/focus/components/booking-modal'
 
 interface Customer {
@@ -380,14 +381,48 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
                   </div>
                 </div>
                 {payment.receipt_url && (
-                  <a
-                    href={payment.receipt_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline transition-colors"
-                  >
-                    📎 ดูสลิปการโอนเงิน
-                  </a>
+                  <div className="flex items-center gap-3 mt-2">
+                    {/* Thumbnail */}
+                    <a
+                      href={payment.receipt_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="relative w-16 h-16 rounded-lg overflow-hidden border-2 border-green-400 dark:border-green-500 hover:border-green-500 dark:hover:border-green-400 transition-colors cursor-pointer flex-shrink-0 group"
+                    >
+                      <Image
+                        src={payment.receipt_url}
+                        alt="สลิปการโอนเงิน"
+                        fill
+                        className="object-cover"
+                        sizes="64px"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement
+                          target.style.display = 'none'
+                          const parent = target.parentElement
+                          if (parent) {
+                            parent.innerHTML = `
+                              <div class="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
+                                <svg class="w-6 h-6 text-gray-400 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                </svg>
+                              </div>
+                            `
+                          }
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all" />
+                    </a>
+
+                    {/* Text link */}
+                    <a
+                      href={payment.receipt_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline transition-colors"
+                    >
+                      📎 ดูสลิปการโอนเงิน
+                    </a>
+                  </div>
                 )}
               </div>
             ))

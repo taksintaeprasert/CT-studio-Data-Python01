@@ -369,6 +369,11 @@ export default function NewOrderPage() {
       alert('กรุณาเลือกสินค้า/บริการอย่างน้อย 1 รายการ')
       return
     }
+    // Validate receipt is required when deposit > 0
+    if (parseFloat(deposit) > 0 && !receiptFile) {
+      alert('กรุณาอัพโหลดสลิปโอนเงินเมื่อมีการชำระเงิน')
+      return
+    }
 
     setSaving(true)
 
@@ -1119,13 +1124,22 @@ export default function NewOrderPage() {
             </div>
           </div>
 
-          {/* Receipt Upload - Optional */}
+          {/* Receipt Upload - Conditionally Required */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              อัพโหลดสลิปโอนเงิน (ไม่บังคับ)
+              อัพโหลดสลิปโอนเงิน
+              {parseFloat(deposit) > 0 ? (
+                <span className="text-red-500"> * (บังคับเมื่อมีการชำระ)</span>
+              ) : (
+                <span className="text-gray-500"> (ไม่บังคับ)</span>
+              )}
             </label>
             <div className="flex items-center gap-3">
-              <label className="flex-1 btn-secondary cursor-pointer text-center py-3">
+              <label className={`flex-1 cursor-pointer text-center py-3 rounded-lg transition-colors ${
+                parseFloat(deposit) > 0
+                  ? 'bg-pink-50 border-2 border-pink-300 hover:bg-pink-100 dark:bg-pink-900/20 dark:border-pink-700'
+                  : 'btn-secondary'
+              }`}>
                 {receiptFile ? (
                   <span className="flex items-center justify-center gap-2">
                     <span>✅</span>
