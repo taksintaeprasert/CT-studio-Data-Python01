@@ -485,6 +485,7 @@ export default function NewOrderPage() {
         order_id: order.id,
         product_id: p.product_id,
         is_upsell: p.is_upsell,
+        item_price: p.price, // Save item price for artist commission calculation
       }))
 
       const { error: itemsError } = await supabase.from('order_items').insert(orderItems)

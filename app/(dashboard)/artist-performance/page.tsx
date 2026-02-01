@@ -139,12 +139,13 @@ export default function ArtistPerformancePage() {
           artist_completed_at,
           sales_completed_at,
           appointment_date,
-          orders!inner(order_date, customer_id),
+          created_at,
+          orders(order_date, customer_id),
           product:products(category, validity_months)
         `)
         .eq('artist_id', selectedArtistId)
-        .gte('orders.order_date', startDate)
-        .lte('orders.order_date', endDate)
+        .gte('created_at', `${startDate}T00:00:00`)
+        .lte('created_at', `${endDate}T23:59:59`)
 
       if (!orderItems) {
         setLoading(false)
@@ -161,20 +162,20 @@ export default function ArtistPerformancePage() {
       )
       const completedServices = completedItems.length
 
-      // Group booking by date
+      // Group booking by date (use order_item created_at date)
       const bookingByDateMap = new Map<string, number>()
       orderItems.forEach(item => {
-        const date = item.orders?.order_date
+        const date = item.created_at ? item.created_at.split('T')[0] : null
         if (date) {
           const current = bookingByDateMap.get(date) || 0
           bookingByDateMap.set(date, current + (item.item_price || 0))
         }
       })
 
-      // Group commission by date (only completed services)
+      // Group commission by date (only completed services, use created_at date)
       const commissionByDateMap = new Map<string, number>()
       completedItems.forEach(item => {
-        const date = item.orders?.order_date
+        const date = item.created_at ? item.created_at.split('T')[0] : null
         if (date) {
           const itemPrice = item.item_price || 0
           const validityMonths = item.product?.validity_months || 0
