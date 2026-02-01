@@ -455,19 +455,44 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
             {/* Face Photo from Order Creation */}
             {customer?.face_photo_url && (
               <div className="relative group">
-                <div className="aspect-square relative rounded-lg overflow-hidden border-2 border-blue-500 dark:border-blue-400">
+                <a
+                  href={customer.face_photo_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block aspect-square relative rounded-lg overflow-hidden border-2 border-blue-500 dark:border-blue-400 cursor-pointer hover:border-blue-600 dark:hover:border-blue-300 transition-colors"
+                >
                   <Image
                     src={customer.face_photo_url}
                     alt="รูปหน้าลูกค้า"
                     fill
                     className="object-cover"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement
+                      target.style.display = 'none'
+                      const parent = target.parentElement
+                      if (parent) {
+                        parent.innerHTML = `
+                          <div class="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-800">
+                            <svg class="w-12 h-12 text-gray-400 dark:text-gray-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">ไม่สามารถโหลดภาพได้</p>
+                          </div>
+                        `
+                      }
+                    }}
                   />
                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-end justify-center pb-2">
                     <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                       รูปหน้าลูกค้า
                     </span>
                   </div>
-                </div>
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <svg className="w-5 h-5 text-white drop-shadow-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </div>
+                </a>
                 <p className="text-xs text-center mt-1 text-gray-600 dark:text-gray-400">รูปหน้าลูกค้า</p>
               </div>
             )}
@@ -475,19 +500,58 @@ export default function EditOrderPage({ params }: { params: { id: string } }) {
             {/* Payment Receipts */}
             {payments.map((payment) => (
               <div key={payment.id} className="relative group">
-                <div className="aspect-square relative rounded-lg overflow-hidden border-2 border-green-500 dark:border-green-400">
-                  <Image
-                    src={payment.receipt_url || ''}
-                    alt={`สลิปโอนเงิน ฿${payment.amount.toLocaleString()}`}
-                    fill
-                    className="object-cover"
-                  />
+                <a
+                  href={payment.receipt_url || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block aspect-square relative rounded-lg overflow-hidden border-2 border-green-500 dark:border-green-400 cursor-pointer hover:border-green-600 dark:hover:border-green-300 transition-colors"
+                  onClick={(e) => {
+                    if (!payment.receipt_url) {
+                      e.preventDefault()
+                    }
+                  }}
+                >
+                  {payment.receipt_url ? (
+                    <Image
+                      src={payment.receipt_url}
+                      alt={`สลิปโอนเงิน ฿${payment.amount.toLocaleString()}`}
+                      fill
+                      className="object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement
+                        target.style.display = 'none'
+                        const parent = target.parentElement
+                        if (parent) {
+                          parent.innerHTML = `
+                            <div class="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-800">
+                              <svg class="w-12 h-12 text-gray-400 dark:text-gray-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                              </svg>
+                              <p class="text-xs text-gray-500 dark:text-gray-400">ไม่สามารถโหลดภาพได้</p>
+                            </div>
+                          `
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-800">
+                      <svg className="w-12 h-12 text-gray-400 dark:text-gray-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">ไม่มีสลิป</p>
+                    </div>
+                  )}
                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-end justify-center pb-2">
                     <span className="bg-green-500 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                       ฿{payment.amount.toLocaleString()}
                     </span>
                   </div>
-                </div>
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <svg className="w-5 h-5 text-white drop-shadow-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </div>
+                </a>
                 <p className="text-xs text-center mt-1 text-gray-600 dark:text-gray-400">
                   สลิป ฿{payment.amount.toLocaleString()}
                 </p>

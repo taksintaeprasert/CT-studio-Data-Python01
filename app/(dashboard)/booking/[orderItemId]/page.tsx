@@ -24,11 +24,24 @@ interface OrderItemDetails {
   orders: {
     id: number
     total_income: number
+    customer_id: number
     customers: {
+      id: number
       full_name: string
       nickname: string | null
     }
   } | null
+}
+
+interface BookingHistoryItem {
+  id: number
+  order_id: number
+  appointment_date: string
+  appointment_time: string | null
+  booking_title: string | null
+  product_name: string
+  artist_name: string | null
+  item_status: string
 }
 
 export default function BookingPage({ params }: { params: { orderItemId: string } }) {
@@ -43,6 +56,9 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
   const [newAppointmentDate, setNewAppointmentDate] = useState('')
   const [newAppointmentTime, setNewAppointmentTime] = useState('')
   const [savingAppointment, setSavingAppointment] = useState(false)
+  const [showBookingHistory, setShowBookingHistory] = useState(false)
+  const [bookingHistory, setBookingHistory] = useState<BookingHistoryItem[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
 
   useEffect(() => {
     loadOrderItemDetails()
@@ -65,7 +81,9 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
         orders!inner (
           id,
           total_income,
+          customer_id,
           customers!inner (
+            id,
             full_name,
             nickname
           )
@@ -83,6 +101,60 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
       }
     }
     setLoading(false)
+  }
+
+  const fetchBookingHistory = async (customerId: number) => {
+    setLoadingHistory(true)
+    try {
+      const { data, error } = await supabase
+        .from('order_items')
+        .select(`
+          id,
+          order_id,
+          appointment_date,
+          appointment_time,
+          booking_title,
+          item_status,
+          products (product_name),
+          artists:staff!order_items_artist_id_fkey (staff_name),
+          orders!inner (
+            customer_id
+          )
+        `)
+        .eq('orders.customer_id', customerId)
+        .not('appointment_date', 'is', null)
+        .neq('item_status', 'cancelled')
+        .order('appointment_date', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching booking history:', error)
+        setBookingHistory([])
+      } else {
+        const mapped: BookingHistoryItem[] = (data || []).map((item: any) => ({
+          id: item.id,
+          order_id: item.order_id,
+          appointment_date: item.appointment_date,
+          appointment_time: item.appointment_time,
+          booking_title: item.booking_title,
+          product_name: item.products?.product_name || 'Unknown',
+          artist_name: item.artists?.staff_name || null,
+          item_status: item.item_status,
+        }))
+        setBookingHistory(mapped)
+      }
+    } catch (error) {
+      console.error('Error fetching booking history:', error)
+      setBookingHistory([])
+    } finally {
+      setLoadingHistory(false)
+    }
+  }
+
+  const handleShowHistory = () => {
+    if (orderItem?.orders?.customer_id) {
+      fetchBookingHistory(orderItem.orders.customer_id)
+      setShowBookingHistory(true)
+    }
   }
 
   const loadPaymentData = async (orderId: number, totalIncome: number) => {
@@ -255,11 +327,20 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
           {/* Customer Info & Payment Status - Inline */}
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
             {orderItem.orders?.customers && (
-              <div className="text-gray-600 dark:text-gray-400">
-                ลูกค้า: <span className="font-medium text-gray-900 dark:text-white">
-                  {orderItem.orders.customers.full_name}
-                  {orderItem.orders.customers.nickname && ` (${orderItem.orders.customers.nickname})`}
-                </span>
+              <div className="flex items-center gap-2">
+                <div className="text-gray-600 dark:text-gray-400">
+                  ลูกค้า: <span className="font-medium text-gray-900 dark:text-white">
+                    {orderItem.orders.customers.full_name}
+                    {orderItem.orders.customers.nickname && ` (${orderItem.orders.customers.nickname})`}
+                  </span>
+                </div>
+                <button
+                  onClick={handleShowHistory}
+                  className="px-2 py-1 bg-purple-500 hover:bg-purple-600 text-white rounded-md text-xs font-medium transition-colors"
+                  title="ดูประวัติ Booking Chat"
+                >
+                  📜 ประวัติ
+                </button>
               </div>
             )}
             {orderItem.orders && (
@@ -347,6 +428,101 @@ export default function BookingPage({ params }: { params: { orderItemId: string 
               >
                 {savingAppointment ? 'กำลังบันทึก...' : 'บันทึก'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Booking History Modal */}
+      {showBookingHistory && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="p-6 border-b dark:border-gray-700 bg-gradient-to-r from-purple-500 to-pink-500">
+              <div className="flex items-center justify-between">
+                <div className="text-white">
+                  <h3 className="text-xl font-bold">📜 ประวัติ Booking Chat</h3>
+                  {orderItem?.orders?.customers && (
+                    <p className="text-purple-100 text-sm mt-1">
+                      {orderItem.orders.customers.full_name}
+                      {orderItem.orders.customers.nickname && ` (${orderItem.orders.customers.nickname})`}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowBookingHistory(false)}
+                  className="text-white hover:text-gray-200 text-2xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/20"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingHistory ? (
+                <div className="text-center text-gray-500 py-8">กำลังโหลด...</div>
+              ) : bookingHistory.length === 0 ? (
+                <div className="text-center text-gray-500 py-8">ไม่พบประวัติ Booking Chat</div>
+              ) : (
+                <div className="space-y-3">
+                  {bookingHistory.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        router.push(`/booking/${item.id}`)
+                        setShowBookingHistory(false)
+                      }}
+                      className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                        item.id === orderItem?.id
+                          ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-pink-300 dark:hover:border-pink-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h4 className="font-semibold text-gray-900 dark:text-white">
+                              {item.product_name}
+                            </h4>
+                            {item.id === orderItem?.id && (
+                              <span className="px-2 py-0.5 bg-pink-500 text-white text-xs rounded-full">
+                                ปัจจุบัน
+                              </span>
+                            )}
+                          </div>
+                          <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                            <div className="flex items-center gap-2">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              {new Date(item.appointment_date).toLocaleDateString('th-TH', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                              })}
+                              {item.appointment_time && ` • ${item.appointment_time.substring(0, 5)}`}
+                            </div>
+                            {item.artist_name && (
+                              <div className="flex items-center gap-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                                {item.artist_name}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className={`px-2 py-1 rounded text-xs font-bold ${
+                          item.item_status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' :
+                          item.item_status === 'scheduled' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
+                          'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+                        }`}>
+                          {item.item_status}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

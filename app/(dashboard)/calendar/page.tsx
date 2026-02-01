@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useLanguage } from '@/lib/language-context'
+import { useUser } from '@/lib/user-context'
 
 interface Staff {
   id: number
@@ -23,12 +24,15 @@ interface Appointment {
   artist_id: number | null
   artist_name: string | null
   customer_name: string
+  customer_phone: string | null
+  customer_id: number | null
   booking_title: string | null
   note: string | null
 }
 
 export default function CalendarPage() {
   const router = useRouter()
+  const { user } = useUser()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [artists, setArtists] = useState<Staff[]>([])
@@ -38,9 +42,17 @@ export default function CalendarPage() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [dayAppointments, setDayAppointments] = useState<Appointment[]>([])
   const [showFilterDropdown, setShowFilterDropdown] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<Appointment[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [showSearchResults, setShowSearchResults] = useState(false)
 
   const { t, language } = useLanguage()
   const supabase = createClient()
+
+  // Check if user is artist
+  const isArtist = user?.role === 'artist'
+  const canViewAllArtists = user?.role === 'super_admin' || user?.role === 'sales' || user?.role === 'admin' || user?.role === 'marketer'
 
   const daysOfWeek = language === 'th'
     ? ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.']
@@ -84,7 +96,7 @@ export default function CalendarPage() {
     const firstDay = new Date(year, month, 1).toISOString().split('T')[0]
     const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0]
 
-    const { data } = await supabase
+    let query = supabase
       .from('order_items')
       .select(`
         id,
@@ -98,13 +110,20 @@ export default function CalendarPage() {
         product:products(product_name, product_code),
         order:orders(
           note,
-          customers(full_name)
+          customers(id, full_name, phone)
         )
       `)
       .not('appointment_date', 'is', null)
       .gte('appointment_date', firstDay)
       .lte('appointment_date', lastDay)
       .neq('item_status', 'cancelled')
+
+    // If user is Artist, only show their own appointments
+    if (isArtist && user?.id) {
+      query = query.eq('artist_id', user.id)
+    }
+
+    const { data } = await query
 
     const mapped: Appointment[] = (data || []).map((item: any) => ({
       id: item.id,
@@ -117,6 +136,8 @@ export default function CalendarPage() {
       artist_id: item.artist_id,
       artist_name: item.artist?.staff_name || null,
       customer_name: item.order?.customers?.full_name || 'Unknown',
+      customer_phone: item.order?.customers?.phone || null,
+      customer_id: item.order?.customers?.id || null,
       booking_title: item.booking_title || null,
       note: item.order?.note || null,
     }))
@@ -275,6 +296,97 @@ export default function CalendarPage() {
     router.push(`/booking/${apt.id}`)
   }
 
+  // Search booking chats by customer name or phone
+  const searchBookingChats = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([])
+      setShowSearchResults(false)
+      return
+    }
+
+    setIsSearching(true)
+    setShowSearchResults(true)
+
+    try {
+      let searchQuery = supabase
+        .from('order_items')
+        .select(`
+          id,
+          order_id,
+          appointment_date,
+          appointment_time,
+          item_status,
+          artist_id,
+          booking_title,
+          artist:staff!order_items_artist_id_fkey(staff_name),
+          product:products(product_name, product_code),
+          order:orders(
+            note,
+            customers(id, full_name, phone)
+          )
+        `)
+        .not('appointment_date', 'is', null)
+        .neq('item_status', 'cancelled')
+
+      // If user is Artist, only search their own appointments
+      if (isArtist && user?.id) {
+        searchQuery = searchQuery.eq('artist_id', user.id)
+      }
+
+      const { data } = await searchQuery
+
+      // Filter results by customer name or phone on the client side
+      const filtered = (data || []).filter((item: any) => {
+        const customerName = item.order?.customers?.full_name?.toLowerCase() || ''
+        const customerPhone = item.order?.customers?.phone || ''
+        const searchLower = query.toLowerCase()
+
+        return customerName.includes(searchLower) || customerPhone.includes(query)
+      })
+
+      const mapped: Appointment[] = filtered.map((item: any) => ({
+        id: item.id,
+        order_id: item.order_id,
+        product_name: item.product?.product_name || 'Unknown',
+        product_code: item.product?.product_code || '',
+        appointment_date: item.appointment_date,
+        appointment_time: item.appointment_time,
+        item_status: item.item_status,
+        artist_id: item.artist_id,
+        artist_name: item.artist?.staff_name || null,
+        customer_name: item.order?.customers?.full_name || 'Unknown',
+        customer_phone: item.order?.customers?.phone || null,
+        customer_id: item.order?.customers?.id || null,
+        booking_title: item.booking_title || null,
+        note: item.order?.note || null,
+      }))
+
+      // Sort by appointment date (most recent first)
+      mapped.sort((a, b) => new Date(b.appointment_date).getTime() - new Date(a.appointment_date).getTime())
+
+      setSearchResults(mapped)
+    } catch (error) {
+      console.error('Error searching booking chats:', error)
+      setSearchResults([])
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery) {
+        searchBookingChats(searchQuery)
+      } else {
+        setSearchResults([])
+        setShowSearchResults(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
   const days = getDaysInMonth()
   const selectedCount = selectedArtistIds.size + (showNoArtist ? 1 : 0)
   const totalCount = artists.length + 1
@@ -288,8 +400,89 @@ export default function CalendarPage() {
           <p className="text-sm text-gray-500 dark:text-gray-400">{t('calendar.subtitle')}</p>
         </div>
 
-        {/* Artist Filter - Checkbox Style - Mobile Optimized */}
+        {/* Search Booking Chat */}
         <div className="relative w-full">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={language === 'th' ? 'ค้นหาด้วยชื่อหรือเบอร์โทรลูกค้า...' : 'Search by customer name or phone...'}
+              className="w-full px-4 py-3 pl-11 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+            />
+            <svg className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {isSearching && (
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-pink-500 border-t-transparent"></div>
+              </div>
+            )}
+          </div>
+
+          {/* Search Results Dropdown */}
+          {showSearchResults && searchQuery && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowSearchResults(false)} />
+              <div className="absolute left-0 right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 max-h-96 overflow-y-auto">
+                {searchResults.length === 0 ? (
+                  <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+                    {language === 'th' ? 'ไม่พบผลลัพธ์' : 'No results found'}
+                  </div>
+                ) : (
+                  <div className="p-2">
+                    <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
+                      {language === 'th' ? `พบ ${searchResults.length} รายการ` : `Found ${searchResults.length} results`}
+                    </div>
+                    {searchResults.map((apt) => (
+                      <button
+                        key={apt.id}
+                        onClick={() => {
+                          handleOpenChat(apt)
+                          setShowSearchResults(false)
+                          setSearchQuery('')
+                        }}
+                        className="w-full px-3 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg text-left transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${getArtistColor(apt.artist_id)}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-gray-900 dark:text-white text-sm truncate">
+                              {apt.customer_name}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                              {apt.product_name} • {new Date(apt.appointment_date).toLocaleDateString(language === 'th' ? 'th-TH' : 'en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </div>
+                            {apt.customer_phone && (
+                              <div className="text-xs text-gray-400 dark:text-gray-500">
+                                📞 {apt.customer_phone}
+                              </div>
+                            )}
+                          </div>
+                          <div className={`px-2 py-1 rounded text-[10px] font-bold ${
+                            apt.item_status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' :
+                            apt.item_status === 'scheduled' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
+                            'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+                          }`}>
+                            {apt.item_status}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Artist Filter - Checkbox Style - Mobile Optimized - Hide for Artists */}
+        {canViewAllArtists && (
+          <div className="relative w-full">
           <button
             onClick={() => setShowFilterDropdown(!showFilterDropdown)}
             className="w-full flex items-center gap-2 px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-98 transition-all shadow-sm"
@@ -364,6 +557,7 @@ export default function CalendarPage() {
             </>
           )}
         </div>
+        )}
       </div>
 
       <div className="space-y-4">
@@ -595,21 +789,23 @@ export default function CalendarPage() {
       </div>
 
       {/* Legend - Mobile Optimized */}
-      <div className="card p-4">
-        <h4 className="font-semibold text-gray-800 dark:text-white mb-3 text-sm">Artist Legend</h4>
-        <div className="flex flex-wrap gap-2">
-          {artists.map(artist => (
-            <div key={artist.id} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className={`w-3 h-3 rounded ${getArtistColor(artist.id)}`} />
-              <span className="text-xs text-gray-700 dark:text-gray-300 font-medium">{artist.staff_name}</span>
+      {canViewAllArtists && (
+        <div className="card p-4">
+          <h4 className="font-semibold text-gray-800 dark:text-white mb-3 text-sm">Artist Legend</h4>
+          <div className="flex flex-wrap gap-2">
+            {artists.map(artist => (
+              <div key={artist.id} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className={`w-3 h-3 rounded ${getArtistColor(artist.id)}`} />
+                <span className="text-xs text-gray-700 dark:text-gray-300 font-medium">{artist.staff_name}</span>
+              </div>
+            ))}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="w-3 h-3 rounded bg-gray-400" />
+              <span className="text-xs text-gray-700 dark:text-gray-300 font-medium">No Artist</span>
             </div>
-          ))}
-          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <div className="w-3 h-3 rounded bg-gray-400" />
-            <span className="text-xs text-gray-700 dark:text-gray-300 font-medium">No Artist</span>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
