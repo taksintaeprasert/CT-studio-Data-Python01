@@ -153,9 +153,13 @@ export default function ArtistPerformancePage() {
         return
       }
 
-      // Count unique customers
-      const uniqueOrders = new Set(orderItems.map(item => item.order_id))
-      const totalCustomers = uniqueOrders.size
+      // Count unique customers (NOT orders)
+      const uniqueCustomers = new Set(
+        orderItems
+          .map(item => item.orders?.customer_id)
+          .filter((id): id is number => id !== null && id !== undefined)
+      )
+      const totalCustomers = uniqueCustomers.size
 
       // Count completed services
       const completedItems = orderItems.filter(item =>
