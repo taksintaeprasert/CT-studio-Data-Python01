@@ -13,7 +13,7 @@ interface PerformanceMetrics {
   completedServices: number
   totalBookingAmount: number
   totalCommission: number
-  periodMonth: string
+  periodDisplay: string
 }
 
 interface Notification extends ArtistNotification {
@@ -30,7 +30,7 @@ export default function ArtistHomePage() {
     completedServices: 0,
     totalBookingAmount: 0,
     totalCommission: 0,
-    periodMonth: ''
+    periodDisplay: ''
   })
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
@@ -43,26 +43,30 @@ export default function ArtistHomePage() {
     }
   }, [user?.id])
 
-  // Calculate current month dates (1st to last day of current month)
+  // Calculate period from 26th of previous month to today
   const getPeriodDates = () => {
     const today = new Date()
     const year = today.getFullYear()
     const month = today.getMonth()
 
-    // First day of current month
-    const firstDay = new Date(year, month, 1)
+    // Start date: 26th of previous month
+    const startDate = new Date(year, month - 1, 26)
 
-    // Last day of current month
-    const lastDay = new Date(year, month + 1, 0)
+    // End date: today
+    const endDate = today
 
     const formatDate = (d: Date) => {
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     }
 
+    const formatDisplayDate = (d: Date) => {
+      return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
+    }
+
     return {
-      startDate: formatDate(firstDay),
-      endDate: formatDate(lastDay),
-      displayMonth: today.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })
+      startDate: formatDate(startDate),
+      endDate: formatDate(endDate),
+      displayPeriod: `${formatDisplayDate(startDate)} - ${formatDisplayDate(endDate)}`
     }
   }
 
@@ -70,7 +74,7 @@ export default function ArtistHomePage() {
     if (!user?.id) return
 
     setLoading(true)
-    const { startDate, endDate, displayMonth } = getPeriodDates()
+    const { startDate, endDate, displayPeriod } = getPeriodDates()
 
     try {
       // Get commission settings for this artist
@@ -83,7 +87,7 @@ export default function ArtistHomePage() {
       const commissionNormal = commissionData?.commission_normal_percent || 0
       const commission50 = commissionData?.commission_50_percent || 0
 
-      // Get all order_items assigned to this artist (not filtered by date)
+      // Get all order_items assigned to this artist with order created_at
       const { data: orderItems, error: itemsError } = await supabase
         .from('order_items')
         .select(`
@@ -93,7 +97,7 @@ export default function ArtistHomePage() {
           artist_completed_at,
           sales_completed_at,
           product:products(validity_months),
-          orders!inner(customer_id)
+          orders!inner(customer_id, created_at)
         `)
         .eq('artist_id', user.id)
 
@@ -111,26 +115,36 @@ export default function ArtistHomePage() {
         return
       }
 
-      // Count unique customers (NOT orders)
+      // Filter items for booking value by order created_at
+      const bookingItems = orderItems.filter((item: any) => {
+        const orderCreatedAt = item.orders?.created_at
+        if (!orderCreatedAt) return false
+        const createdDate = new Date(orderCreatedAt).toISOString().split('T')[0]
+        return createdDate >= startDate && createdDate <= endDate
+      })
+
+      // Count unique customers from booking period
       const uniqueCustomers = new Set(
-        orderItems
+        bookingItems
           .map((item: any) => item.orders?.customer_id)
           .filter((id): id is number => id !== null && id !== undefined)
       )
       const totalCustomers = uniqueCustomers.size
 
-      // Count completed services (both artist AND sales marked complete)
+      // Count completed services (both artist AND sales marked complete) - all time for comparison
       const completedServices = orderItems.filter(item =>
         item.artist_completed_at && item.sales_completed_at
       ).length
 
-      // Calculate total booking amount
-      const totalBookingAmount = orderItems.reduce((sum, item) => sum + (item.item_price || 0), 0)
+      // Calculate total booking amount from orders created in the period
+      const totalBookingAmount = bookingItems.reduce((sum, item) => sum + (item.item_price || 0), 0)
 
-      // Calculate commission from completed services only
-      const completedItems = orderItems.filter(item =>
-        item.artist_completed_at && item.sales_completed_at
-      )
+      // Calculate commission from completed services in the period (by artist_completed_at)
+      const completedItems = orderItems.filter(item => {
+        if (!item.artist_completed_at || !item.sales_completed_at) return false
+        const completedDate = new Date(item.artist_completed_at).toISOString().split('T')[0]
+        return completedDate >= startDate && completedDate <= endDate
+      })
 
       let totalCommission = 0
       completedItems.forEach(item => {
@@ -151,7 +165,7 @@ export default function ArtistHomePage() {
         completedServices,
         totalBookingAmount,
         totalCommission: Math.round(totalCommission), // Round to nearest baht
-        periodMonth: displayMonth
+        periodDisplay: displayPeriod
       })
     } catch (error) {
       console.error('Error fetching performance metrics:', error)
@@ -253,9 +267,9 @@ export default function ArtistHomePage() {
       <div className="card p-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white">
         <div className="text-center">
           <p className="text-sm opacity-90">ผลงานของคุณ</p>
-          <p className="text-2xl font-bold">ทั้งหมด</p>
+          <p className="text-2xl font-bold">{loading ? '...' : metrics.periodDisplay}</p>
           <p className="text-xs opacity-75 mt-1">
-            (คำนวณจาก Orders ที่ลงคิวให้คุณ)
+            (Booking นับจากวันสร้าง Orders / ค่าคอมนับจากวันทำเสร็จ)
           </p>
         </div>
       </div>
