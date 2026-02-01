@@ -83,7 +83,7 @@ export default function ArtistHomePage() {
       const commissionNormal = commissionData?.commission_normal_percent || 0
       const commission50 = commissionData?.commission_50_percent || 0
 
-      // Get all order_items for this artist created in current month
+      // Get all order_items assigned to this artist (not filtered by date)
       const { data: orderItems, error: itemsError } = await supabase
         .from('order_items')
         .select(`
@@ -92,11 +92,10 @@ export default function ArtistHomePage() {
           item_price,
           artist_completed_at,
           sales_completed_at,
-          product:products(validity_months)
+          product:products(validity_months),
+          orders!inner(customer_id)
         `)
         .eq('artist_id', user.id)
-        .gte('created_at', `${startDate}T00:00:00`)
-        .lte('created_at', `${endDate}T23:59:59`)
 
       console.log('Artist Performance Query:', {
         artistId: user.id,
@@ -112,9 +111,13 @@ export default function ArtistHomePage() {
         return
       }
 
-      // Count unique orders (customers)
-      const uniqueOrders = new Set(orderItems.map(item => item.order_id))
-      const totalCustomers = uniqueOrders.size
+      // Count unique customers (NOT orders)
+      const uniqueCustomers = new Set(
+        orderItems
+          .map((item: any) => item.orders?.customer_id)
+          .filter((id): id is number => id !== null && id !== undefined)
+      )
+      const totalCustomers = uniqueCustomers.size
 
       // Count completed services (both artist AND sales marked complete)
       const completedServices = orderItems.filter(item =>
@@ -250,9 +253,9 @@ export default function ArtistHomePage() {
       <div className="card p-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white">
         <div className="text-center">
           <p className="text-sm opacity-90">ผลงานของคุณ</p>
-          <p className="text-2xl font-bold">{metrics.periodMonth}</p>
+          <p className="text-2xl font-bold">ทั้งหมด</p>
           <p className="text-xs opacity-75 mt-1">
-            (คำนวณจาก Booking ในเดือนนี้)
+            (คำนวณจาก Orders ที่ลงคิวให้คุณ)
           </p>
         </div>
       </div>
