@@ -144,8 +144,9 @@ export default function ArtistPerformancePage() {
           product:products(category, validity_months)
         `)
         .eq('artist_id', selectedArtistId)
-        .gte('created_at', `${startDate}T00:00:00`)
-        .lte('created_at', `${endDate}T23:59:59`)
+        .gte('artist_completed_at', `${startDate}T00:00:00`)
+        .lte('artist_completed_at', `${endDate}T23:59:59`)
+        .not('artist_completed_at', 'is', null)
 
       if (!orderItems) {
         setLoading(false)
@@ -162,20 +163,20 @@ export default function ArtistPerformancePage() {
       )
       const completedServices = completedItems.length
 
-      // Group booking by date (use order_item created_at date)
+      // Group booking by date (use order_item artist_completed_at date)
       const bookingByDateMap = new Map<string, number>()
       orderItems.forEach(item => {
-        const date = item.created_at ? item.created_at.split('T')[0] : null
+        const date = item.artist_completed_at ? item.artist_completed_at.split('T')[0] : null
         if (date) {
           const current = bookingByDateMap.get(date) || 0
           bookingByDateMap.set(date, current + (item.item_price || 0))
         }
       })
 
-      // Group commission by date (only completed services, use created_at date)
+      // Group commission by date (only completed services, use artist_completed_at date)
       const commissionByDateMap = new Map<string, number>()
       completedItems.forEach(item => {
-        const date = item.created_at ? item.created_at.split('T')[0] : null
+        const date = item.artist_completed_at ? item.artist_completed_at.split('T')[0] : null
         if (date) {
           const itemPrice = item.item_price || 0
           const validityMonths = item.product?.validity_months || 0
