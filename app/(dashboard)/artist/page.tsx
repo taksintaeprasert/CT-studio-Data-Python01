@@ -164,15 +164,18 @@ export default function ArtistHomePage() {
       // Calculate commission from completed services in the period (use completedInPeriod)
       let totalCommission = 0
       completedInPeriod.forEach(item => {
-        const itemPrice = item.item_price || 0
+        // Use commission_base_price for commission calculation
+        // For FREE services, this equals the paired paid service price
+        // For normal services, this equals item_price
+        const commissionBasePrice = item.commission_base_price || item.item_price || 0
         const validityMonths = item.product?.validity_months || 0
 
         // Check if it's a 50% service (validity_months = 12)
         if (validityMonths === 12) {
-          totalCommission += itemPrice * (commission50 / 100)
+          totalCommission += commissionBasePrice * (commission50 / 100)
         } else {
           // Normal service (including FREE services)
-          totalCommission += itemPrice * (commissionNormal / 100)
+          totalCommission += commissionBasePrice * (commissionNormal / 100)
         }
       })
 
