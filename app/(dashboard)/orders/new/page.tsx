@@ -294,13 +294,38 @@ export default function NewOrderPage() {
       return
     }
 
+    // For FREE services, find the paired paid service to get its price for commission calculation
+    let commissionBasePrice = product.list_price // Default for normal products
+
+    if (product.is_free || product.list_price === 0 || product.product_code.toUpperCase().includes('FREE')) {
+      const freeBaseCode = extractBaseCode(product.product_code)
+      const freePriceCode = extractPriceCode(product.product_code)
+
+      // Look for the paired paid service in selectedProducts
+      const pairedPaidService = selectedProducts.find(p => {
+        const paidBaseCode = extractBaseCode(p.product_code)
+        const paidPriceCode = extractPriceCode(p.product_code)
+        return (
+          paidBaseCode === freeBaseCode &&
+          paidPriceCode === freePriceCode &&
+          !p.product_code.toUpperCase().includes('FREE') &&
+          p.price > 0
+        )
+      })
+
+      // If found paired service, use its price for commission calculation
+      if (pairedPaidService) {
+        commissionBasePrice = pairedPaidService.price
+      }
+    }
+
     const newProduct: SelectedProduct = {
       product_id: product.id,
       product_code: product.product_code,
       product_name: product.product_name,
       price: product.list_price,
       is_upsell: false,
-      commission_base_price: product.list_price, // For normal products, commission is based on list price
+      commission_base_price: commissionBasePrice, // For FREE services, use paired service price; for normal products, use list price
     }
     setSelectedProducts(prev => [...prev, newProduct])
 
