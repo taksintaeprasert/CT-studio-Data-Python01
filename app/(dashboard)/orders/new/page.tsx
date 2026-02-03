@@ -301,8 +301,8 @@ export default function NewOrderPage() {
       const freeBaseCode = extractBaseCode(product.product_code)
       const freePriceCode = extractPriceCode(product.product_code)
 
-      // Look for the paired paid service in selectedProducts
-      const pairedPaidService = selectedProducts.find(p => {
+      // First, try to find the paired paid service in selectedProducts
+      let pairedPaidService = selectedProducts.find(p => {
         const paidBaseCode = extractBaseCode(p.product_code)
         const paidPriceCode = extractPriceCode(p.product_code)
         return (
@@ -313,8 +313,24 @@ export default function NewOrderPage() {
         )
       })
 
-      // If found paired service, use its price for commission calculation
-      if (pairedPaidService) {
+      // If not found in selectedProducts, search in products table
+      if (!pairedPaidService) {
+        const pairedProduct = products.find(p => {
+          const paidBaseCode = extractBaseCode(p.product_code)
+          const paidPriceCode = extractPriceCode(p.product_code)
+          return (
+            paidBaseCode === freeBaseCode &&
+            paidPriceCode === freePriceCode &&
+            !p.product_code.toUpperCase().includes('FREE') &&
+            p.list_price > 0 &&
+            !p.is_free
+          )
+        })
+
+        if (pairedProduct) {
+          commissionBasePrice = pairedProduct.list_price
+        }
+      } else {
         commissionBasePrice = pairedPaidService.price
       }
     }
@@ -356,8 +372,8 @@ export default function NewOrderPage() {
     const freeBaseCode = extractBaseCode(suggestedProduct.product_code)
     const freePriceCode = extractPriceCode(suggestedProduct.product_code)
 
-    // Look for the paired paid service in selectedProducts
-    const pairedPaidService = selectedProducts.find(p => {
+    // First, try to find the paired paid service in selectedProducts
+    let pairedPaidService = selectedProducts.find(p => {
       const paidBaseCode = extractBaseCode(p.product_code)
       const paidPriceCode = extractPriceCode(p.product_code)
       return (
@@ -368,6 +384,28 @@ export default function NewOrderPage() {
       )
     })
 
+    // If not found in selectedProducts, search in products table
+    let commissionBasePrice = suggestedProduct.list_price
+    if (!pairedPaidService) {
+      const pairedProduct = products.find(p => {
+        const paidBaseCode = extractBaseCode(p.product_code)
+        const paidPriceCode = extractPriceCode(p.product_code)
+        return (
+          paidBaseCode === freeBaseCode &&
+          paidPriceCode === freePriceCode &&
+          !p.product_code.toUpperCase().includes('FREE') &&
+          p.list_price > 0 &&
+          !p.is_free
+        )
+      })
+
+      if (pairedProduct) {
+        commissionBasePrice = pairedProduct.list_price
+      }
+    } else {
+      commissionBasePrice = pairedPaidService.price
+    }
+
     const newProduct: SelectedProduct = {
       product_id: suggestedProduct.id,
       product_code: suggestedProduct.product_code,
@@ -375,7 +413,7 @@ export default function NewOrderPage() {
       price: suggestedProduct.list_price, // This is 0 for FREE products
       is_upsell: false,
       // For FREE services, use the paired paid service price for commission calculation
-      commission_base_price: pairedPaidService ? pairedPaidService.price : suggestedProduct.list_price,
+      commission_base_price: commissionBasePrice,
     }
     setSelectedProducts(prev => [...prev, newProduct])
     setSuggestedProduct(null)
