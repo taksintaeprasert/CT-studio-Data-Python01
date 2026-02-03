@@ -136,6 +136,7 @@ export default function ArtistPerformancePage() {
           id,
           order_id,
           item_price,
+          commission_base_price,
           artist_completed_at,
           sales_completed_at,
           appointment_date,
