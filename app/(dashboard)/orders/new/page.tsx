@@ -223,8 +223,10 @@ export default function NewOrderPage() {
 
   // Extract price code from product code (e.g., "10900" from "LIP10900" or "BROW5900")
   const extractPriceCode = (productCode: string): string | null => {
-    // Match digits at the end of the code (e.g., LIP10900 → 10900, BROW5900 → 5900)
-    const match = productCode.match(/(\d+)$/)
+    // Remove "FREE" suffix if exists, then match digits at the end
+    // (e.g., BROW5900FREE → BROW5900 → 5900, B9D15900FREE → B9D15900 → 15900)
+    const codeWithoutFree = productCode.replace(/FREE$/i, '')
+    const match = codeWithoutFree.match(/(\d+)$/)
     return match ? match[1] : null
   }
 
