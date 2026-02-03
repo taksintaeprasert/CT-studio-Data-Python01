@@ -40,6 +40,7 @@ interface SelectedProduct {
   product_name: string
   price: number
   is_upsell: boolean
+  commission_base_price: number // Price used for commission calculation (for FREE services, this equals the paired paid service price)
 }
 
 export default function NewOrderPage() {
@@ -299,6 +300,7 @@ export default function NewOrderPage() {
       product_name: product.product_name,
       price: product.list_price,
       is_upsell: false,
+      commission_base_price: product.list_price, // For normal products, commission is based on list price
     }
     setSelectedProducts(prev => [...prev, newProduct])
 
@@ -325,12 +327,30 @@ export default function NewOrderPage() {
   const addSuggestedProduct = () => {
     if (!suggestedProduct) return
 
+    // Find the paired paid service to get its price for commission calculation
+    const freeBaseCode = extractBaseCode(suggestedProduct.product_code)
+    const freePriceCode = extractPriceCode(suggestedProduct.product_code)
+
+    // Look for the paired paid service in selectedProducts
+    const pairedPaidService = selectedProducts.find(p => {
+      const paidBaseCode = extractBaseCode(p.product_code)
+      const paidPriceCode = extractPriceCode(p.product_code)
+      return (
+        paidBaseCode === freeBaseCode &&
+        paidPriceCode === freePriceCode &&
+        !p.product_code.toUpperCase().includes('FREE') &&
+        p.price > 0
+      )
+    })
+
     const newProduct: SelectedProduct = {
       product_id: suggestedProduct.id,
       product_code: suggestedProduct.product_code,
       product_name: suggestedProduct.product_name,
-      price: suggestedProduct.list_price,
+      price: suggestedProduct.list_price, // This is 0 for FREE products
       is_upsell: false,
+      // For FREE services, use the paired paid service price for commission calculation
+      commission_base_price: pairedPaidService ? pairedPaidService.price : suggestedProduct.list_price,
     }
     setSelectedProducts(prev => [...prev, newProduct])
     setSuggestedProduct(null)
@@ -485,7 +505,8 @@ export default function NewOrderPage() {
         order_id: order.id,
         product_id: p.product_id,
         is_upsell: p.is_upsell,
-        item_price: p.price, // Save item price for artist commission calculation
+        item_price: p.price, // Actual price charged to customer
+        commission_base_price: p.commission_base_price, // Price used for commission calculation (for FREE services, this equals paired service price)
       }))
 
       const { error: itemsError } = await supabase.from('order_items').insert(orderItems)

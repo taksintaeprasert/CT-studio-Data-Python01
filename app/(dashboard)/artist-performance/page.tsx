@@ -182,10 +182,13 @@ export default function ArtistPerformancePage() {
       completedItems.forEach(item => {
         const date = item.artist_completed_at ? item.artist_completed_at.split('T')[0] : null
         if (date) {
-          const itemPrice = item.item_price || 0
+          // Use commission_base_price for commission calculation
+          // For FREE services, this equals the paired paid service price
+          // For normal services, this equals item_price
+          const commissionBasePrice = item.commission_base_price || item.item_price || 0
           const validityMonths = item.product?.validity_months || 0
           const commissionPercent = validityMonths === 12 ? commission50 : commissionNormal
-          const commission = itemPrice * (commissionPercent / 100)
+          const commission = commissionBasePrice * (commissionPercent / 100)
 
           const current = commissionByDateMap.get(date) || 0
           commissionByDateMap.set(date, current + commission)

@@ -169,6 +169,7 @@ export type Database = {
           product_id: number
           is_upsell: boolean
           item_price: number
+          commission_base_price: number
           appointment_date: string | null
           appointment_time: string | null
           item_status: 'pending' | 'scheduled' | 'completed' | 'cancelled'
@@ -185,6 +186,7 @@ export type Database = {
           product_id: number
           is_upsell?: boolean
           item_price?: number
+          commission_base_price?: number
           appointment_date?: string | null
           appointment_time?: string | null
           item_status?: 'pending' | 'scheduled' | 'completed' | 'cancelled'
@@ -201,6 +203,7 @@ export type Database = {
           product_id?: number
           is_upsell?: boolean
           item_price?: number
+          commission_base_price?: number
           appointment_date?: string | null
           appointment_time?: string | null
           item_status?: 'pending' | 'scheduled' | 'completed' | 'cancelled'
