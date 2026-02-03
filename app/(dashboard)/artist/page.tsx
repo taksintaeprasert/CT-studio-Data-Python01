@@ -94,6 +94,7 @@ export default function ArtistHomePage() {
           id,
           order_id,
           item_price,
+          commission_base_price,
           artist_completed_at,
           sales_completed_at,
           product:products(validity_months),
