@@ -55,8 +55,8 @@ export default function AnalyticsPage() {
   // Filter states
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [selectedProduct, setSelectedProduct] = useState<string>('')
-  const [selectedCategory, setSelectedCategory] = useState<string>('')
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([])
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [keyword, setKeyword] = useState('')
 
   const { t } = useLanguage()
@@ -139,8 +139,9 @@ export default function AnalyticsPage() {
           .not('appointment_date', 'is', null)
 
         // Apply product filter
-        if (selectedProduct) {
-          query = query.eq('product_id', parseInt(selectedProduct))
+        if (selectedProducts.length > 0) {
+          const productIds = selectedProducts.map(p => parseInt(p))
+          query = query.in('product_id', productIds)
         }
 
         const { data, error } = await query
@@ -172,9 +173,9 @@ export default function AnalyticsPage() {
           }))
 
         // Apply category filter on client side
-        if (selectedCategory) {
+        if (selectedCategories.length > 0) {
           processedData = processedData.filter((item: SalesAnalytics) =>
-            item.category === selectedCategory
+            item.category && selectedCategories.includes(item.category)
           )
         }
 
@@ -229,11 +230,15 @@ export default function AnalyticsPage() {
     }
 
     fetchAnalytics()
-  }, [startDate, endDate, selectedProduct, selectedCategory, keyword])
+  }, [startDate, endDate, selectedProducts, selectedCategories, keyword])
 
   // Calculate totals
   const totalQuantity = dailySummary.reduce((sum, item) => sum + item.quantity, 0)
   const totalSales = dailySummary.reduce((sum, item) => sum + item.total_sales, 0)
+
+  // Calculate benchmarks (averages)
+  const avgSales = dailySummary.length > 0 ? totalSales / dailySummary.length : 0
+  const avgQuantity = dailySummary.length > 0 ? totalQuantity / dailySummary.length : 0
 
   // Chart data
   const dailyChartData = {
@@ -246,6 +251,19 @@ export default function AnalyticsPage() {
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
         fill: true,
         tension: 0.4,
+        order: 2,
+      },
+      {
+        label: 'เฉลี่ยยอดขาย (Benchmark)',
+        data: dailySummary.map(() => avgSales),
+        borderColor: 'rgb(239, 68, 68)',
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        borderWidth: 2,
+        borderDash: [5, 5],
+        fill: false,
+        tension: 0,
+        pointRadius: 0,
+        order: 1,
       },
     ],
   }
@@ -259,6 +277,20 @@ export default function AnalyticsPage() {
         backgroundColor: 'rgba(34, 197, 94, 0.5)',
         borderColor: 'rgb(34, 197, 94)',
         borderWidth: 1,
+        order: 2,
+      },
+      {
+        label: 'เฉลี่ยจำนวน (Benchmark)',
+        data: dailySummary.map(() => avgQuantity),
+        backgroundColor: 'rgba(239, 68, 68, 0.3)',
+        borderColor: 'rgb(239, 68, 68)',
+        borderWidth: 2,
+        borderDash: [5, 5],
+        type: 'line' as const,
+        fill: false,
+        tension: 0,
+        pointRadius: 0,
+        order: 1,
       },
     ],
   }
@@ -291,7 +323,7 @@ export default function AnalyticsPage() {
             🔍 ตัวกรอง (Filters)
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-1 gap-4 mb-4">
             {/* Date Range */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -300,42 +332,95 @@ export default function AnalyticsPage() {
               <DateRangeFilter onDateChange={handleDateChange} />
             </div>
 
-            {/* Category Filter */}
+            {/* Category Filter - Multi Select */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                หมวดหมู่
+                หมวดหมู่ (เลือกได้หลายอัน)
               </label>
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="">ทั้งหมด (All Categories)</option>
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
+              <div className="border border-gray-300 dark:border-gray-600 rounded-md p-3 max-h-48 overflow-y-auto bg-white dark:bg-gray-700">
+                <div className="space-y-2">
+                  <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600 p-1 rounded">
+                    <input
+                      type="checkbox"
+                      checked={selectedCategories.length === 0}
+                      onChange={() => setSelectedCategories([])}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300 font-semibold">
+                      ทั้งหมด (All Categories)
+                    </span>
+                  </label>
+                  {categories.map((cat) => (
+                    <label key={cat} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={selectedCategories.includes(cat)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedCategories([...selectedCategories, cat])
+                          } else {
+                            setSelectedCategories(selectedCategories.filter(c => c !== cat))
+                          }
+                        }}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{cat}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {selectedCategories.length > 0 && (
+                <div className="mt-2 text-sm text-blue-600 dark:text-blue-400">
+                  เลือกแล้ว {selectedCategories.length} หมวดหมู่
+                </div>
+              )}
             </div>
 
-            {/* Product Filter */}
+            {/* Product Filter - Multi Select */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                สินค้า
+                สินค้า (เลือกได้หลายอัน)
               </label>
-              <select
-                value={selectedProduct}
-                onChange={(e) => setSelectedProduct(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="">ทั้งหมด (All Products)</option>
-                {products.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.product_code} - {product.product_name}
-                  </option>
-                ))}
-              </select>
+              <div className="border border-gray-300 dark:border-gray-600 rounded-md p-3 max-h-48 overflow-y-auto bg-white dark:bg-gray-700">
+                <div className="space-y-2">
+                  <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600 p-1 rounded">
+                    <input
+                      type="checkbox"
+                      checked={selectedProducts.length === 0}
+                      onChange={() => setSelectedProducts([])}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300 font-semibold">
+                      ทั้งหมด (All Products)
+                    </span>
+                  </label>
+                  {products.map((product) => (
+                    <label key={product.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={selectedProducts.includes(String(product.id))}
+                        onChange={(e) => {
+                          const productId = String(product.id)
+                          if (e.target.checked) {
+                            setSelectedProducts([...selectedProducts, productId])
+                          } else {
+                            setSelectedProducts(selectedProducts.filter(p => p !== productId))
+                          }
+                        }}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        {product.product_code} - {product.product_name}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {selectedProducts.length > 0 && (
+                <div className="mt-2 text-sm text-blue-600 dark:text-blue-400">
+                  เลือกแล้ว {selectedProducts.length} สินค้า
+                </div>
+              )}
             </div>
           </div>
 
