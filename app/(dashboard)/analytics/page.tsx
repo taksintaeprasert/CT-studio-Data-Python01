@@ -102,11 +102,10 @@ export default function AnalyticsPage() {
       setLoading(true)
 
       try {
-        // Build query
+        // Build query - using created_at from orders to match Overview Dashboard
         let query = supabase
           .from('order_items')
           .select(`
-            appointment_date,
             item_price,
             product_id,
             products (
@@ -116,13 +115,14 @@ export default function AnalyticsPage() {
               category,
               list_price
             ),
-            orders (
+            orders!inner (
+              created_at,
               order_status
             )
           `)
-          .gte('appointment_date', startDate)
-          .lte('appointment_date', endDate)
-          .not('appointment_date', 'is', null)
+          .gte('orders.created_at', `${startDate}T00:00:00`)
+          .lte('orders.created_at', `${endDate}T23:59:59`)
+          .neq('orders.order_status', 'cancelled')
 
         // Apply product filter
         if (selectedProducts.length > 0) {
@@ -145,11 +145,11 @@ export default function AnalyticsPage() {
           return
         }
 
-        // Process data
+        // Process data - using created_at from orders
         let processedData = data
-          .filter((item: any) => item.products && item.appointment_date)
+          .filter((item: any) => item.products && item.orders)
           .map((item: any) => ({
-            date: item.appointment_date,
+            date: item.orders.created_at.split('T')[0], // Extract date from timestamp
             product_id: item.products.id,
             product_code: item.products.product_code,
             product_name: item.products.product_name,
