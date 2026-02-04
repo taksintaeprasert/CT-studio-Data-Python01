@@ -113,7 +113,8 @@ export default function AnalyticsPage() {
               id,
               product_code,
               product_name,
-              category
+              category,
+              list_price
             ),
             orders (
               order_status
@@ -154,7 +155,8 @@ export default function AnalyticsPage() {
             product_name: item.products.product_name,
             category: item.products.category,
             quantity: 1,
-            total_sales: parseFloat(item.item_price) || 0,
+            // Use item_price if available, fallback to list_price for old data
+            total_sales: parseFloat(item.item_price) || parseFloat(item.products.list_price) || 0,
           }))
 
         // Apply category filter on client side
