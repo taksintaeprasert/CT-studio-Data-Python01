@@ -6,21 +6,6 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import DateRangeFilter from '@/components/date-range-filter'
 import { useLanguage } from '@/lib/language-context'
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  LineElement,
-  PointElement,
-  Filler,
-} from 'chart.js'
-import { Bar, Line } from 'react-chartjs-2'
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, LineElement, PointElement, Filler)
 
 interface Product {
   id: number
@@ -236,79 +221,37 @@ export default function AnalyticsPage() {
   const totalQuantity = dailySummary.reduce((sum, item) => sum + item.quantity, 0)
   const totalSales = dailySummary.reduce((sum, item) => sum + item.total_sales, 0)
 
-  // Calculate benchmarks (averages)
-  const avgSales = dailySummary.length > 0 ? totalSales / dailySummary.length : 0
-  const avgQuantity = dailySummary.length > 0 ? totalQuantity / dailySummary.length : 0
+  // Group data by category
+  const categoryData = analyticsData.reduce((acc: any, item: SalesAnalytics) => {
+    const category = item.category || 'ไม่มีหมวดหมู่'
+    if (!acc[category]) {
+      acc[category] = {
+        category,
+        booking: 0,
+        income: 0,
+        products: {},
+      }
+    }
+    acc[category].booking += item.quantity
+    acc[category].income += item.total_sales
 
-  // Chart data
-  const dailyChartData = {
-    labels: dailySummary.map(d => d.date),
-    datasets: [
-      {
-        label: 'ยอดขาย (฿)',
-        data: dailySummary.map(d => d.total_sales),
-        borderColor: 'rgb(59, 130, 246)',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        fill: true,
-        tension: 0.4,
-        order: 2,
-      },
-      {
-        label: 'เฉลี่ยยอดขาย (Benchmark)',
-        data: dailySummary.map(() => avgSales),
-        borderColor: 'rgb(239, 68, 68)',
-        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-        borderWidth: 2,
-        borderDash: [5, 5],
-        fill: false,
-        tension: 0,
-        pointRadius: 0,
-        order: 1,
-      },
-    ],
-  }
+    // Group by product within category
+    const productKey = `${item.product_code} - ${item.product_name}`
+    if (!acc[category].products[productKey]) {
+      acc[category].products[productKey] = {
+        booking: 0,
+        income: 0,
+      }
+    }
+    acc[category].products[productKey].booking += item.quantity
+    acc[category].products[productKey].income += item.total_sales
 
-  const quantityChartData = {
-    labels: dailySummary.map(d => d.date),
-    datasets: [
-      {
-        label: 'จำนวนสินค้า',
-        data: dailySummary.map(d => d.quantity),
-        backgroundColor: 'rgba(34, 197, 94, 0.5)',
-        borderColor: 'rgb(34, 197, 94)',
-        borderWidth: 1,
-        order: 2,
-      },
-      {
-        label: 'เฉลี่ยจำนวน (Benchmark)',
-        data: dailySummary.map(() => avgQuantity),
-        backgroundColor: 'rgba(239, 68, 68, 0.3)',
-        borderColor: 'rgb(239, 68, 68)',
-        borderWidth: 2,
-        borderDash: [5, 5],
-        type: 'line' as const,
-        fill: false,
-        tension: 0,
-        pointRadius: 0,
-        order: 1,
-      },
-    ],
-  }
+    return acc
+  }, {})
 
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'top' as const,
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-      },
-    },
-  }
+  const categoryList = Object.values(categoryData).sort((a: any, b: any) =>
+    b.income - a.income
+  )
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-8">
@@ -466,24 +409,94 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Charts */}
-        {!loading && dailySummary.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                ยอดขายรายวัน (Daily Sales)
-              </h3>
-              <div style={{ height: '300px' }}>
-                <Line data={dailyChartData} options={chartOptions} />
-              </div>
-            </div>
+        {/* Category and Product Breakdown */}
+        {!loading && analyticsData.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
+              📊 สรุปยอด Booking / Income ตามหมวดหมู่และสินค้า
+            </h2>
 
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                จำนวนสินค้ารายวัน (Daily Quantity)
-              </h3>
-              <div style={{ height: '300px' }}>
-                <Bar data={quantityChartData} options={chartOptions} />
+            <div className="space-y-6">
+              {categoryList.map((cat: any, catIndex: number) => (
+                <div key={catIndex} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                  {/* Category Header */}
+                  <div className="bg-gradient-to-r from-blue-500 to-blue-600 dark:from-blue-700 dark:to-blue-800 px-6 py-4">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-xl font-bold text-white">
+                        {cat.category}
+                      </h3>
+                      <div className="flex gap-8 text-white">
+                        <div className="text-right">
+                          <div className="text-sm opacity-90">Booking</div>
+                          <div className="text-2xl font-bold">{cat.booking.toLocaleString()}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm opacity-90">Income</div>
+                          <div className="text-2xl font-bold">
+                            ฿{cat.income.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Products in Category */}
+                  <div className="bg-white dark:bg-gray-800">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                      <thead className="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            สินค้า
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Booking (จำนวน)
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Income (ยอดขาย)
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {Object.entries(cat.products)
+                          .sort((a: any, b: any) => b[1].income - a[1].income)
+                          .map(([productName, productData]: [string, any], prodIndex: number) => (
+                            <tr key={prodIndex} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                              <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                {productName}
+                              </td>
+                              <td className="px-6 py-4 text-sm text-right font-semibold text-blue-600 dark:text-blue-400">
+                                {productData.booking.toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4 text-sm text-right font-semibold text-green-600 dark:text-green-400">
+                                ฿{productData.income.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+
+              {/* Grand Total */}
+              <div className="bg-gradient-to-r from-gray-700 to-gray-800 dark:from-gray-800 dark:to-gray-900 rounded-lg px-6 py-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xl font-bold text-white">
+                    รวมทั้งหมด (Grand Total)
+                  </h3>
+                  <div className="flex gap-8 text-white">
+                    <div className="text-right">
+                      <div className="text-sm opacity-90">Total Booking</div>
+                      <div className="text-2xl font-bold">{totalQuantity.toLocaleString()}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm opacity-90">Total Income</div>
+                      <div className="text-2xl font-bold">
+                        ฿{totalSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
