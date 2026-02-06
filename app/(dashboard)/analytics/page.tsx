@@ -30,12 +30,22 @@ interface DailySummary {
   total_sales: number
 }
 
+interface ArtistCommission {
+  artist_id: number
+  artist_name: string
+  orders_50_percent: number
+  commission_percent: number
+  total_commission: number
+}
+
 export default function AnalyticsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [analyticsData, setAnalyticsData] = useState<SalesAnalytics[]>([])
   const [dailySummary, setDailySummary] = useState<DailySummary[]>([])
+  const [artistCommissions, setArtistCommissions] = useState<ArtistCommission[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingArtistData, setLoadingArtistData] = useState(true)
 
   // Filter states
   const [startDate, setStartDate] = useState('')
@@ -218,6 +228,108 @@ export default function AnalyticsPage() {
 
     fetchAnalytics()
   }, [startDate, endDate, selectedProducts, selectedCategories, keyword])
+
+  // Fetch artist 50% commission data
+  useEffect(() => {
+    if (!startDate || !endDate) return
+
+    const fetchArtistCommissions = async () => {
+      setLoadingArtistData(true)
+
+      try {
+        // Fetch order items with 50% discount products (validity_months = 12)
+        const { data: orderItems, error: orderItemsError } = await supabase
+          .from('order_items')
+          .select(`
+            id,
+            artist_id,
+            commission_base_price,
+            orders!inner (
+              created_at,
+              order_status
+            ),
+            products!inner (
+              validity_months
+            ),
+            staff!order_items_artist_id_fkey (
+              id,
+              staff_name
+            )
+          `)
+          .gte('orders.created_at', `${startDate}T00:00:00`)
+          .lte('orders.created_at', `${endDate}T23:59:59`)
+          .neq('orders.order_status', 'cancelled')
+          .eq('products.validity_months', 12)
+          .not('artist_id', 'is', null)
+
+        if (orderItemsError) {
+          console.error('Error fetching artist commission data:', orderItemsError)
+          setLoadingArtistData(false)
+          return
+        }
+
+        if (!orderItems || orderItems.length === 0) {
+          setArtistCommissions([])
+          setLoadingArtistData(false)
+          return
+        }
+
+        // Fetch commission settings for all artists
+        const { data: commissionSettings, error: commissionError } = await supabase
+          .from('commission_settings')
+          .select('artist_id, commission_50_percent')
+
+        if (commissionError) {
+          console.error('Error fetching commission settings:', commissionError)
+        }
+
+        // Create a map of artist_id to commission_50_percent
+        const commissionMap = new Map()
+        if (commissionSettings) {
+          commissionSettings.forEach((setting: any) => {
+            commissionMap.set(setting.artist_id, setting.commission_50_percent || 0)
+          })
+        }
+
+        // Group by artist
+        const artistMap = new Map()
+        orderItems.forEach((item: any) => {
+          const artistId = item.artist_id
+          const artistName = item.staff?.staff_name || 'Unknown'
+          const commissionPercent = commissionMap.get(artistId) || 0
+          const commissionBase = parseFloat(item.commission_base_price) || 0
+          const commission = commissionBase * (commissionPercent / 100)
+
+          if (!artistMap.has(artistId)) {
+            artistMap.set(artistId, {
+              artist_id: artistId,
+              artist_name: artistName,
+              orders_50_percent: 0,
+              commission_percent: commissionPercent,
+              total_commission: 0,
+            })
+          }
+
+          const artist = artistMap.get(artistId)
+          artist.orders_50_percent += 1
+          artist.total_commission += commission
+        })
+
+        // Convert map to array and sort by total commission descending
+        const artistList = Array.from(artistMap.values()).sort(
+          (a, b) => b.total_commission - a.total_commission
+        )
+
+        setArtistCommissions(artistList)
+      } catch (err) {
+        console.error('Error fetching artist commissions:', err)
+      } finally {
+        setLoadingArtistData(false)
+      }
+    }
+
+    fetchArtistCommissions()
+  }, [startDate, endDate])
 
   // Calculate totals
   const totalQuantity = dailySummary.reduce((sum, item) => sum + item.quantity, 0)
@@ -409,6 +521,87 @@ export default function AnalyticsPage() {
               Total Sales
             </p>
           </div>
+        </div>
+
+        {/* Artist 50% Commission Tracking */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
+            👨‍🎨 ช่างที่ได้ค่าคอมฯ 50% (Artist 50% Commission Tracking)
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+            แสดงข้อมูลช่างที่ทำงานบริการลด 50% (validity_months = 12) และค่าคอมมิชชั่นที่ได้รับ
+          </p>
+
+          {loadingArtistData ? (
+            <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+              กำลังโหลดข้อมูลช่าง...
+            </div>
+          ) : artistCommissions.length === 0 ? (
+            <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+              ไม่พบข้อมูลช่างที่ทำบริการลด 50% ในช่วงเวลานี้
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-50 dark:bg-gray-700">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      ช่าง (Artist)
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      จำนวน Order ที่เป็น 50%
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      % ค่าคอมที่ได้
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      รวมค่าคอมที่ได้ (฿)
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {artistCommissions.map((artist, index) => (
+                    <tr key={artist.artist_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                        {artist.artist_name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          {artist.orders_50_percent} orders
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${
+                          artist.commission_percent > 0
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                        }`}>
+                          {artist.commission_percent}%
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold text-green-600 dark:text-green-400">
+                        ฿{artist.total_commission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-gray-50 dark:bg-gray-700">
+                  <tr>
+                    <td className="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white">
+                      รวมทั้งหมด (Total)
+                    </td>
+                    <td className="px-6 py-4 text-center text-sm font-bold text-blue-600 dark:text-blue-400">
+                      {artistCommissions.reduce((sum, a) => sum + a.orders_50_percent, 0)} orders
+                    </td>
+                    <td className="px-6 py-4"></td>
+                    <td className="px-6 py-4 text-right text-sm font-bold text-green-600 dark:text-green-400">
+                      ฿{artistCommissions.reduce((sum, a) => sum + a.total_commission, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Category and Product Breakdown */}
