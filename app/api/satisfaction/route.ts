@@ -84,11 +84,13 @@ export async function GET(request: Request) {
     }
 
     if (startDate) {
-      query = query.gte('submitted_at', `${startDate}T00:00:00`)
+      // Use Thailand timezone (UTC+7)
+      query = query.gte('submitted_at', `${startDate}T00:00:00+07:00`)
     }
 
     if (endDate) {
-      query = query.lte('submitted_at', `${endDate}T23:59:59`)
+      // Use Thailand timezone (UTC+7)
+      query = query.lte('submitted_at', `${endDate}T23:59:59+07:00`)
     }
 
     if (category && category !== 'All') {
