@@ -73,18 +73,30 @@ export default function CalendarPage() {
   // Initialize all artists as selected when artists are loaded
   useEffect(() => {
     if (artists.length > 0 && selectedArtistIds.size === 0) {
-      setSelectedArtistIds(new Set(artists.map(a => a.id)))
+      // For artists, only select their own ID
+      if (isArtist && user?.id) {
+        setSelectedArtistIds(new Set([user.id]))
+      } else {
+        // For other roles, select all artists
+        setSelectedArtistIds(new Set(artists.map(a => a.id)))
+      }
     }
-  }, [artists])
+  }, [artists, isArtist, user])
 
   const fetchArtists = async () => {
-    const { data } = await supabase
+    let query = supabase
       .from('staff')
       .select('id, staff_name')
       .eq('role', 'artist')
       .eq('is_active', true)
       .order('staff_name')
 
+    // If user is artist, only fetch their own record
+    if (isArtist && user?.id) {
+      query = query.eq('id', user.id)
+    }
+
+    const { data } = await query
     setArtists(data || [])
   }
 
