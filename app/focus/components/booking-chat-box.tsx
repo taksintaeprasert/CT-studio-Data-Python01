@@ -152,44 +152,49 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = e.target.files
+    if (!files || files.length === 0) return
 
     setUploading(true)
     try {
-      // Upload to Supabase Storage
-      const fileName = `${Date.now()}_${file.name}`
-      const filePath = `booking-files/${orderItemId}/${fileName}`
+      // Loop through all selected files
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
 
-      const { error: uploadError } = await supabase.storage
-        .from('service-photos')
-        .upload(filePath, file)
+        // Upload to Supabase Storage
+        const fileName = `${Date.now()}_${i}_${file.name}`
+        const filePath = `booking-files/${orderItemId}/${fileName}`
 
-      if (uploadError) throw uploadError
+        const { error: uploadError } = await supabase.storage
+          .from('service-photos')
+          .upload(filePath, file)
 
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('service-photos')
-        .getPublicUrl(filePath)
+        if (uploadError) throw uploadError
 
-      // Determine if file is image
-      const isImage = file.type.startsWith('image/')
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from('service-photos')
+          .getPublicUrl(filePath)
 
-      // Send message with file
-      const { error: messageError } = await supabase
-        .from('booking_messages')
-        .insert({
-          order_item_id: orderItemId,
-          sender_id: user?.id || null,
-          sender_type: 'staff',
-          message_type: 'file',
-          message_text: isImage ? '' : `แนบไฟล์: ${file.name}`,
-          file_url: urlData.publicUrl,
-          file_name: file.name,
-          is_read: false,
-        })
+        // Determine if file is image
+        const isImage = file.type.startsWith('image/')
 
-      if (messageError) throw messageError
+        // Send message with file
+        const { error: messageError } = await supabase
+          .from('booking_messages')
+          .insert({
+            order_item_id: orderItemId,
+            sender_id: user?.id || null,
+            sender_type: 'staff',
+            message_type: 'file',
+            message_text: isImage ? '' : `แนบไฟล์: ${file.name}`,
+            file_url: urlData.publicUrl,
+            file_name: file.name,
+            is_read: false,
+          })
+
+        if (messageError) throw messageError
+      }
 
       await loadMessages()
       e.target.value = ''
@@ -381,6 +386,7 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
               disabled={uploading}
               className="hidden"
               accept="image/*,.pdf,.doc,.docx"
+              multiple
             />
           </label>
 
