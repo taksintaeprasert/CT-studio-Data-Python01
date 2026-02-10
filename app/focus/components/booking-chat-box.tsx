@@ -221,6 +221,59 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
     return /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(url)
   }
 
+  const handleDeleteMessage = async (msg: MessageWithSender) => {
+    // System messages cannot be deleted
+    if (msg.sender_type === 'system') {
+      alert('ไม่สามารถลบข้อความระบบได้')
+      return
+    }
+
+    // Only the sender can delete their own message
+    if (msg.sender_id !== user?.id) {
+      alert('คุณสามารถลบได้เฉพาะข้อความของคุณเองเท่านั้น')
+      return
+    }
+
+    if (!window.confirm('ต้องการลบข้อความนี้ใช่หรือไม่?')) {
+      return
+    }
+
+    try {
+      // If it's a file message, delete the file from storage first
+      if (msg.message_type === 'file' && msg.file_url) {
+        // Extract file path from URL
+        // URL format: https://.../storage/v1/object/public/service-photos/booking-files/...
+        const urlParts = msg.file_url.split('/service-photos/')
+        if (urlParts.length > 1) {
+          const filePath = urlParts[1]
+
+          const { error: storageError } = await supabase.storage
+            .from('service-photos')
+            .remove([filePath])
+
+          if (storageError) {
+            console.error('Error deleting file from storage:', storageError)
+            // Continue with message deletion even if file deletion fails
+          }
+        }
+      }
+
+      // Delete the message from database
+      const { error } = await supabase
+        .from('booking_messages')
+        .delete()
+        .eq('id', msg.id)
+
+      if (error) throw error
+
+      // Reload messages
+      await loadMessages()
+    } catch (error) {
+      console.error('Error deleting message:', error)
+      alert('เกิดข้อผิดพลาดในการลบข้อความ')
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -352,8 +405,20 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
                   )}
 
                   {!isSystem && (
-                    <div className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
-                      {formatTimestamp(msg.created_at)}
+                    <div className="flex items-center justify-between gap-2 mt-1.5">
+                      <div className="text-xs text-gray-400 dark:text-gray-500">
+                        {formatTimestamp(msg.created_at)}
+                      </div>
+                      {/* Delete button - only shown to message sender */}
+                      {msg.sender_id === user?.id && (
+                        <button
+                          onClick={() => handleDeleteMessage(msg)}
+                          className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:underline transition-colors"
+                          title="ลบข้อความ"
+                        >
+                          ลบ
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
