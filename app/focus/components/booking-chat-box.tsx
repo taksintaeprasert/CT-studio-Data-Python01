@@ -234,13 +234,7 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
       return
     }
 
-    // Only the sender can delete their own message
-    if (msg.sender_id !== user?.id) {
-      console.log('[handleDeleteMessage] User is not the sender')
-      alert('คุณสามารถลบได้เฉพาะข้อความของคุณเองเท่านั้น')
-      return
-    }
-
+    // Allow any authenticated user to delete any message
     if (!window.confirm('ต้องการลบข้อความนี้ใช่หรือไม่?')) {
       console.log('[handleDeleteMessage] User cancelled deletion')
       return
@@ -433,16 +427,14 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
                       <div className="text-xs text-gray-400 dark:text-gray-500">
                         {formatTimestamp(msg.created_at)}
                       </div>
-                      {/* Delete button - only shown to message sender */}
-                      {msg.sender_id === user?.id && (
-                        <button
-                          onClick={() => handleDeleteMessage(msg)}
-                          className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:underline transition-colors"
-                          title="ลบข้อความ"
-                        >
-                          ลบ
-                        </button>
-                      )}
+                      {/* Delete button - shown for all non-system messages */}
+                      <button
+                        onClick={() => handleDeleteMessage(msg)}
+                        className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:underline transition-colors"
+                        title="ลบข้อความ"
+                      >
+                        ลบ
+                      </button>
                     </div>
                   )}
                 </div>
