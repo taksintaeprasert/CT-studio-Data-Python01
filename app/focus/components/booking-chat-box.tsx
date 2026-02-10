@@ -49,6 +49,7 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
 
   const loadMessages = async () => {
     setLoading(true)
+    console.log('[loadMessages] Loading messages for order_item_id:', orderItemId)
     const { data, error } = await supabase
       .from('booking_messages')
       .select(`
@@ -59,8 +60,10 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
       .order('created_at', { ascending: true })
 
     if (error) {
-      console.error('Error loading messages:', error)
+      console.error('[loadMessages] Error loading messages:', error)
     } else {
+      console.log('[loadMessages] Loaded messages count:', data?.length || 0)
+      console.log('[loadMessages] Message IDs:', data?.map(m => m.id).join(', '))
       setMessages(data || [])
     }
     setLoading(false)
@@ -272,17 +275,19 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
       }
 
       // Delete the message from database
-      console.log('[handleDeleteMessage] Deleting message from database')
-      const { error } = await supabase
+      console.log('[handleDeleteMessage] Deleting message from database, message ID:', msg.id)
+      const { data: deleteData, error, count } = await supabase
         .from('booking_messages')
         .delete()
         .eq('id', msg.id)
+        .select()
 
       if (error) {
         console.error('[handleDeleteMessage] Database delete error:', error)
         throw error
       }
 
+      console.log('[handleDeleteMessage] Delete result - data:', deleteData, 'count:', count)
       console.log('[handleDeleteMessage] Successfully deleted message, reloading')
       // Reload messages
       await loadMessages()
