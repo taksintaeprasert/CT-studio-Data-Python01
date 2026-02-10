@@ -76,6 +76,16 @@ export async function middleware(request: NextRequest) {
 
   // If user is logged in and trying to access login page
   if (session && request.nextUrl.pathname.startsWith('/login')) {
+    // Check user role to redirect to appropriate page
+    const { data: staffData } = await supabase
+      .from('staff')
+      .select('role')
+      .eq('auth_id', session.user.id)
+      .single()
+
+    if (staffData?.role === 'artist') {
+      return NextResponse.redirect(new URL('/artist', request.url))
+    }
     return NextResponse.redirect(new URL('/', request.url))
   }
 
