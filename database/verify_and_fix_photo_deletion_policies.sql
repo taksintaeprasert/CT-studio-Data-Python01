@@ -24,7 +24,7 @@ WHERE tablename = 'service_photos';
 SELECT
   id,
   name,
-  policies
+  public
 FROM storage.buckets
 WHERE id = 'service-photos';
 
