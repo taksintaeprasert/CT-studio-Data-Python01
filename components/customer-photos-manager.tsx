@@ -64,14 +64,24 @@ export default function CustomerPhotosManager({ customerId, customerName }: Cust
   }
 
   const handleDeletePhoto = async (photoId: number) => {
-    if (!confirm('ต้องการลบรูปนี้ใช่หรือไม่?')) return
+    console.log('[handleDeletePhoto] Attempting to delete photo id:', photoId)
 
+    if (!confirm('ต้องการลบรูปนี้ใช่หรือไม่?')) {
+      console.log('[handleDeletePhoto] User cancelled deletion')
+      return
+    }
+
+    console.log('[handleDeletePhoto] User confirmed, calling deleteServicePhoto')
     const result = await deleteServicePhoto(photoId)
+    console.log('[handleDeletePhoto] Result:', result)
 
     if (result.success) {
+      console.log('[handleDeletePhoto] Deletion successful, reloading photos')
       alert('✅ ลบรูปสำเร็จ!')
       await loadPhotos()
+      console.log('[handleDeletePhoto] Photos reloaded')
     } else {
+      console.error('[handleDeletePhoto] Deletion failed with error:', result.error)
       alert(`❌ เกิดข้อผิดพลาด: ${result.error}`)
     }
   }
