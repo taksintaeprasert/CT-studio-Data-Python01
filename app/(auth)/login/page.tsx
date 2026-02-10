@@ -20,7 +20,7 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error, data } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
@@ -28,7 +28,19 @@ export default function LoginPage() {
       if (error) {
         setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง')
       } else {
-        router.push('/')
+        // Fetch user role from staff table to determine redirect
+        const { data: staffData } = await supabase
+          .from('staff')
+          .select('role')
+          .eq('auth_id', data.user.id)
+          .single()
+
+        // Redirect based on role
+        if (staffData?.role === 'artist') {
+          router.push('/artist')
+        } else {
+          router.push('/')
+        }
         router.refresh()
       }
     } catch (err) {

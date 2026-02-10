@@ -67,8 +67,11 @@ export default function CalendarPage() {
   }, [])
 
   useEffect(() => {
-    fetchAppointments()
-  }, [currentDate])
+    // Don't fetch until user is loaded (important for artist filtering)
+    if (user) {
+      fetchAppointments()
+    }
+  }, [currentDate, user, isArtist])
 
   // Initialize all artists as selected when artists are loaded
   useEffect(() => {

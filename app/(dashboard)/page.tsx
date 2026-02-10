@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { useUser } from '@/lib/user-context'
+import { useUser, withRoleAccess } from '@/lib/user-context'
 import Link from 'next/link'
 import DateRangeFilter from '@/components/date-range-filter'
 import {
@@ -91,7 +91,7 @@ interface PriceBreakdown {
   count: number
 }
 
-export default function DashboardPage() {
+function DashboardPage() {
   const router = useRouter()
   const { user } = useUser()
   const [activeTab, setActiveTab] = useState<'alerts' | 'overview' | 'marketing' | 'report'>('alerts')
@@ -138,13 +138,6 @@ export default function DashboardPage() {
   const [reportOrders, setReportOrders] = useState<any[]>([])
 
   const supabase = createClient()
-
-  // Redirect artists to their home page
-  useEffect(() => {
-    if (user?.role === 'artist') {
-      router.replace('/artist')
-    }
-  }, [user, router])
 
   const handleDateChange = (start: string, end: string) => {
     setStartDate(start)
@@ -1551,3 +1544,6 @@ export default function DashboardPage() {
     </div>
   )
 }
+
+// Protect dashboard from artist access - only allow super_admin, admin, marketer, sales
+export default withRoleAccess(DashboardPage, ['super_admin', 'admin', 'marketer', 'sales'])
