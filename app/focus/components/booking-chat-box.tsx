@@ -222,54 +222,73 @@ export default function BookingChatBox({ orderItemId }: BookingChatBoxProps) {
   }
 
   const handleDeleteMessage = async (msg: MessageWithSender) => {
+    console.log('[handleDeleteMessage] Attempting to delete message:', msg.id)
+
     // System messages cannot be deleted
     if (msg.sender_type === 'system') {
+      console.log('[handleDeleteMessage] Cannot delete system message')
       alert('ไม่สามารถลบข้อความระบบได้')
       return
     }
 
     // Only the sender can delete their own message
     if (msg.sender_id !== user?.id) {
+      console.log('[handleDeleteMessage] User is not the sender')
       alert('คุณสามารถลบได้เฉพาะข้อความของคุณเองเท่านั้น')
       return
     }
 
     if (!window.confirm('ต้องการลบข้อความนี้ใช่หรือไม่?')) {
+      console.log('[handleDeleteMessage] User cancelled deletion')
       return
     }
+
+    console.log('[handleDeleteMessage] User confirmed deletion')
 
     try {
       // If it's a file message, delete the file from storage first
       if (msg.message_type === 'file' && msg.file_url) {
+        console.log('[handleDeleteMessage] Message has file, extracting path from URL:', msg.file_url)
         // Extract file path from URL
         // URL format: https://.../storage/v1/object/public/service-photos/booking-files/...
         const urlParts = msg.file_url.split('/service-photos/')
         if (urlParts.length > 1) {
           const filePath = urlParts[1]
+          console.log('[handleDeleteMessage] Extracted file path:', filePath)
 
           const { error: storageError } = await supabase.storage
             .from('service-photos')
             .remove([filePath])
 
           if (storageError) {
-            console.error('Error deleting file from storage:', storageError)
+            console.error('[handleDeleteMessage] Error deleting file from storage:', storageError)
             // Continue with message deletion even if file deletion fails
+          } else {
+            console.log('[handleDeleteMessage] Successfully deleted file from storage')
           }
+        } else {
+          console.warn('[handleDeleteMessage] Could not extract file path from URL')
         }
       }
 
       // Delete the message from database
+      console.log('[handleDeleteMessage] Deleting message from database')
       const { error } = await supabase
         .from('booking_messages')
         .delete()
         .eq('id', msg.id)
 
-      if (error) throw error
+      if (error) {
+        console.error('[handleDeleteMessage] Database delete error:', error)
+        throw error
+      }
 
+      console.log('[handleDeleteMessage] Successfully deleted message, reloading')
       // Reload messages
       await loadMessages()
+      console.log('[handleDeleteMessage] Messages reloaded')
     } catch (error) {
-      console.error('Error deleting message:', error)
+      console.error('[handleDeleteMessage] Error deleting message:', error)
       alert('เกิดข้อผิดพลาดในการลบข้อความ')
     }
   }

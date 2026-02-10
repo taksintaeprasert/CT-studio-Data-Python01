@@ -180,6 +180,8 @@ export async function deleteServicePhoto(
   const supabase = createClient()
 
   try {
+    console.log('[deleteServicePhoto] Starting deletion for photoId:', photoId)
+
     // Get photo details first
     const { data: photo, error: fetchError } = await supabase
       .from('service_photos')
@@ -187,9 +189,17 @@ export async function deleteServicePhoto(
       .eq('id', photoId)
       .single()
 
-    if (fetchError || !photo) {
+    if (fetchError) {
+      console.error('[deleteServicePhoto] Fetch error:', fetchError)
+      return { success: false, error: `Failed to find photo: ${fetchError.message}` }
+    }
+
+    if (!photo) {
+      console.error('[deleteServicePhoto] Photo not found for id:', photoId)
       return { success: false, error: 'Photo not found' }
     }
+
+    console.log('[deleteServicePhoto] Found photo with path:', photo.photo_path)
 
     // Delete from Storage
     const { error: storageError } = await supabase.storage
@@ -197,23 +207,29 @@ export async function deleteServicePhoto(
       .remove([photo.photo_path])
 
     if (storageError) {
-      console.error('Storage delete error:', storageError)
+      console.error('[deleteServicePhoto] Storage delete error:', storageError)
+      console.log('[deleteServicePhoto] Continuing with database deletion despite storage error')
       // Continue anyway to delete from database
+    } else {
+      console.log('[deleteServicePhoto] Successfully deleted from storage')
     }
 
     // Delete from Database
+    console.log('[deleteServicePhoto] Deleting from database...')
     const { error: dbError } = await supabase
       .from('service_photos')
       .delete()
       .eq('id', photoId)
 
     if (dbError) {
+      console.error('[deleteServicePhoto] Database delete error:', dbError)
       return { success: false, error: `Database error: ${dbError.message}` }
     }
 
+    console.log('[deleteServicePhoto] Successfully deleted from database')
     return { success: true }
   } catch (error) {
-    console.error('Unexpected error:', error)
+    console.error('[deleteServicePhoto] Unexpected error:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'เกิดข้อผิดพลาดที่ไม่คาดคิด',
