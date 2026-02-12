@@ -449,7 +449,7 @@ export type PhotoType = 'before' | 'after'
 export const ROLE_ACCESS: Record<StaffRole, string[]> = {
   super_admin: ['*'], // All pages
   admin: ['/', '/orders', '/service', '/calendar', '/customers', '/products', '/sales', '/staff', '/artist-score', '/satisfaction'],
-  marketer: ['/', '/orders', '/service', '/calendar', '/customers', '/products', '/sales', '/staff', '/artist-score', '/satisfaction'],
+  marketer: ['/', '/orders', '/service', '/calendar', '/customers', '/products', '/sales', '/staff', '/artist-score'],
   sales: ['/', '/orders', '/service', '/calendar', '/customers', '/products', '/artist-score', '/satisfaction'],
-  artist: ['/artist', '/calendar', '/artist-score', '/satisfaction'],
+  artist: ['/artist', '/calendar', '/artist-score'],
 }
