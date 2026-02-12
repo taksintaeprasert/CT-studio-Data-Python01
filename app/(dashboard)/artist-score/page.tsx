@@ -310,12 +310,25 @@ export default function ArtistScorePage() {
         max: 5,
         ticks: {
           stepSize: 1,
+          font: {
+            size: 14,
+          },
+        },
+        pointLabels: {
+          font: {
+            size: 16,
+          },
         },
       },
     },
     plugins: {
       legend: {
         position: 'top' as const,
+        labels: {
+          font: {
+            size: 16,
+          },
+        },
       },
     },
   }
@@ -324,8 +337,8 @@ export default function ArtistScorePage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Artist Score</h1>
-        <p className="text-gray-500 dark:text-gray-400">คะแนนความพึงพอใจของช่าง</p>
+        <h1 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-white">Artist Score</h1>
+        <p className="text-lg md:text-xl text-gray-500 dark:text-gray-400">คะแนนความพึงพอใจของช่าง</p>
       </div>
 
       {/* Filters */}
@@ -335,7 +348,7 @@ export default function ArtistScorePage() {
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Artist Filter */}
           <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-base md:text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
               เลือกช่าง
             </label>
             <select
@@ -354,7 +367,7 @@ export default function ArtistScorePage() {
 
           {/* Category Filter */}
           <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-base md:text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
               เลือกหมวดบริการ
             </label>
             <select
@@ -375,27 +388,27 @@ export default function ArtistScorePage() {
 
       {loading ? (
         <div className="card text-center py-12">
-          <p className="text-gray-500 dark:text-gray-400">กำลังโหลด...</p>
+          <p className="text-lg md:text-xl text-gray-500 dark:text-gray-400">กำลังโหลด...</p>
         </div>
       ) : (
         <>
           {/* Summary Stats */}
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="card">
-              <p className="text-sm text-gray-500 dark:text-gray-400">จำนวนช่าง</p>
-              <p className="text-2xl font-bold text-pink-600 mt-1">
+              <p className="text-base md:text-lg text-gray-500 dark:text-gray-400">จำนวนช่าง</p>
+              <p className="text-3xl md:text-4xl font-bold text-pink-600 mt-1">
                 {artistStats.length}
               </p>
             </div>
             <div className="card">
-              <p className="text-sm text-gray-500 dark:text-gray-400">แบบประเมินทั้งหมด</p>
-              <p className="text-2xl font-bold text-purple-600 mt-1">
+              <p className="text-base md:text-lg text-gray-500 dark:text-gray-400">แบบประเมินทั้งหมด</p>
+              <p className="text-3xl md:text-4xl font-bold text-purple-600 mt-1">
                 {ratings.length}
               </p>
             </div>
             <div className="card">
-              <p className="text-sm text-gray-500 dark:text-gray-400">ช่างที่ดีที่สุด</p>
-              <p className="text-lg font-bold text-green-600 mt-1">
+              <p className="text-base md:text-lg text-gray-500 dark:text-gray-400">ช่างที่ดีที่สุด</p>
+              <p className="text-xl md:text-2xl font-bold text-green-600 mt-1">
                 {artistStats[0]?.artist_name || '-'}
               </p>
             </div>
@@ -406,32 +419,32 @@ export default function ArtistScorePage() {
             <div className="card">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">คะแนนการบริการหน้าร้าน (Sales)</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  <p className="text-base md:text-lg text-gray-500 dark:text-gray-400">คะแนนการบริการหน้าร้าน (Sales)</p>
+                  <p className="text-sm md:text-base text-gray-400 dark:text-gray-500 mt-1">
                     คะแนนรวมทั้งหมดจากการให้บริการหน้าร้าน
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-3xl font-bold text-blue-600">
+                  <p className="text-4xl md:text-5xl font-bold text-blue-600">
                     {formatScore(overallSalesScore)}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">/ 5.00</p>
+                  <p className="text-sm md:text-base text-gray-500 dark:text-gray-400">/ 5.00</p>
                 </div>
               </div>
             </div>
             <div className="card">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">คะแนนการตอบแชท</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  <p className="text-base md:text-lg text-gray-500 dark:text-gray-400">คะแนนการตอบแชท</p>
+                  <p className="text-sm md:text-base text-gray-400 dark:text-gray-500 mt-1">
                     คะแนนรวมทั้งหมดจากการตอบแชท
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-3xl font-bold text-teal-600">
+                  <p className="text-4xl md:text-5xl font-bold text-teal-600">
                     {formatScore(overallChatScore)}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">/ 5.00</p>
+                  <p className="text-sm md:text-base text-gray-500 dark:text-gray-400">/ 5.00</p>
                 </div>
               </div>
             </div>
@@ -440,7 +453,7 @@ export default function ArtistScorePage() {
           {/* Radar Chart (if artist selected) */}
           {selectedArtist && selectedArtistData && radarData && (
             <div className="card">
-              <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-4">
+              <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white mb-4">
                 คะแนนรายละเอียด - {selectedArtistData.artist_name}
               </h2>
               <div className="h-96">
@@ -451,7 +464,7 @@ export default function ArtistScorePage() {
 
           {/* Rankings */}
           <div className="card">
-            <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-4">
+            <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white mb-4">
               อันดับช่างตามคะแนนเฉลี่ย
             </h2>
 
@@ -471,7 +484,7 @@ export default function ArtistScorePage() {
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${
+                      <div className={`w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center font-bold text-xl md:text-2xl ${
                         index === 0
                           ? 'bg-yellow-500 text-white'
                           : index === 1
@@ -483,39 +496,39 @@ export default function ArtistScorePage() {
                         {index + 1}
                       </div>
                       <div>
-                        <p className="font-bold text-gray-800 dark:text-white">
+                        <p className="text-lg md:text-xl font-bold text-gray-800 dark:text-white">
                           {artist.artist_name}
                         </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <p className="text-base md:text-lg text-gray-500 dark:text-gray-400">
                           {artist.total_ratings} รีวิว
                         </p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-2xl font-bold text-pink-600">
+                      <p className="text-3xl md:text-4xl font-bold text-pink-600">
                         {formatScore(artist.overall_avg)}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">/ 5.00</p>
+                      <p className="text-sm md:text-base text-gray-500 dark:text-gray-400">/ 5.00</p>
                     </div>
                   </div>
 
                   {/* Detailed Scores */}
                   <div className="mt-4 grid grid-cols-3 gap-3">
-                    <div className="text-center p-2 bg-white dark:bg-gray-800 rounded-lg">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">ระดับความเจ็บ</p>
-                      <p className="font-bold text-gray-800 dark:text-white">
+                    <div className="text-center p-3 bg-white dark:bg-gray-800 rounded-lg">
+                      <p className="text-sm md:text-base text-gray-500 dark:text-gray-400">ระดับความเจ็บ</p>
+                      <p className="text-lg md:text-xl font-bold text-gray-800 dark:text-white">
                         {formatScore(artist.avg_pain_level)}
                       </p>
                     </div>
-                    <div className="text-center p-2 bg-white dark:bg-gray-800 rounded-lg">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">การบริการของช่าง</p>
-                      <p className="font-bold text-gray-800 dark:text-white">
+                    <div className="text-center p-3 bg-white dark:bg-gray-800 rounded-lg">
+                      <p className="text-sm md:text-base text-gray-500 dark:text-gray-400">การบริการของช่าง</p>
+                      <p className="text-lg md:text-xl font-bold text-gray-800 dark:text-white">
                         {formatScore(artist.avg_artist_quality)}
                       </p>
                     </div>
-                    <div className="text-center p-2 bg-white dark:bg-gray-800 rounded-lg">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">ความพึงพอใจหลังทำ</p>
-                      <p className="font-bold text-gray-800 dark:text-white">
+                    <div className="text-center p-3 bg-white dark:bg-gray-800 rounded-lg">
+                      <p className="text-sm md:text-base text-gray-500 dark:text-gray-400">ความพึงพอใจหลังทำ</p>
+                      <p className="text-lg md:text-xl font-bold text-gray-800 dark:text-white">
                         {formatScore(artist.avg_result_satisfaction)}
                       </p>
                     </div>
@@ -524,14 +537,14 @@ export default function ArtistScorePage() {
                   {/* Category Breakdown */}
                   {Object.keys(artist.category_stats).length > 0 && (
                     <div className="mt-4">
-                      <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                      <p className="text-sm md:text-base font-medium text-gray-600 dark:text-gray-400 mb-2">
                         คะแนนตามหมวด:
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {Object.entries(artist.category_stats).map(([category, stats]) => (
                           <div
                             key={category}
-                            className="px-3 py-1 bg-white dark:bg-gray-800 rounded-full text-xs"
+                            className="px-4 py-2 bg-white dark:bg-gray-800 rounded-full text-sm md:text-base"
                           >
                             <span className="font-medium text-gray-700 dark:text-gray-300">
                               {category}
@@ -551,7 +564,7 @@ export default function ArtistScorePage() {
               ))}
 
               {artistStats.length === 0 && (
-                <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                <div className="text-center py-12 text-lg md:text-xl text-gray-500 dark:text-gray-400">
                   ไม่มีข้อมูลคะแนนในช่วงเวลาที่เลือก
                 </div>
               )}
