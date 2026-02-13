@@ -229,7 +229,7 @@ export default function AnalyticsPage() {
     fetchAnalytics()
   }, [startDate, endDate, selectedProducts, selectedCategories, keyword])
 
-  // Fetch artist 50% commission data
+  // Fetch artist 50% commission data (NEW CUSTOMERS ONLY)
   useEffect(() => {
     if (!startDate || !endDate) return
 
@@ -245,6 +245,8 @@ export default function AnalyticsPage() {
             artist_id,
             commission_base_price,
             orders!inner (
+              id,
+              customer_id,
               created_at,
               order_status
             ),
@@ -274,6 +276,41 @@ export default function AnalyticsPage() {
           return
         }
 
+        // Get unique customer IDs from the order items
+        const customerIds = [...new Set(orderItems.map((item: any) => item.orders.customer_id))]
+
+        // Fetch all orders for these customers to identify first orders
+        const { data: allOrders, error: ordersError } = await supabase
+          .from('orders')
+          .select('id, customer_id, created_at, order_status')
+          .in('customer_id', customerIds)
+          .neq('order_status', 'cancelled')
+          .order('created_at', { ascending: true })
+
+        if (ordersError) {
+          console.error('Error fetching customer orders:', ordersError)
+          setLoadingArtistData(false)
+          return
+        }
+
+        // Create a map of customer_id to their first order_id
+        const firstOrderMap = new Map()
+        if (allOrders) {
+          allOrders.forEach((order: any) => {
+            if (!firstOrderMap.has(order.customer_id)) {
+              firstOrderMap.set(order.customer_id, order.id)
+            }
+          })
+        }
+
+        // Filter to only include order items where the order is the customer's first order
+        const newCustomerOrderItems = orderItems.filter((item: any) => {
+          const customerId = item.orders.customer_id
+          const orderId = item.orders.id
+          const firstOrderId = firstOrderMap.get(customerId)
+          return orderId === firstOrderId
+        })
+
         // Fetch commission settings for all artists
         const { data: commissionSettings, error: commissionError } = await supabase
           .from('commission_settings')
@@ -293,7 +330,7 @@ export default function AnalyticsPage() {
 
         // Group by artist
         const artistMap = new Map()
-        orderItems.forEach((item: any) => {
+        newCustomerOrderItems.forEach((item: any) => {
           const artistId = item.artist_id
           const artistName = item.staff?.staff_name || 'Unknown'
           const commissionPercent = commissionMap.get(artistId) || 0
@@ -523,13 +560,13 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Artist 50% Commission Tracking */}
+        {/* Artist 50% Commission Tracking - NEW CUSTOMERS ONLY */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
-            👨‍🎨 ช่างที่ได้ค่าคอมฯ 50% (Artist 50% Commission Tracking)
+            👨‍🎨 ช่างที่มี Orders 50% มาใหม่ (Artists with 50% New Customer Orders)
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-            แสดงข้อมูลช่างที่ทำงานบริการลด 50% (validity_months = 12) และค่าคอมมิชชั่นที่ได้รับ
+            แสดงข้อมูลช่างที่ทำงานบริการลด 50% (validity_months = 12) สำหรับลูกค้ามาใหม่เท่านั้น และค่าคอมมิชชั่นที่ได้รับ
           </p>
 
           {loadingArtistData ? (
@@ -549,10 +586,7 @@ export default function AnalyticsPage() {
                       ช่าง (Artist)
                     </th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                      จำนวน Order ที่เป็น 50%
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                      % ค่าคอมที่ได้
+                      จำนวน Order ที่เป็น 50% มาใหม่
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       รวมค่าคอมที่ได้ (฿)
@@ -570,15 +604,6 @@ export default function AnalyticsPage() {
                           {artist.orders_50_percent} orders
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${
-                          artist.commission_percent > 0
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                        }`}>
-                          {artist.commission_percent}%
-                        </span>
-                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold text-green-600 dark:text-green-400">
                         ฿{artist.total_commission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
@@ -593,7 +618,6 @@ export default function AnalyticsPage() {
                     <td className="px-6 py-4 text-center text-sm font-bold text-blue-600 dark:text-blue-400">
                       {artistCommissions.reduce((sum, a) => sum + a.orders_50_percent, 0)} orders
                     </td>
-                    <td className="px-6 py-4"></td>
                     <td className="px-6 py-4 text-right text-sm font-bold text-green-600 dark:text-green-400">
                       ฿{artistCommissions.reduce((sum, a) => sum + a.total_commission, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
