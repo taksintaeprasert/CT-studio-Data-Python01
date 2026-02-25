@@ -150,7 +150,8 @@ export async function POST(request: NextRequest) {
     const totalBookingAmount = salesReports.reduce((sum, s) => sum + s.bookingAmount, 0)
     const totalPaidAmount = salesReports.reduce((sum, s) => sum + s.paidAmount, 0)
     const totalDoneAmount = salesReports.reduce((sum, s) => sum + s.doneAmount, 0)
-    const totalRealIncome = totalPaymentsIncome
+    // Use sum of individual staff incomes (consistent with web dashboard)
+    const totalRealIncome = salesReports.reduce((sum, s) => sum + s.realIncome, 0)
 
     // Calculate services sold (period) - exclude free items and validity months only
     const serviceMap = new Map<string, { count: number; amount: number }>()
@@ -409,7 +410,7 @@ export async function POST(request: NextRequest) {
       totalBookingAmount: todayTotalBookingAmount,
       totalPaidAmount: todayTotalPaidAmount,
       totalDoneAmount: todayTotalDoneAmount,
-      totalRealIncome: todayPaymentsIncome,
+      totalRealIncome: todaySalesReports.reduce((sum, s) => sum + s.realIncome, 0),
       walkInCount: todayWalkInCount,
       googleReviewCount: todayGoogleReviewCount,
       followUpClosed: todayFollowUpClosed,

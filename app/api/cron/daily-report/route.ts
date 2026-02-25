@@ -169,8 +169,8 @@ export async function GET(request: NextRequest) {
     const totalBookingAmount = salesReports.reduce((sum, s) => sum + s.bookingAmount, 0)
     const totalPaidAmount = salesReports.reduce((sum, s) => sum + s.paidAmount, 0)
     const totalDoneAmount = salesReports.reduce((sum, s) => sum + s.doneAmount, 0)
-    // Use payments received in period (by payment_date) - same as Dashboard
-    const totalRealIncome = totalPaymentsIncome
+    // Use sum of individual staff incomes (consistent with web dashboard)
+    const totalRealIncome = salesReports.reduce((sum, s) => sum + s.realIncome, 0)
 
     // Calculate services sold by category (exclude only FREE items and validity months, COUNT 50% and upsell)
     const serviceMap = new Map<string, { count: number; amount: number }>()
@@ -518,7 +518,7 @@ export async function GET(request: NextRequest) {
       totalBookingAmount: todayTotalBookingAmount,
       totalPaidAmount: todayTotalPaidAmount,
       totalDoneAmount: todayTotalDoneAmount,
-      totalRealIncome: todayPaymentsIncome,
+      totalRealIncome: todaySalesReports.reduce((sum, s) => sum + s.realIncome, 0),
       walkInCount: todayWalkInCount,
       googleReviewCount: todayGoogleReviewCount,
       followUpClosed: todayFollowUpClosed,
