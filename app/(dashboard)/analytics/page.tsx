@@ -38,14 +38,25 @@ interface ArtistCommission {
   total_commission: number
 }
 
+interface Artist50PercentBreakdown {
+  artist_id: number
+  artist_name: string
+  new_customer_completed: number
+  new_customer_pending: number
+  old_customer_completed: number
+  old_customer_pending: number
+}
+
 export default function AnalyticsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [analyticsData, setAnalyticsData] = useState<SalesAnalytics[]>([])
   const [dailySummary, setDailySummary] = useState<DailySummary[]>([])
   const [artistCommissions, setArtistCommissions] = useState<ArtistCommission[]>([])
+  const [artist50PercentBreakdown, setArtist50PercentBreakdown] = useState<Artist50PercentBreakdown[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingArtistData, setLoadingArtistData] = useState(true)
+  const [loadingBreakdownData, setLoadingBreakdownData] = useState(true)
 
   // Filter states
   const [startDate, setStartDate] = useState('')
@@ -368,6 +379,141 @@ export default function AnalyticsPage() {
     fetchArtistCommissions()
   }, [startDate, endDate])
 
+  // Fetch 50% orders breakdown by customer type and completion status
+  useEffect(() => {
+    if (!startDate || !endDate) return
+
+    const fetchBreakdownData = async () => {
+      setLoadingBreakdownData(true)
+
+      try {
+        // Fetch order items with 50% discount products (validity_months = 12)
+        const { data: orderItems, error: orderItemsError } = await supabase
+          .from('order_items')
+          .select(`
+            id,
+            artist_id,
+            artist_completed_at,
+            sales_completed_at,
+            orders!inner (
+              id,
+              customer_id,
+              created_at,
+              order_status
+            ),
+            products!inner (
+              validity_months
+            ),
+            staff!order_items_artist_id_fkey (
+              id,
+              staff_name
+            )
+          `)
+          .gte('orders.created_at', `${startDate}T00:00:00`)
+          .lte('orders.created_at', `${endDate}T23:59:59`)
+          .neq('orders.order_status', 'cancelled')
+          .eq('products.validity_months', 12)
+          .not('artist_id', 'is', null)
+
+        if (orderItemsError) {
+          console.error('Error fetching breakdown data:', orderItemsError)
+          setLoadingBreakdownData(false)
+          return
+        }
+
+        if (!orderItems || orderItems.length === 0) {
+          setArtist50PercentBreakdown([])
+          setLoadingBreakdownData(false)
+          return
+        }
+
+        // Get unique customer IDs from the order items
+        const customerIds = [...new Set(orderItems.map((item: any) => item.orders.customer_id))]
+
+        // Fetch all orders for these customers to identify first orders
+        const { data: allOrders, error: ordersError } = await supabase
+          .from('orders')
+          .select('id, customer_id, created_at, order_status')
+          .in('customer_id', customerIds)
+          .neq('order_status', 'cancelled')
+          .order('created_at', { ascending: true })
+
+        if (ordersError) {
+          console.error('Error fetching customer orders:', ordersError)
+          setLoadingBreakdownData(false)
+          return
+        }
+
+        // Create a map of customer_id to their first order_id
+        const firstOrderMap = new Map()
+        if (allOrders) {
+          allOrders.forEach((order: any) => {
+            if (!firstOrderMap.has(order.customer_id)) {
+              firstOrderMap.set(order.customer_id, order.id)
+            }
+          })
+        }
+
+        // Group by artist and categorize
+        const artistMap = new Map()
+
+        orderItems.forEach((item: any) => {
+          const artistId = item.artist_id
+          const artistName = item.staff?.staff_name || 'Unknown'
+          const customerId = item.orders.customer_id
+          const orderId = item.orders.id
+          const firstOrderId = firstOrderMap.get(customerId)
+
+          // Determine if new or old customer
+          const isNewCustomer = orderId === firstOrderId
+
+          // Determine if completed (both artist and sales completed)
+          const isCompleted = item.artist_completed_at && item.sales_completed_at
+
+          if (!artistMap.has(artistId)) {
+            artistMap.set(artistId, {
+              artist_id: artistId,
+              artist_name: artistName,
+              new_customer_completed: 0,
+              new_customer_pending: 0,
+              old_customer_completed: 0,
+              old_customer_pending: 0,
+            })
+          }
+
+          const artist = artistMap.get(artistId)
+
+          if (isNewCustomer && isCompleted) {
+            artist.new_customer_completed += 1
+          } else if (isNewCustomer && !isCompleted) {
+            artist.new_customer_pending += 1
+          } else if (!isNewCustomer && isCompleted) {
+            artist.old_customer_completed += 1
+          } else {
+            artist.old_customer_pending += 1
+          }
+        })
+
+        // Convert map to array and sort by total orders descending
+        const artistList = Array.from(artistMap.values()).sort(
+          (a, b) => {
+            const totalA = a.new_customer_completed + a.new_customer_pending + a.old_customer_completed + a.old_customer_pending
+            const totalB = b.new_customer_completed + b.new_customer_pending + b.old_customer_completed + b.old_customer_pending
+            return totalB - totalA
+          }
+        )
+
+        setArtist50PercentBreakdown(artistList)
+      } catch (err) {
+        console.error('Error fetching breakdown data:', err)
+      } finally {
+        setLoadingBreakdownData(false)
+      }
+    }
+
+    fetchBreakdownData()
+  }, [startDate, endDate])
+
   // Calculate totals
   const totalQuantity = dailySummary.reduce((sum, item) => sum + item.quantity, 0)
   const totalSales = dailySummary.reduce((sum, item) => sum + item.total_sales, 0)
@@ -620,6 +766,116 @@ export default function AnalyticsPage() {
                     </td>
                     <td className="px-6 py-4 text-right text-sm font-bold text-green-600 dark:text-green-400">
                       ฿{artistCommissions.reduce((sum, a) => sum + a.total_commission, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* 50% Orders Breakdown by Customer Type and Status */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
+            📊 แยกรายละเอียด Orders 50% ตามประเภทลูกค้าและสถานะ
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+            แสดงข้อมูล Orders 50% (validity_months = 12) แยกตามลูกค้าใหม่/เก่า และสถานะการใช้บริการ
+          </p>
+
+          {loadingBreakdownData ? (
+            <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+              กำลังโหลดข้อมูล...
+            </div>
+          ) : artist50PercentBreakdown.length === 0 ? (
+            <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+              ไม่พบข้อมูล Orders 50% ในช่วงเวลานี้
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-50 dark:bg-gray-700">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      ช่าง (Artist)
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider bg-green-50 dark:bg-green-900">
+                      ลูกค้าใหม่<br/>มาใช้บริการแล้ว
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider bg-yellow-50 dark:bg-yellow-900">
+                      ลูกค้าใหม่<br/>ยังไม่มาใช้
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider bg-blue-50 dark:bg-blue-900">
+                      ลูกค้าเก่า<br/>มาใช้บริการแล้ว
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider bg-orange-50 dark:bg-orange-900">
+                      ลูกค้าเก่า<br/>ยังไม่มาใช้
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider bg-purple-50 dark:bg-purple-900">
+                      รวมทั้งหมด
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {artist50PercentBreakdown.map((artist) => {
+                    const total = artist.new_customer_completed + artist.new_customer_pending +
+                                  artist.old_customer_completed + artist.old_customer_pending
+                    return (
+                      <tr key={artist.artist_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                          {artist.artist_name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center bg-green-50 dark:bg-green-900/20">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                            {artist.new_customer_completed}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center bg-yellow-50 dark:bg-yellow-900/20">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                            {artist.new_customer_pending}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center bg-blue-50 dark:bg-blue-900/20">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            {artist.old_customer_completed}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center bg-orange-50 dark:bg-orange-900/20">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+                            {artist.old_customer_pending}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center bg-purple-50 dark:bg-purple-900/20">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                            {total}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot className="bg-gray-50 dark:bg-gray-700">
+                  <tr>
+                    <td className="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white">
+                      รวมทั้งหมด (Total)
+                    </td>
+                    <td className="px-6 py-4 text-center text-sm font-bold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20">
+                      {artist50PercentBreakdown.reduce((sum, a) => sum + a.new_customer_completed, 0)}
+                    </td>
+                    <td className="px-6 py-4 text-center text-sm font-bold text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20">
+                      {artist50PercentBreakdown.reduce((sum, a) => sum + a.new_customer_pending, 0)}
+                    </td>
+                    <td className="px-6 py-4 text-center text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20">
+                      {artist50PercentBreakdown.reduce((sum, a) => sum + a.old_customer_completed, 0)}
+                    </td>
+                    <td className="px-6 py-4 text-center text-sm font-bold text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20">
+                      {artist50PercentBreakdown.reduce((sum, a) => sum + a.old_customer_pending, 0)}
+                    </td>
+                    <td className="px-6 py-4 text-center text-sm font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20">
+                      {artist50PercentBreakdown.reduce((sum, a) =>
+                        sum + a.new_customer_completed + a.new_customer_pending +
+                        a.old_customer_completed + a.old_customer_pending, 0
+                      )}
                     </td>
                   </tr>
                 </tfoot>
